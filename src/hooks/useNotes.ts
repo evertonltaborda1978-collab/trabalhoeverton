@@ -4,6 +4,7 @@ export interface Note {
   id: string;
   title: string;
   content: string;
+  imageUrl?: string;
   createdAt: Date;
   updatedAt: Date;
   color: string;
@@ -44,11 +45,12 @@ export function useNotes() {
     },
   ]);
 
-  const addNote = useCallback((title: string, content: string) => {
+  const addNote = useCallback((title: string, content: string, imageUrl?: string) => {
     const note: Note = {
       id: Date.now().toString(),
       title,
       content,
+      imageUrl,
       createdAt: new Date(),
       updatedAt: new Date(),
       color: COLORS[Math.floor(Math.random() * COLORS.length)],
@@ -61,10 +63,10 @@ export function useNotes() {
     setNotes((prev) => prev.filter((n) => n.id !== id));
   }, []);
 
-  const updateNote = useCallback((id: string, title: string, content: string) => {
+  const updateNote = useCallback((id: string, title: string, content: string, imageUrl?: string) => {
     setNotes((prev) =>
       prev.map((n) =>
-        n.id === id ? { ...n, title, content, updatedAt: new Date() } : n
+        n.id === id ? { ...n, title, content, imageUrl: imageUrl !== undefined ? imageUrl : n.imageUrl, updatedAt: new Date() } : n
       )
     );
   }, []);

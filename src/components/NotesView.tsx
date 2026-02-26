@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { NoteCard } from "./NoteCard";
 import { Note } from "@/hooks/useNotes";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, ImagePlus, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -14,9 +14,9 @@ import { Button } from "@/components/ui/button";
 
 interface NotesViewProps {
   notes: Note[];
-  onAdd: (title: string, content: string) => void;
+  onAdd: (title: string, content: string, imageUrl?: string) => void;
   onDelete: (id: string) => void;
-  onUpdate: (id: string, title: string, content: string) => void;
+  onUpdate: (id: string, title: string, content: string, imageUrl?: string) => void;
 }
 
 export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) {
@@ -25,6 +25,8 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filtered = notes.filter(
     (n) =>
@@ -36,6 +38,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
     setEditingNote(null);
     setTitle("");
     setContent("");
+    setImageUrl(undefined);
     setDialogOpen(true);
   };
 
@@ -43,15 +46,25 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
     setEditingNote(note);
     setTitle(note.title);
     setContent(note.content);
+    setImageUrl(note.imageUrl);
     setDialogOpen(true);
+  };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (ev) => setImageUrl(ev.target?.result as string);
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleSave = () => {
     if (!title.trim()) return;
     if (editingNote) {
-      onUpdate(editingNote.id, title, content);
+      onUpdate(editingNote.id, title, content, imageUrl);
     } else {
-      onAdd(title, content);
+      onAdd(title, content, imageUrl);
     }
     setDialogOpen(false);
   };
@@ -112,6 +125,36 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
               rows={5}
               className="resize-none"
             />
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageSelect}
+              />
+              {imageUrl ? (
+                <div className="relative">
+                  <img src={imageUrl} alt="" className="w-full h-40 object-cover rounded-lg" />
+                  <button
+                    onClick={() => setImageUrl(undefined)}
+                    className="absolute top-2 right-2 p-1 rounded-full bg-background/80 hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full gap-2"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <ImagePlus size={16} />
+                  Anexar foto
+                </Button>
+              )}
+            </div>
             <Button onClick={handleSave} className="w-full">
               {editingNote ? "Salvar" : "Criar nota"}
             </Button>
