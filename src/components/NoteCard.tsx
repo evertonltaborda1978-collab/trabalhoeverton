@@ -34,7 +34,7 @@ export function NoteCard({ note, onDelete, onClick }: NoteCardProps) {
         {note.title}
       </h3>
       {note.imageUrl && (
-        <img src={note.imageUrl} alt="" className="w-full h-20 object-cover rounded-lg mb-2" />
+        <img src={note.imageUrl} alt="" className="w-full max-h-32 object-contain rounded-lg mb-2" />
       )}
       <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed mb-3">
         {note.content}

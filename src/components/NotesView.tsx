@@ -144,7 +144,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
               />
               {imageUrl ? (
                 <div className="relative">
-                  <img src={imageUrl} alt="" className="w-full h-40 object-cover rounded-lg" />
+                  <img src={imageUrl} alt="" className="w-full max-h-60 object-contain rounded-lg" />
                   <button
                     onClick={() => setImageUrl(undefined)}
                     className="absolute top-2 right-2 p-1 rounded-full bg-background/80 hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
