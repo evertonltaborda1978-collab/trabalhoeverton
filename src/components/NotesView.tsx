@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { NoteCard } from "./NoteCard";
 import { Note } from "@/hooks/useNotes";
-import { Plus, Search, ImagePlus, X } from "lucide-react";
+import { Plus, Search, ImagePlus, Camera, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +27,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
   const [content, setContent] = useState("");
   const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const filtered = notes.filter(
     (n) =>
@@ -133,6 +134,14 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
                 className="hidden"
                 onChange={handleImageSelect}
               />
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleImageSelect}
+              />
               {imageUrl ? (
                 <div className="relative">
                   <img src={imageUrl} alt="" className="w-full h-40 object-cover rounded-lg" />
@@ -144,15 +153,26 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
                   </button>
                 </div>
               ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full gap-2"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <ImagePlus size={16} />
-                  Anexar foto
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1 gap-2"
+                    onClick={() => cameraInputRef.current?.click()}
+                  >
+                    <Camera size={16} />
+                    Tirar foto
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1 gap-2"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <ImagePlus size={16} />
+                    Galeria
+                  </Button>
+                </div>
               )}
             </div>
             <Button onClick={handleSave} className="w-full">
