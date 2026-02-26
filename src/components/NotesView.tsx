@@ -14,9 +14,9 @@ import { Button } from "@/components/ui/button";
 
 interface NotesViewProps {
   notes: Note[];
-  onAdd: (title: string, content: string, imageUrl?: string) => void;
+  onAdd: (title: string, content: string, images?: string[]) => void;
   onDelete: (id: string) => void;
-  onUpdate: (id: string, title: string, content: string, imageUrl?: string) => void;
+  onUpdate: (id: string, title: string, content: string, images?: string[]) => void;
 }
 
 export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) {
@@ -25,7 +25,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
+  const [images, setImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -39,7 +39,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
     setEditingNote(null);
     setTitle("");
     setContent("");
-    setImageUrl(undefined);
+    setImages([]);
     setDialogOpen(true);
   };
 
@@ -47,7 +47,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
     setEditingNote(note);
     setTitle(note.title);
     setContent(note.content);
-    setImageUrl(note.imageUrl);
+    setImages(note.images);
     setDialogOpen(true);
   };
 
@@ -55,17 +55,26 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (ev) => setImageUrl(ev.target?.result as string);
+      reader.onload = (ev) => {
+        const url = ev.target?.result as string;
+        setImages((prev) => [...prev, url]);
+      };
       reader.readAsDataURL(file);
     }
+    // Reset input so the same file can be selected again
+    e.target.value = "";
+  };
+
+  const removeImage = (index: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSave = () => {
     if (!title.trim()) return;
     if (editingNote) {
-      onUpdate(editingNote.id, title, content, imageUrl);
+      onUpdate(editingNote.id, title, content, images);
     } else {
-      onAdd(title, content, imageUrl);
+      onAdd(title, content, images);
     }
     setDialogOpen(false);
   };
@@ -106,7 +115,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display">
               {editingNote ? "Editar nota" : "Nova nota"}
@@ -142,38 +151,41 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
                 className="hidden"
                 onChange={handleImageSelect}
               />
-              {imageUrl ? (
-                <div className="relative">
-                  <img src={imageUrl} alt="" className="w-full max-h-60 object-contain rounded-lg" />
-                  <button
-                    onClick={() => setImageUrl(undefined)}
-                    className="absolute top-2 right-2 p-1 rounded-full bg-background/80 hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex-1 gap-2"
-                    onClick={() => cameraInputRef.current?.click()}
-                  >
-                    <Camera size={16} />
-                    Tirar foto
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex-1 gap-2"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <ImagePlus size={16} />
-                    Galeria
-                  </Button>
+              {images.length > 0 && (
+                <div className="grid grid-cols-3 gap-2 mb-2">
+                  {images.map((img, i) => (
+                    <div key={i} className="relative">
+                      <img src={img} alt="" className="w-full h-24 object-cover rounded-lg" />
+                      <button
+                        onClick={() => removeImage(i)}
+                        className="absolute top-1 right-1 p-0.5 rounded-full bg-background/80 hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1 gap-2"
+                  onClick={() => cameraInputRef.current?.click()}
+                >
+                  <Camera size={16} />
+                  Tirar foto
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1 gap-2"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <ImagePlus size={16} />
+                  Galeria
+                </Button>
+              </div>
             </div>
             <Button onClick={handleSave} className="w-full">
               {editingNote ? "Salvar" : "Criar nota"}
