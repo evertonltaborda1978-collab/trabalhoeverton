@@ -1,5 +1,5 @@
 import { Note } from "@/hooks/useNotes";
-import { Trash2, Clock } from "lucide-react";
+import { Trash2, Clock, ImageIcon } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -33,8 +33,16 @@ export function NoteCard({ note, onDelete, onClick }: NoteCardProps) {
       <h3 className="font-display font-semibold text-foreground text-sm mb-1.5 pr-6 line-clamp-1">
         {note.title}
       </h3>
-      {note.imageUrl && (
-        <img src={note.imageUrl} alt="" className="w-full max-h-32 object-contain rounded-lg mb-2" />
+      {note.images.length > 0 && (
+        <div className="mb-2">
+          <img src={note.images[0]} alt="" className="w-full max-h-24 object-contain rounded-lg" />
+          {note.images.length > 1 && (
+            <div className="flex items-center gap-1 mt-1 text-muted-foreground/60">
+              <ImageIcon size={10} />
+              <span className="text-[10px]">+{note.images.length - 1} foto{note.images.length > 2 ? "s" : ""}</span>
+            </div>
+          )}
+        </div>
       )}
       <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed mb-3">
         {note.content}
