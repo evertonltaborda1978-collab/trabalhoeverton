@@ -1,4 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 export interface Note {
   id: string;
@@ -18,61 +20,85 @@ const COLORS = [
 ];
 
 export function useNotes() {
-  const [notes, setNotes] = useState<Note[]>([
-    {
-      id: "1",
-      title: "Bem-vindo! 👋",
-      content: "Esta é sua secretária virtual. Use-a para organizar suas anotações e compromissos.",
-      images: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      color: COLORS[0],
-    },
-    {
-      id: "2",
-      title: "Lista de compras",
-      content: "Café, leite, pão integral, frutas, ovos",
-      images: [],
-      createdAt: new Date(Date.now() - 86400000),
-      updatedAt: new Date(Date.now() - 86400000),
-      color: COLORS[1],
-    },
-    {
-      id: "3",
-      title: "Ideias para o projeto",
-      content: "Pesquisar novas tendências de design. Revisar paleta de cores. Preparar apresentação.",
-      images: [],
-      createdAt: new Date(Date.now() - 172800000),
-      updatedAt: new Date(Date.now() - 172800000),
-      color: COLORS[2],
-    },
-  ]);
+  const { user } = useAuth();
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const addNote = useCallback((title: string, content: string, images: string[] = []) => {
-    const note: Note = {
-      id: Date.now().toString(),
-      title,
-      content,
-      images,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      color: COLORS[Math.floor(Math.random() * COLORS.length)],
-    };
-    setNotes((prev) => [note, ...prev]);
-    return note;
-  }, []);
+  const fetchNotes = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("notes")
+      .select("*")
+      .order("created_at", { ascending: false });
 
-  const deleteNote = useCallback((id: string) => {
+    if (data) {
+      setNotes(
+        data.map((n) => ({
+          id: n.id,
+          title: n.title,
+          content: n.content,
+          images: n.images || [],
+          createdAt: new Date(n.created_at),
+          updatedAt: new Date(n.updated_at),
+          color: n.color || COLORS[0],
+        }))
+      );
+    }
+    setLoading(false);
+  }, [user]);
+
+  useEffect(() => {
+    fetchNotes();
+  }, [fetchNotes]);
+
+  const addNote = useCallback(
+    async (title: string, content: string, images: string[] = []) => {
+      if (!user) return;
+      const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+      const { data } = await supabase
+        .from("notes")
+        .insert({ user_id: user.id, title, content, images, color })
+        .select()
+        .single();
+
+      if (data) {
+        const note: Note = {
+          id: data.id,
+          title: data.title,
+          content: data.content,
+          images: data.images || [],
+          createdAt: new Date(data.created_at),
+          updatedAt: new Date(data.updated_at),
+          color: data.color,
+        };
+        setNotes((prev) => [note, ...prev]);
+        return note;
+      }
+    },
+    [user]
+  );
+
+  const deleteNote = useCallback(async (id: string) => {
+    await supabase.from("notes").delete().eq("id", id);
     setNotes((prev) => prev.filter((n) => n.id !== id));
   }, []);
 
-  const updateNote = useCallback((id: string, title: string, content: string, images?: string[]) => {
-    setNotes((prev) =>
-      prev.map((n) =>
-        n.id === id ? { ...n, title, content, images: images ?? n.images, updatedAt: new Date() } : n
-      )
-    );
-  }, []);
+  const updateNote = useCallback(
+    async (id: string, title: string, content: string, images?: string[]) => {
+      const updates: any = { title, content };
+      if (images !== undefined) updates.images = images;
 
-  return { notes, addNote, deleteNote, updateNote };
+      await supabase.from("notes").update(updates).eq("id", id);
+      setNotes((prev) =>
+        prev.map((n) =>
+          n.id === id
+            ? { ...n, title, content, images: images ?? n.images, updatedAt: new Date() }
+            : n
+        )
+      );
+    },
+    []
+  );
+
+  return { notes, addNote, deleteNote, updateNote, loading };
 }

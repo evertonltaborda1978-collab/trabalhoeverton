@@ -7,6 +7,8 @@ import { AudioView } from "@/components/AudioView";
 import { LocationView } from "@/components/LocationView";
 import { useNotes } from "@/hooks/useNotes";
 import { useAppointments } from "@/hooks/useAppointments";
+import { useAuth } from "@/contexts/AuthContext";
+import { LogOut } from "lucide-react";
 
 type Tab = "notes" | "calendar" | "audio" | "location";
 
@@ -21,6 +23,7 @@ const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
   const { notes, addNote, deleteNote, updateNote } = useNotes();
   const { appointments, addAppointment, deleteAppointment } = useAppointments();
+  const { signOut } = useAuth();
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -31,7 +34,16 @@ const Index = () => {
             <h1 className="text-xl font-display font-bold text-foreground">
               {titles[tab]}
             </h1>
-            <MoonPhaseWidget />
+            <div className="flex items-center gap-2">
+              <MoonPhaseWidget />
+              <button
+                onClick={signOut}
+                className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                title="Sair"
+              >
+                <LogOut size={18} />
+              </button>
+            </div>
           </div>
         </div>
       </header>
