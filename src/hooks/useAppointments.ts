@@ -1,4 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 export interface Appointment {
   id: string;
@@ -9,36 +11,60 @@ export interface Appointment {
 }
 
 export function useAppointments() {
-  const [appointments, setAppointments] = useState<Appointment[]>([
-    {
-      id: "1",
-      title: "Reunião de equipe",
-      date: new Date(),
-      time: "10:00",
-      description: "Revisão semanal do projeto",
-    },
-    {
-      id: "2",
-      title: "Consulta médica",
-      date: new Date(Date.now() + 86400000 * 2),
-      time: "14:30",
-      description: "Check-up anual",
-    },
-  ]);
+  const { user } = useAuth();
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
 
-  const addAppointment = useCallback((title: string, date: Date, time: string, description: string) => {
-    const apt: Appointment = {
-      id: Date.now().toString(),
-      title,
-      date,
-      time,
-      description,
-    };
-    setAppointments((prev) => [...prev, apt]);
-    return apt;
-  }, []);
+  const fetchAppointments = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("appointments")
+      .select("*")
+      .order("date", { ascending: true });
 
-  const deleteAppointment = useCallback((id: string) => {
+    if (data) {
+      setAppointments(
+        data.map((a) => ({
+          id: a.id,
+          title: a.title,
+          date: new Date(a.date + "T00:00:00"),
+          time: a.time,
+          description: a.description,
+        }))
+      );
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchAppointments();
+  }, [fetchAppointments]);
+
+  const addAppointment = useCallback(
+    async (title: string, date: Date, time: string, description: string) => {
+      if (!user) return;
+      const dateStr = date.toISOString().split("T")[0];
+      const { data } = await supabase
+        .from("appointments")
+        .insert({ user_id: user.id, title, date: dateStr, time, description })
+        .select()
+        .single();
+
+      if (data) {
+        const apt: Appointment = {
+          id: data.id,
+          title: data.title,
+          date: new Date(data.date + "T00:00:00"),
+          time: data.time,
+          description: data.description,
+        };
+        setAppointments((prev) => [...prev, apt]);
+        return apt;
+      }
+    },
+    [user]
+  );
+
+  const deleteAppointment = useCallback(async (id: string) => {
+    await supabase.from("appointments").delete().eq("id", id);
     setAppointments((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
