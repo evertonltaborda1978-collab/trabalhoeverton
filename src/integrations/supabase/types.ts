@@ -52,6 +52,8 @@ export type Database = {
           color: string
           content: string
           created_at: string
+          font_family: string
+          font_size: string
           id: string
           images: string[]
           title: string
@@ -62,6 +64,8 @@ export type Database = {
           color?: string
           content?: string
           created_at?: string
+          font_family?: string
+          font_size?: string
           id?: string
           images?: string[]
           title?: string
@@ -72,6 +76,8 @@ export type Database = {
           color?: string
           content?: string
           created_at?: string
+          font_family?: string
+          font_size?: string
           id?: string
           images?: string[]
           title?: string
