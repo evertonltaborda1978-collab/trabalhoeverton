@@ -115,13 +115,13 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-md h-[100dvh] sm:h-auto sm:max-h-[90vh] overflow-y-auto flex flex-col">
           <DialogHeader>
             <DialogTitle className="font-display">
               {editingNote ? "Editar nota" : "Nova nota"}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 mt-2">
+          <div className="space-y-3 mt-2 flex-1 flex flex-col">
             <Input
               placeholder="Título"
               value={title}
@@ -132,8 +132,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
               placeholder="Escreva sua anotação..."
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              rows={5}
-              className="resize-none"
+              className="resize-none flex-1 min-h-[200px]"
             />
             <div>
               <input
