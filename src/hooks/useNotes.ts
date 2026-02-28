@@ -52,12 +52,12 @@ export function useNotes() {
   }, [fetchNotes]);
 
   const addNote = useCallback(
-    async (title: string, content: string, images: string[] = []) => {
+    async (title: string, content: string, images: string[] = [], color?: string) => {
       if (!user) return;
-      const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+      const noteColor = color || COLORS[Math.floor(Math.random() * COLORS.length)];
       const { data } = await supabase
         .from("notes")
-        .insert({ user_id: user.id, title, content, images, color })
+        .insert({ user_id: user.id, title, content, images, color: noteColor })
         .select()
         .single();
 
@@ -84,15 +84,16 @@ export function useNotes() {
   }, []);
 
   const updateNote = useCallback(
-    async (id: string, title: string, content: string, images?: string[]) => {
+    async (id: string, title: string, content: string, images?: string[], color?: string) => {
       const updates: any = { title, content };
       if (images !== undefined) updates.images = images;
+      if (color !== undefined) updates.color = color;
 
       await supabase.from("notes").update(updates).eq("id", id);
       setNotes((prev) =>
         prev.map((n) =>
           n.id === id
-            ? { ...n, title, content, images: images ?? n.images, updatedAt: new Date() }
+            ? { ...n, title, content, images: images ?? n.images, color: color ?? n.color, updatedAt: new Date() }
             : n
         )
       );

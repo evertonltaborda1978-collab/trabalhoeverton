@@ -11,12 +11,20 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+const NOTE_COLORS = [
+  { value: "bg-surface-warm", label: "Quente" },
+  { value: "bg-surface-cool", label: "Frio" },
+  { value: "bg-secondary", label: "Neutro" },
+  { value: "bg-card", label: "Branco" },
+];
 
 interface NotesViewProps {
   notes: Note[];
-  onAdd: (title: string, content: string, images?: string[]) => void;
+  onAdd: (title: string, content: string, images?: string[], color?: string) => void;
   onDelete: (id: string) => void;
-  onUpdate: (id: string, title: string, content: string, images?: string[]) => void;
+  onUpdate: (id: string, title: string, content: string, images?: string[], color?: string) => void;
 }
 
 export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) {
@@ -26,6 +34,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [images, setImages] = useState<string[]>([]);
+  const [selectedColor, setSelectedColor] = useState(NOTE_COLORS[0].value);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -40,6 +49,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
     setTitle("");
     setContent("");
     setImages([]);
+    setSelectedColor(NOTE_COLORS[0].value);
     setDialogOpen(true);
   };
 
@@ -48,6 +58,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
     setTitle(note.title);
     setContent(note.content);
     setImages(note.images);
+    setSelectedColor(note.color);
     setDialogOpen(true);
   };
 
@@ -72,9 +83,9 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
   const handleSave = () => {
     if (!title.trim()) return;
     if (editingNote) {
-      onUpdate(editingNote.id, title, content, images);
+      onUpdate(editingNote.id, title, content, images, selectedColor);
     } else {
-      onAdd(title, content, images);
+      onAdd(title, content, images, selectedColor);
     }
     setDialogOpen(false);
   };
@@ -107,7 +118,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
           <p className="text-xs mt-1">Toque em + para criar uma nova nota</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-2">
           {filtered.map((note) => (
             <NoteCard key={note.id} note={note} onDelete={onDelete} onClick={openEdit} />
           ))}
@@ -184,6 +195,26 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
                   <ImagePlus size={16} />
                   Galeria
                 </Button>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-2">Cor da nota</p>
+              <div className="flex gap-2">
+                {NOTE_COLORS.map((c) => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => setSelectedColor(c.value)}
+                    className={cn(
+                      "w-8 h-8 rounded-full border-2 transition-all",
+                      c.value,
+                      selectedColor === c.value
+                        ? "border-primary scale-110 ring-2 ring-primary/30"
+                        : "border-border/50 hover:scale-105"
+                    )}
+                    title={c.label}
+                  />
+                ))}
               </div>
             </div>
             <Button onClick={handleSave} className="w-full">
