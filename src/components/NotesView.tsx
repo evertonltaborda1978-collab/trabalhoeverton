@@ -14,10 +14,12 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const NOTE_COLORS = [
-  { value: "bg-surface-warm", label: "Quente" },
-  { value: "bg-surface-cool", label: "Frio" },
-  { value: "bg-secondary", label: "Neutro" },
-  { value: "bg-card", label: "Branco" },
+  { value: "bg-yellow-100", label: "Amarelo" },
+  { value: "bg-blue-100", label: "Azul" },
+  { value: "bg-green-100", label: "Verde" },
+  { value: "bg-pink-100", label: "Rosa" },
+  { value: "bg-orange-100", label: "Laranja" },
+  { value: "bg-purple-100", label: "Roxo" },
 ];
 
 interface NotesViewProps {
