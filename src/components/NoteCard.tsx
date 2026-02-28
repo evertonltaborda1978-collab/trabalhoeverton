@@ -1,5 +1,5 @@
 import { Note } from "@/hooks/useNotes";
-import { Trash2, Clock, ImageIcon } from "lucide-react";
+import { Trash2, Clock, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -15,43 +15,35 @@ export function NoteCard({ note, onDelete, onClick }: NoteCardProps) {
     <div
       onClick={() => onClick(note)}
       className={cn(
-        "group relative p-4 rounded-xl cursor-pointer transition-all duration-200 hover:scale-[1.02] note-shadow animate-fade-in",
-        note.color,
-        "border border-border/30"
+        "group relative flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 hover:scale-[1.01] note-shadow animate-fade-in border border-border/30",
+        note.color
       )}
     >
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete(note.id);
-        }}
-        className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-      >
-        <Trash2 size={14} />
-      </button>
+      <div className={cn("w-3 h-3 rounded-full shrink-0 border border-border/50", note.color)} />
 
-      <h3 className="font-display font-semibold text-foreground text-sm mb-1.5 pr-6 line-clamp-1">
-        {note.title}
-      </h3>
-      {note.images.length > 0 && (
-        <div className="mb-2">
-          <img src={note.images[0]} alt="" className="w-full max-h-24 object-contain rounded-lg" />
-          {note.images.length > 1 && (
-            <div className="flex items-center gap-1 mt-1 text-muted-foreground/60">
-              <ImageIcon size={10} />
-              <span className="text-[10px]">+{note.images.length - 1} foto{note.images.length > 2 ? "s" : ""}</span>
-            </div>
-          )}
+      <div className="flex-1 min-w-0">
+        <h3 className="font-display font-semibold text-foreground text-sm line-clamp-1">
+          {note.title || "Sem título"}
+        </h3>
+        <div className="flex items-center gap-1 text-muted-foreground/60 mt-0.5">
+          <Clock size={10} />
+          <span className="text-[10px]">
+            {format(note.updatedAt, "d MMM, HH:mm", { locale: ptBR })}
+          </span>
         </div>
-      )}
-      <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed mb-3">
-        {note.content}
-      </p>
-      <div className="flex items-center gap-1 text-muted-foreground/60">
-        <Clock size={10} />
-        <span className="text-[10px]">
-          {format(note.updatedAt, "d MMM, HH:mm", { locale: ptBR })}
-        </span>
+      </div>
+
+      <div className="flex items-center gap-1 shrink-0">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(note.id);
+          }}
+          className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+        >
+          <Trash2 size={14} />
+        </button>
+        <ChevronRight size={16} className="text-muted-foreground/40" />
       </div>
     </div>
   );
