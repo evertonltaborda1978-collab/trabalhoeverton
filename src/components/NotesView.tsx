@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { NoteCard } from "./NoteCard";
 import { Note } from "@/hooks/useNotes";
-import { Plus, Search, ImagePlus, Camera, X } from "lucide-react";
+import { Plus, Search, ImagePlus, Camera, X, Type, ALargeSmall } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -22,11 +22,49 @@ const NOTE_COLORS = [
   { value: "bg-purple-100", label: "Roxo" },
 ];
 
+const NOTE_FONTS = [
+  { value: "default", label: "Padrão", style: "font-family: 'Plus Jakarta Sans', sans-serif" },
+  { value: "playfair", label: "Elegante", style: "font-family: 'Playfair Display', serif" },
+  { value: "caveat", label: "Manuscrita", style: "font-family: 'Caveat', cursive" },
+  { value: "lora", label: "Clássica", style: "font-family: 'Lora', serif" },
+  { value: "nunito", label: "Arredondada", style: "font-family: 'Nunito', sans-serif" },
+  { value: "dancing", label: "Caligráfica", style: "font-family: 'Dancing Script', cursive" },
+];
+
+const NOTE_SIZES = [
+  { value: "small", label: "P", className: "text-xs" },
+  { value: "medium", label: "M", className: "text-sm" },
+  { value: "large", label: "G", className: "text-base" },
+  { value: "xlarge", label: "GG", className: "text-lg" },
+];
+
+export function getFontClass(fontFamily: string) {
+  const map: Record<string, string> = {
+    default: "font-body",
+    playfair: "font-display",
+    caveat: "font-[Caveat]",
+    lora: "font-[Lora]",
+    nunito: "font-[Nunito]",
+    dancing: "font-[Dancing_Script]",
+  };
+  return map[fontFamily] || "font-body";
+}
+
+export function getSizeClass(fontSize: string) {
+  const map: Record<string, string> = {
+    small: "text-xs",
+    medium: "text-sm",
+    large: "text-base",
+    xlarge: "text-lg",
+  };
+  return map[fontSize] || "text-sm";
+}
+
 interface NotesViewProps {
   notes: Note[];
-  onAdd: (title: string, content: string, images?: string[], color?: string) => void;
+  onAdd: (title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string) => void;
   onDelete: (id: string) => void;
-  onUpdate: (id: string, title: string, content: string, images?: string[], color?: string) => void;
+  onUpdate: (id: string, title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string) => void;
 }
 
 export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) {
@@ -37,6 +75,8 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
   const [content, setContent] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [selectedColor, setSelectedColor] = useState(NOTE_COLORS[0].value);
+  const [selectedFont, setSelectedFont] = useState("default");
+  const [selectedSize, setSelectedSize] = useState("medium");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -52,6 +92,8 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
     setContent("");
     setImages([]);
     setSelectedColor(NOTE_COLORS[0].value);
+    setSelectedFont("default");
+    setSelectedSize("medium");
     setDialogOpen(true);
   };
 
@@ -61,6 +103,8 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
     setContent(note.content);
     setImages(note.images);
     setSelectedColor(note.color);
+    setSelectedFont(note.fontFamily || "default");
+    setSelectedSize(note.fontSize || "medium");
     setDialogOpen(true);
   };
 
@@ -74,7 +118,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
       };
       reader.readAsDataURL(file);
     }
-    // Reset input so the same file can be selected again
     e.target.value = "";
   };
 
@@ -85,9 +128,9 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
   const handleSave = () => {
     if (!title.trim()) return;
     if (editingNote) {
-      onUpdate(editingNote.id, title, content, images, selectedColor);
+      onUpdate(editingNote.id, title, content, images, selectedColor, selectedFont, selectedSize);
     } else {
-      onAdd(title, content, images, selectedColor);
+      onAdd(title, content, images, selectedColor, selectedFont, selectedSize);
     }
     setDialogOpen(false);
   };
@@ -139,14 +182,65 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
               placeholder="Título"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="font-semibold"
+              className={cn("font-semibold", getFontClass(selectedFont))}
             />
             <Textarea
               placeholder="Escreva sua anotação..."
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              className="resize-none flex-1 min-h-[200px]"
+              className={cn("resize-none flex-1 min-h-[200px]", getFontClass(selectedFont), getSizeClass(selectedSize))}
             />
+
+            {/* Font & Size selectors */}
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+                  <Type size={12} /> Fonte
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {NOTE_FONTS.map((f) => (
+                    <button
+                      key={f.value}
+                      type="button"
+                      onClick={() => setSelectedFont(f.value)}
+                      className={cn(
+                        "px-2.5 py-1 rounded-lg text-xs border transition-all",
+                        selectedFont === f.value
+                          ? "border-primary bg-primary/10 text-primary font-medium"
+                          : "border-border/50 text-muted-foreground hover:border-primary/50"
+                      )}
+                      style={{ fontFamily: f.style.split(": ")[1]?.replace(/'/g, "") }}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+                <ALargeSmall size={12} /> Tamanho
+              </p>
+              <div className="flex gap-1.5">
+                {NOTE_SIZES.map((s) => (
+                  <button
+                    key={s.value}
+                    type="button"
+                    onClick={() => setSelectedSize(s.value)}
+                    className={cn(
+                      "w-10 h-8 rounded-lg border text-xs font-medium transition-all",
+                      selectedSize === s.value
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border/50 text-muted-foreground hover:border-primary/50"
+                    )}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div>
               <input
                 ref={fileInputRef}

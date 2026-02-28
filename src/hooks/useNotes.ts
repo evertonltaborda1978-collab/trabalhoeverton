@@ -10,6 +10,8 @@ export interface Note {
   createdAt: Date;
   updatedAt: Date;
   color: string;
+  fontFamily: string;
+  fontSize: string;
 }
 
 const COLORS = [
@@ -43,6 +45,8 @@ export function useNotes() {
           createdAt: new Date(n.created_at),
           updatedAt: new Date(n.updated_at),
           color: n.color || COLORS[0],
+          fontFamily: (n as any).font_family || "default",
+          fontSize: (n as any).font_size || "medium",
         }))
       );
     }
@@ -54,12 +58,12 @@ export function useNotes() {
   }, [fetchNotes]);
 
   const addNote = useCallback(
-    async (title: string, content: string, images: string[] = [], color?: string) => {
+    async (title: string, content: string, images: string[] = [], color?: string, fontFamily?: string, fontSize?: string) => {
       if (!user) return;
       const noteColor = color || COLORS[Math.floor(Math.random() * COLORS.length)];
       const { data } = await supabase
         .from("notes")
-        .insert({ user_id: user.id, title, content, images, color: noteColor })
+        .insert({ user_id: user.id, title, content, images, color: noteColor, font_family: fontFamily || "default", font_size: fontSize || "medium" } as any)
         .select()
         .single();
 
@@ -72,6 +76,8 @@ export function useNotes() {
           createdAt: new Date(data.created_at),
           updatedAt: new Date(data.updated_at),
           color: data.color,
+          fontFamily: (data as any).font_family || "default",
+          fontSize: (data as any).font_size || "medium",
         };
         setNotes((prev) => [note, ...prev]);
         return note;
@@ -86,16 +92,18 @@ export function useNotes() {
   }, []);
 
   const updateNote = useCallback(
-    async (id: string, title: string, content: string, images?: string[], color?: string) => {
+    async (id: string, title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string) => {
       const updates: any = { title, content };
       if (images !== undefined) updates.images = images;
       if (color !== undefined) updates.color = color;
+      if (fontFamily !== undefined) updates.font_family = fontFamily;
+      if (fontSize !== undefined) updates.font_size = fontSize;
 
       await supabase.from("notes").update(updates).eq("id", id);
       setNotes((prev) =>
         prev.map((n) =>
           n.id === id
-            ? { ...n, title, content, images: images ?? n.images, color: color ?? n.color, updatedAt: new Date() }
+            ? { ...n, title, content, images: images ?? n.images, color: color ?? n.color, fontFamily: fontFamily ?? n.fontFamily, fontSize: fontSize ?? n.fontSize, updatedAt: new Date() }
             : n
         )
       );
