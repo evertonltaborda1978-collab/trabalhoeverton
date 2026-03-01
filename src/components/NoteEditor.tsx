@@ -3,8 +3,6 @@ import { Note } from "@/hooks/useNotes";
 import {
   Camera,
   X,
-  Type,
-  ALargeSmall,
   ImagePlus,
   Copy,
   Check,
@@ -30,42 +28,12 @@ const NOTE_COLORS = [
   { value: "bg-gray-800", label: "Escura", ring: "ring-gray-500" },
 ];
 
-const NOTE_FONTS = [
-  { value: "default", label: "Padrão" },
-  { value: "playfair", label: "Elegante" },
-  { value: "caveat", label: "Manuscrita" },
-  { value: "lora", label: "Clássica" },
-  { value: "nunito", label: "Arredondada" },
-  { value: "dancing", label: "Caligráfica" },
-];
-
-const NOTE_SIZES = [
-  { value: "small", label: "P" },
-  { value: "medium", label: "M" },
-  { value: "large", label: "G" },
-  { value: "xlarge", label: "GG" },
-];
-
-export function getFontClass(fontFamily: string) {
-  const map: Record<string, string> = {
-    default: "font-body",
-    playfair: "font-display",
-    caveat: "font-[Caveat]",
-    lora: "font-[Lora]",
-    nunito: "font-[Nunito]",
-    dancing: "font-[Dancing_Script]",
-  };
-  return map[fontFamily] || "font-body";
+export function getFontClass(_fontFamily: string) {
+  return "font-body";
 }
 
-export function getSizeClass(fontSize: string) {
-  const map: Record<string, string> = {
-    small: "text-xs",
-    medium: "text-sm",
-    large: "text-base",
-    xlarge: "text-lg",
-  };
-  return map[fontSize] || "text-sm";
+export function getSizeClass(_fontSize: string) {
+  return "text-sm";
 }
 
 interface NoteEditorProps {
@@ -92,8 +60,6 @@ export function NoteEditor({
   const [content, setContent] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [selectedColor, setSelectedColor] = useState(NOTE_COLORS[0].value);
-  const [selectedFont, setSelectedFont] = useState("default");
-  const [selectedSize, setSelectedSize] = useState("medium");
   const [copied, setCopied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -109,15 +75,11 @@ export function NoteEditor({
         setContent(editingNote.content);
         setImages(editingNote.images);
         setSelectedColor(editingNote.color);
-        setSelectedFont(editingNote.fontFamily || "default");
-        setSelectedSize(editingNote.fontSize || "medium");
       } else {
         setTitle("");
         setContent("");
         setImages([]);
         setSelectedColor(NOTE_COLORS[0].value);
-        setSelectedFont("default");
-        setSelectedSize("medium");
       }
     }
   } else {
@@ -144,26 +106,22 @@ export function NoteEditor({
     e.target.value = "";
   };
 
-  const removeImage = (index: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== index));
-  };
-
   const handleCopy = () => {
     const text = `${title}\n\n${content}`;
     navigator.clipboard.writeText(text);
     setCopied(true);
-    toast({ title: "Nota copiada!", description: "Conteúdo copiado para a área de transferência." });
+    toast({ title: "Nota copiada com sucesso!", description: "Conteúdo copiado para a área de transferência." });
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleSave = () => {
     if (!title.trim()) return;
-    onSave(title, content, images, selectedColor, selectedFont, selectedSize);
+    onSave(title, content, images, selectedColor, "default", "medium");
     onOpenChange(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={(val) => { onOpenChange(val); }}>
+    <Dialog open={open} onOpenChange={(val) => onOpenChange(val)}>
       <DialogContent className="sm:max-w-lg p-0 gap-0 h-[100dvh] sm:h-auto sm:max-h-[92vh] overflow-hidden flex flex-col border-0 sm:border sm:rounded-2xl shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
@@ -179,11 +137,11 @@ export function NoteEditor({
             )}
           </div>
           <button
-            onClick={handleCopy}
+            onClick={() => onOpenChange(false)}
             className="p-2 rounded-xl hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
-            title="Copiar nota"
+            aria-label="Fechar"
           >
-            {copied ? <Check size={18} className="text-primary" /> : <Copy size={18} />}
+            <X size={20} />
           </button>
         </div>
 
@@ -195,10 +153,7 @@ export function NoteEditor({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Título da nota..."
-              className={cn(
-                "w-full bg-transparent border-0 border-b-2 border-border/60 focus:border-primary px-1 py-3 text-lg font-semibold text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors duration-300",
-                getFontClass(selectedFont)
-              )}
+              className="w-full bg-transparent border-0 border-b-2 border-border/60 focus:border-primary px-1 py-3 text-lg font-semibold text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors duration-300 font-body"
             />
             <div className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary transition-all duration-300 group-focus-within:w-full" />
           </div>
@@ -209,11 +164,7 @@ export function NoteEditor({
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="Comece a escrever sua nota..."
-              className={cn(
-                "w-full min-h-[180px] bg-secondary/30 rounded-xl px-4 py-3 resize-none outline-none border border-border/30 focus:border-primary/40 focus:bg-secondary/50 transition-all duration-300 placeholder:text-muted-foreground/40 note-shadow",
-                getFontClass(selectedFont),
-                getSizeClass(selectedSize)
-              )}
+              className="w-full min-h-[220px] bg-secondary/30 rounded-xl px-4 py-3 resize-none outline-none border border-border/30 focus:border-primary/40 focus:bg-secondary/50 transition-all duration-300 placeholder:text-muted-foreground/40 text-sm font-body note-shadow"
             />
             {/* Word & char counter */}
             <div className="flex justify-end gap-3 mt-1.5 px-1">
@@ -226,64 +177,8 @@ export function NoteEditor({
             </div>
           </div>
 
-          {/* Font selector */}
-          <div>
-            <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5 font-medium">
-              <Type size={13} /> Fonte
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {NOTE_FONTS.map((f) => (
-                <button
-                  key={f.value}
-                  type="button"
-                  onClick={() => setSelectedFont(f.value)}
-                  className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs border transition-all duration-200",
-                    getFontClass(f.value),
-                    selectedFont === f.value
-                      ? "border-primary bg-primary/10 text-primary font-semibold shadow-sm"
-                      : "border-border/40 text-muted-foreground hover:border-primary/40 hover:bg-secondary/50"
-                  )}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Size selector */}
-          <div>
-            <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5 font-medium">
-              <ALargeSmall size={13} /> Tamanho
-            </p>
-            <div className="flex gap-2">
-              {NOTE_SIZES.map((s) => (
-                <button
-                  key={s.value}
-                  type="button"
-                  onClick={() => setSelectedSize(s.value)}
-                  className={cn(
-                    "w-11 h-9 rounded-xl border text-xs font-semibold transition-all duration-200",
-                    selectedSize === s.value
-                      ? "border-primary bg-primary/10 text-primary shadow-sm"
-                      : "border-border/40 text-muted-foreground hover:border-primary/40 hover:bg-secondary/50"
-                  )}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Image section */}
-          <div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleImageSelect}
-            />
+          {/* Toolbar: Camera, Gallery, Copy */}
+          <div className="flex items-center gap-2">
             <input
               ref={cameraInputRef}
               type="file"
@@ -292,46 +187,59 @@ export function NoteEditor({
               className="hidden"
               onChange={handleImageSelect}
             />
-            {images.length > 0 && (
-              <div className="grid grid-cols-3 gap-2.5 mb-3">
-                {images.map((img, i) => (
-                  <div key={i} className="relative group/img rounded-xl overflow-hidden note-shadow">
-                    <img
-                      src={img}
-                      alt=""
-                      className="w-full h-24 object-cover transition-transform duration-300 group-hover/img:scale-105"
-                    />
-                    <button
-                      onClick={() => removeImage(i)}
-                      className="absolute top-1.5 right-1.5 p-1 rounded-full bg-background/90 shadow-sm opacity-0 group-hover/img:opacity-100 transition-all duration-200 hover:bg-destructive/20 text-muted-foreground hover:text-destructive"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="flex gap-2.5">
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1 gap-2 rounded-xl h-11 border-border/40 hover:border-primary/40 hover:bg-secondary/50 transition-all duration-200"
-                onClick={() => cameraInputRef.current?.click()}
-              >
-                <Camera size={16} />
-                Câmera
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1 gap-2 rounded-xl h-11 border-border/40 hover:border-primary/40 hover:bg-secondary/50 transition-all duration-200"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <ImagePlus size={16} />
-                Galeria
-              </Button>
-            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageSelect}
+            />
+            <button
+              type="button"
+              onClick={() => cameraInputRef.current?.click()}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border/40 text-muted-foreground hover:border-primary/40 hover:text-foreground hover:bg-secondary/50 transition-all duration-200 text-xs"
+            >
+              <Camera size={16} />
+              Câmera
+            </button>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border/40 text-muted-foreground hover:border-primary/40 hover:text-foreground hover:bg-secondary/50 transition-all duration-200 text-xs"
+            >
+              <ImagePlus size={16} />
+              Galeria
+            </button>
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border/40 text-muted-foreground hover:border-primary/40 hover:text-foreground hover:bg-secondary/50 transition-all duration-200 text-xs"
+            >
+              {copied ? <Check size={16} className="text-primary" /> : <Copy size={16} />}
+              Copiar
+            </button>
           </div>
+
+          {/* Inline image previews */}
+          {images.length > 0 && (
+            <div className="flex flex-wrap gap-3">
+              {images.map((img, i) => (
+                <div key={i} className="relative group/img rounded-lg overflow-hidden shadow-md" style={{ width: "40%", maxWidth: "200px" }}>
+                  <img
+                    src={img}
+                    alt=""
+                    className="w-full h-auto object-cover rounded-lg"
+                  />
+                  <button
+                    onClick={() => setImages((prev) => prev.filter((_, idx) => idx !== i))}
+                    className="absolute top-1.5 right-1.5 p-1 rounded-full bg-background/90 shadow-sm opacity-0 group-hover/img:opacity-100 transition-all duration-200 hover:bg-destructive/20 text-muted-foreground hover:text-destructive"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Color selector */}
           <div>
