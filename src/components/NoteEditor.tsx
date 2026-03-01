@@ -7,6 +7,7 @@ import {
   Copy,
   Check,
   Clock,
+  Lock,
 } from "lucide-react";
 import {
   Dialog,
@@ -63,6 +64,7 @@ export function NoteEditor({
   const [copied, setCopied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Sync state when dialog opens
   const lastNoteId = useRef<string | null>(null);
@@ -99,11 +101,26 @@ export function NoteEditor({
     if (file) {
       const reader = new FileReader();
       reader.onload = (ev) => {
-        setImages((prev) => [...prev, ev.target?.result as string]);
+        const dataUrl = ev.target?.result as string;
+        setImages((prev) => [...prev, dataUrl]);
+        // Insert image placeholder into text at cursor position
+        const ta = textareaRef.current;
+        if (ta) {
+          const pos = ta.selectionStart ?? content.length;
+          const imgTag = `\n[imagem-${images.length}]\n`;
+          const newContent = content.slice(0, pos) + imgTag + content.slice(pos);
+          setContent(newContent);
+        }
       };
       reader.readAsDataURL(file);
     }
     e.target.value = "";
+  };
+
+  const removeImage = (index: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== index));
+    // Remove placeholder from text
+    setContent((prev) => prev.replace(`[imagem-${index}]`, ""));
   };
 
   const handleCopy = () => {
@@ -120,21 +137,68 @@ export function NoteEditor({
     onOpenChange(false);
   };
 
+  // Render content with inline images
+  const renderContentPreview = () => {
+    if (images.length === 0) return null;
+
+    const parts = content.split(/(\[imagem-\d+\])/g);
+    const hasPlaceholders = parts.some((p) => /^\[imagem-\d+\]$/.test(p));
+    if (!hasPlaceholders) return null;
+
+    return (
+      <div className="px-1 mt-2 space-y-1">
+        {parts.map((part, i) => {
+          const match = part.match(/^\[imagem-(\d+)\]$/);
+          if (match) {
+            const imgIndex = parseInt(match[1]);
+            const src = images[imgIndex];
+            if (!src) return null;
+            return (
+              <div key={i} className="relative inline-block group/img" style={{ maxWidth: "40%" }}>
+                <img
+                  src={src}
+                  alt=""
+                  className="w-full h-auto rounded-lg shadow-md"
+                />
+                <button
+                  onClick={() => removeImage(imgIndex)}
+                  className="absolute top-1 right-1 p-1 rounded-full bg-background/90 shadow-sm opacity-0 group-hover/img:opacity-100 transition-all duration-200 hover:bg-destructive/20 text-muted-foreground hover:text-destructive"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            );
+          }
+          return null;
+        })}
+      </div>
+    );
+  };
+
   return (
     <Dialog open={open} onOpenChange={(val) => onOpenChange(val)}>
       <DialogContent className="sm:max-w-lg p-0 gap-0 h-[100dvh] sm:h-auto sm:max-h-[92vh] overflow-hidden flex flex-col border-0 sm:border sm:rounded-2xl shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
-          <div>
-            <h2 className="font-display text-lg font-semibold text-foreground">
-              {editingNote ? "Editar nota" : "Nova nota"}
-            </h2>
-            {editingNote && (
-              <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                <Clock size={10} />
-                Criada em {format(editingNote.createdAt, "d 'de' MMMM, HH:mm", { locale: ptBR })}
-              </p>
-            )}
+          <div className="flex items-center gap-2">
+            <div>
+              <h2 className="font-display text-lg font-semibold text-foreground">
+                {editingNote ? "Editar nota" : "Nova nota"}
+              </h2>
+              {editingNote && (
+                <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                  <Clock size={10} />
+                  Criada em {format(editingNote.createdAt, "d 'de' MMMM, HH:mm", { locale: ptBR })}
+                </p>
+              )}
+            </div>
+            <button
+              className="p-1.5 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+              title="Bloquear nota"
+              onClick={() => toast({ title: "Em breve", description: "Bloqueio por senha será implementado em breve." })}
+            >
+              <Lock size={16} />
+            </button>
           </div>
           <button
             onClick={() => onOpenChange(false)}
@@ -158,14 +222,16 @@ export function NoteEditor({
             <div className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary transition-all duration-300 group-focus-within:w-full" />
           </div>
 
-          {/* Content textarea */}
+          {/* Content textarea + inline images */}
           <div className="relative">
             <textarea
+              ref={textareaRef}
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="Comece a escrever sua nota..."
               className="w-full min-h-[220px] bg-secondary/30 rounded-xl px-4 py-3 resize-none outline-none border border-border/30 focus:border-primary/40 focus:bg-secondary/50 transition-all duration-300 placeholder:text-muted-foreground/40 text-sm font-body note-shadow"
             />
+            {renderContentPreview()}
             {/* Word & char counter */}
             <div className="flex justify-end gap-3 mt-1.5 px-1">
               <span className="text-[10px] text-muted-foreground/60">
@@ -220,29 +286,8 @@ export function NoteEditor({
             </button>
           </div>
 
-          {/* Inline image previews */}
-          {images.length > 0 && (
-            <div className="flex flex-wrap gap-3">
-              {images.map((img, i) => (
-                <div key={i} className="relative group/img rounded-lg overflow-hidden shadow-md" style={{ width: "40%", maxWidth: "200px" }}>
-                  <img
-                    src={img}
-                    alt=""
-                    className="w-full h-auto object-cover rounded-lg"
-                  />
-                  <button
-                    onClick={() => setImages((prev) => prev.filter((_, idx) => idx !== i))}
-                    className="absolute top-1.5 right-1.5 p-1 rounded-full bg-background/90 shadow-sm opacity-0 group-hover/img:opacity-100 transition-all duration-200 hover:bg-destructive/20 text-muted-foreground hover:text-destructive"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Color selector */}
-          <div>
+          {/* Color selector - fully visible */}
+          <div className="pb-2">
             <p className="text-xs text-muted-foreground mb-2.5 font-medium">Cor da nota</p>
             <div className="flex gap-3 flex-wrap">
               {NOTE_COLORS.map((c) => (
@@ -251,7 +296,7 @@ export function NoteEditor({
                   type="button"
                   onClick={() => setSelectedColor(c.value)}
                   className={cn(
-                    "w-11 h-11 rounded-full border-2 transition-all duration-300 relative",
+                    "w-11 h-11 rounded-full border-2 transition-all duration-300 relative shrink-0",
                     c.value,
                     selectedColor === c.value
                       ? `${c.ring} ring-2 ring-offset-2 ring-offset-background border-transparent scale-110`
@@ -282,7 +327,7 @@ export function NoteEditor({
             className="flex-1 h-[52px] rounded-xl text-sm font-semibold border-border/50 hover:bg-secondary/50 transition-all duration-200"
             onClick={() => onOpenChange(false)}
           >
-            {editingNote ? "Cancelar" : "Salvar rascunho"}
+            Salvar rascunho
           </Button>
           <Button
             type="button"
