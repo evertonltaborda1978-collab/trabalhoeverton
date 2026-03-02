@@ -274,7 +274,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg p-0 gap-0 h-[100dvh] sm:h-auto sm:max-h-[92vh] overflow-hidden flex flex-col border-0 sm:border sm:rounded-2xl shadow-2xl bg-transparent">
+      <DialogContent className="p-0 gap-0 overflow-hidden flex flex-col border-0 bg-transparent fixed inset-0 w-screen h-screen min-h-[100dvh] max-w-none max-h-none rounded-none shadow-none translate-x-0 translate-y-0 top-0 left-0" style={{ transform: 'none' }}>
         {/* ── NOTEPAD CONTAINER ── */}
         <div className="flex flex-col h-full" style={{ background: "#FFFDE7" }}>
 
@@ -382,8 +382,8 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
                       <img
                         src={block.url}
                         alt=""
-                        className="w-full h-auto shadow-md"
-                        style={{ borderRadius: "8px" }}
+                        className="shadow-md"
+                        style={{ maxWidth: "calc(100% - 24px)", maxHeight: "250px", objectFit: "contain", borderRadius: "8px", margin: "0 12px" }}
                       />
                       <button
                         onClick={() => removeImageBlock(idx)}
