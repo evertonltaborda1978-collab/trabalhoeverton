@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Note } from "@/hooks/useNotes";
 import {
   Camera,
@@ -6,37 +6,65 @@ import {
   ImagePlus,
   Copy,
   Check,
-  Clock,
-  Lock,
+  Undo2,
+  Redo2,
+  MoreVertical,
+  ScanSearch,
+  Loader2,
 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "@/hooks/use-toast";
 
+// ── Types ──────────────────────────────────────────────
+export interface ContentBlock {
+  type: "text" | "image";
+  content?: string; // for text blocks
+  url?: string;     // for image blocks
+}
+
 const NOTE_COLORS = [
-  { value: "bg-yellow-100", label: "Amarelo", ring: "ring-yellow-400" },
-  { value: "bg-blue-100", label: "Azul", ring: "ring-blue-400" },
-  { value: "bg-green-100", label: "Verde", ring: "ring-green-400" },
-  { value: "bg-pink-100", label: "Rosa", ring: "ring-pink-400" },
-  { value: "bg-orange-100", label: "Laranja", ring: "ring-orange-400" },
-  { value: "bg-purple-100", label: "Roxo", ring: "ring-purple-400" },
-  { value: "bg-gray-800", label: "Escura", ring: "ring-gray-500" },
+  { value: "bg-yellow-100", label: "Amarelo", dot: "#FEF9C3" },
+  { value: "bg-blue-100", label: "Azul", dot: "#DBEAFE" },
+  { value: "bg-green-100", label: "Verde", dot: "#DCFCE7" },
+  { value: "bg-pink-100", label: "Rosa", dot: "#FCE7F3" },
+  { value: "bg-orange-100", label: "Laranja", dot: "#FED7AA" },
+  { value: "bg-purple-100", label: "Roxo", dot: "#E9D5FF" },
+  { value: "bg-gray-800", label: "Escura", dot: "#1F2937" },
 ];
 
-export function getFontClass(_fontFamily: string) {
-  return "font-body";
+// ── Helpers ────────────────────────────────────────────
+export function getFontClass(_f: string) { return "font-body"; }
+export function getSizeClass(_f: string) { return "text-sm"; }
+
+/** Serialize blocks to a JSON string for DB storage */
+function serializeBlocks(blocks: ContentBlock[]): string {
+  return JSON.stringify(blocks);
 }
 
-export function getSizeClass(_fontSize: string) {
-  return "text-sm";
+/** Deserialize DB content – handles legacy plain strings */
+function deserializeBlocks(raw: string): ContentBlock[] {
+  if (!raw) return [{ type: "text", content: "" }];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed;
+  } catch { /* legacy plain text */ }
+  return [{ type: "text", content: raw }];
 }
 
+function blocksToPlainText(blocks: ContentBlock[]): string {
+  return blocks
+    .filter((b) => b.type === "text")
+    .map((b) => b.content || "")
+    .join("\n");
+}
+
+// ── Props ──────────────────────────────────────────────
 interface NoteEditorProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -47,26 +75,31 @@ interface NoteEditorProps {
     images: string[],
     color: string,
     fontFamily: string,
-    fontSize: string
+    fontSize: string,
   ) => void;
 }
 
-export function NoteEditor({
-  open,
-  onOpenChange,
-  editingNote,
-  onSave,
-}: NoteEditorProps) {
+// ── Component ──────────────────────────────────────────
+export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEditorProps) {
   const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [images, setImages] = useState<string[]>([]);
+  const [blocks, setBlocks] = useState<ContentBlock[]>([{ type: "text", content: "" }]);
   const [selectedColor, setSelectedColor] = useState(NOTE_COLORS[0].value);
+  const [showColorPicker, setShowColorPicker] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showOcrModal, setShowOcrModal] = useState(false);
+  const [ocrLoading, setOcrLoading] = useState(false);
+
+  // History for undo/redo
+  const [history, setHistory] = useState<ContentBlock[][]>([]);
+  const [historyIdx, setHistoryIdx] = useState(-1);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const ocrFileRef = useRef<HTMLInputElement>(null);
+  const ocrCameraRef = useRef<HTMLInputElement>(null);
+  const focusedBlockRef = useRef<number>(0);
 
-  // Sync state when dialog opens
+  // ── Sync on open ─────────────────────────────────────
   const lastNoteId = useRef<string | null>(null);
   if (open) {
     const noteId = editingNote?.id ?? "__new__";
@@ -74,270 +107,406 @@ export function NoteEditor({
       lastNoteId.current = noteId;
       if (editingNote) {
         setTitle(editingNote.title);
-        setContent(editingNote.content);
-        setImages(editingNote.images);
+        const parsed = deserializeBlocks(editingNote.content);
+        setBlocks(parsed);
         setSelectedColor(editingNote.color);
       } else {
         setTitle("");
-        setContent("");
-        setImages([]);
+        setBlocks([{ type: "text", content: "" }]);
         setSelectedColor(NOTE_COLORS[0].value);
       }
+      setHistory([]);
+      setHistoryIdx(-1);
     }
   } else {
     if (lastNoteId.current !== null) lastNoteId.current = null;
   }
 
-  const wordCount = useMemo(() => {
-    const words = content.trim().split(/\s+/).filter(Boolean).length;
-    const chars = content.length;
-    return { words, chars };
-  }, [content]);
+  // ── Undo / Redo ──────────────────────────────────────
+  const pushHistory = useCallback((newBlocks: ContentBlock[]) => {
+    setHistory((h) => {
+      const trimmed = h.slice(0, historyIdx + 1);
+      return [...trimmed, JSON.parse(JSON.stringify(newBlocks))];
+    });
+    setHistoryIdx((i) => i + 1);
+  }, [historyIdx]);
 
-  const isDarkNote = selectedColor === "bg-gray-800";
+  const undo = () => {
+    if (historyIdx <= 0) return;
+    const prev = history[historyIdx - 1];
+    if (prev) {
+      setBlocks(JSON.parse(JSON.stringify(prev)));
+      setHistoryIdx((i) => i - 1);
+    }
+  };
 
+  const redo = () => {
+    if (historyIdx >= history.length - 1) return;
+    const next = history[historyIdx + 1];
+    if (next) {
+      setBlocks(JSON.parse(JSON.stringify(next)));
+      setHistoryIdx((i) => i + 1);
+    }
+  };
+
+  // ── Block operations ─────────────────────────────────
+  const updateTextBlock = (index: number, text: string) => {
+    setBlocks((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], content: text };
+      return next;
+    });
+  };
+
+  const insertImageAtBlock = (file: File) => {
+    const url = URL.createObjectURL(file);
+    const idx = focusedBlockRef.current;
+
+    setBlocks((prev) => {
+      const next = [...prev];
+      const currentBlock = next[idx];
+
+      // Split text block at cursor if it's a text block
+      if (currentBlock?.type === "text") {
+        const imgBlock: ContentBlock = { type: "image", url };
+        const afterBlock: ContentBlock = { type: "text", content: "" };
+        next.splice(idx + 1, 0, imgBlock, afterBlock);
+      } else {
+        next.splice(idx + 1, 0, { type: "image", url }, { type: "text", content: "" });
+      }
+
+      const result = next;
+      pushHistory(result);
+      return result;
+    });
+  };
+
+  const removeImageBlock = (index: number) => {
+    setBlocks((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      // Merge adjacent text blocks
+      const merged: ContentBlock[] = [];
+      for (const block of next) {
+        const last = merged[merged.length - 1];
+        if (block.type === "text" && last?.type === "text") {
+          last.content = (last.content || "") + "\n" + (block.content || "");
+        } else {
+          merged.push({ ...block });
+        }
+      }
+      if (merged.length === 0) merged.push({ type: "text", content: "" });
+      pushHistory(merged);
+      return merged;
+    });
+  };
+
+  // ── Image input handler ──────────────────────────────
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const dataUrl = ev.target?.result as string;
-        setImages((prev) => [...prev, dataUrl]);
-        // Insert image placeholder into text at cursor position
-        const ta = textareaRef.current;
-        if (ta) {
-          const pos = ta.selectionStart ?? content.length;
-          const imgTag = `\n[imagem-${images.length}]\n`;
-          const newContent = content.slice(0, pos) + imgTag + content.slice(pos);
-          setContent(newContent);
-        }
-      };
-      reader.readAsDataURL(file);
-    }
+    if (file) insertImageAtBlock(file);
     e.target.value = "";
   };
 
-  const removeImage = (index: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== index));
-    // Remove placeholder from text
-    setContent((prev) => prev.replace(`[imagem-${index}]`, ""));
+  // ── OCR ──────────────────────────────────────────────
+  const handleOcrImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setShowOcrModal(false);
+    setOcrLoading(true);
+
+    try {
+      const { createWorker } = await import("tesseract.js");
+      const worker = await createWorker("por");
+      const { data: { text } } = await worker.recognize(file);
+      await worker.terminate();
+
+      if (text.trim()) {
+        const idx = focusedBlockRef.current;
+        setBlocks((prev) => {
+          const next = [...prev];
+          if (next[idx]?.type === "text") {
+            next[idx] = { ...next[idx], content: (next[idx].content || "") + text.trim() };
+          } else {
+            next.splice(idx + 1, 0, { type: "text", content: text.trim() });
+          }
+          return next;
+        });
+        toast({ title: "Texto extraído e inserido!", description: `${text.trim().split(/\s+/).length} palavras extraídas.` });
+      } else {
+        toast({ title: "Nenhum texto encontrado", description: "Não foi possível extrair texto desta imagem." });
+      }
+    } catch {
+      toast({ title: "Erro no OCR", description: "Não foi possível processar a imagem." });
+    } finally {
+      setOcrLoading(false);
+    }
   };
 
+  // ── Copy ─────────────────────────────────────────────
   const handleCopy = () => {
-    const text = `${title}\n\n${content}`;
+    const text = `${title}\n\n${blocksToPlainText(blocks)}`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     toast({ title: "Nota copiada com sucesso!", description: "Conteúdo copiado para a área de transferência." });
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // ── Save ─────────────────────────────────────────────
   const handleSave = () => {
     if (!title.trim()) return;
-    onSave(title, content, images, selectedColor, "default", "medium");
+    const serialized = serializeBlocks(blocks);
+    const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
+    onSave(title, serialized, imageUrls, selectedColor, "default", "medium");
     onOpenChange(false);
   };
 
-  // Render content with inline images
-  const renderContentPreview = () => {
-    if (images.length === 0) return null;
+  // ── Word count ───────────────────────────────────────
+  const plainText = blocksToPlainText(blocks);
+  const wordCount = plainText.trim().split(/\s+/).filter(Boolean).length;
+  const charCount = plainText.length;
 
-    const parts = content.split(/(\[imagem-\d+\])/g);
-    const hasPlaceholders = parts.some((p) => /^\[imagem-\d+\]$/.test(p));
-    if (!hasPlaceholders) return null;
-
-    return (
-      <div className="px-1 mt-2 space-y-1">
-        {parts.map((part, i) => {
-          const match = part.match(/^\[imagem-(\d+)\]$/);
-          if (match) {
-            const imgIndex = parseInt(match[1]);
-            const src = images[imgIndex];
-            if (!src) return null;
-            return (
-              <div key={i} className="relative inline-block group/img" style={{ maxWidth: "40%" }}>
-                <img
-                  src={src}
-                  alt=""
-                  className="w-full h-auto rounded-lg shadow-md"
-                />
-                <button
-                  onClick={() => removeImage(imgIndex)}
-                  className="absolute top-1 right-1 p-1 rounded-full bg-background/90 shadow-sm opacity-0 group-hover/img:opacity-100 transition-all duration-200 hover:bg-destructive/20 text-muted-foreground hover:text-destructive"
-                >
-                  <X size={12} />
-                </button>
-              </div>
-            );
-          }
-          return null;
-        })}
-      </div>
-    );
+  // ── Auto-resize textareas ────────────────────────────
+  const autoResize = (el: HTMLTextAreaElement) => {
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
   };
 
   return (
-    <Dialog open={open} onOpenChange={(val) => onOpenChange(val)}>
-      <DialogContent className="sm:max-w-lg p-0 gap-0 h-[100dvh] sm:h-auto sm:max-h-[92vh] overflow-hidden flex flex-col border-0 sm:border sm:rounded-2xl shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 pt-4 pb-2">
-          <div className="flex items-center gap-2">
-            <div>
-              <h2 className="font-display text-lg font-semibold text-foreground">
-                {editingNote ? "Editar nota" : "Nova nota"}
-              </h2>
-              {editingNote && (
-                <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                  <Clock size={10} />
-                  Criada em {format(editingNote.createdAt, "d 'de' MMMM, HH:mm", { locale: ptBR })}
-                </p>
-              )}
-            </div>
-            <button
-              className="p-1.5 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
-              title="Bloquear nota"
-              onClick={() => toast({ title: "Em breve", description: "Bloqueio por senha será implementado em breve." })}
-            >
-              <Lock size={16} />
-            </button>
-          </div>
-          <button
-            onClick={() => onOpenChange(false)}
-            className="p-2 rounded-xl hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
-            aria-label="Fechar"
-          >
-            <X size={20} />
-          </button>
-        </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg p-0 gap-0 h-[100dvh] sm:h-auto sm:max-h-[92vh] overflow-hidden flex flex-col border-0 sm:border sm:rounded-2xl shadow-2xl bg-transparent">
+        {/* ── NOTEPAD CONTAINER ── */}
+        <div className="flex flex-col h-full" style={{ background: "#FFFDE7" }}>
 
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-5">
-          {/* Title - Material Design style */}
-          <div className="relative group">
+          {/* ── HEADER (yellow bar) ── */}
+          <div
+            className="flex items-center gap-2 px-3 py-2.5 shrink-0"
+            style={{ background: "#F9C920" }}
+          >
+            <button
+              onClick={handleSave}
+              disabled={!title.trim()}
+              className="p-2 rounded-lg hover:bg-black/10 transition-colors disabled:opacity-40"
+              title="Salvar"
+            >
+              <Check size={20} className="text-gray-800" />
+            </button>
+
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Título da nota..."
-              className="w-full bg-transparent border-0 border-b-2 border-border/60 focus:border-primary px-1 py-3 text-lg font-semibold text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors duration-300 font-body"
+              className="flex-1 bg-white/90 rounded-lg px-3 py-1.5 text-sm font-semibold text-gray-800 placeholder:text-gray-400 outline-none border-0 shadow-sm"
             />
-            <div className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary transition-all duration-300 group-focus-within:w-full" />
-          </div>
 
-          {/* Content textarea + inline images */}
-          <div className="relative">
-            <textarea
-              ref={textareaRef}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Comece a escrever sua nota..."
-              className="w-full min-h-[220px] bg-secondary/30 rounded-xl px-4 py-3 resize-none outline-none border border-border/30 focus:border-primary/40 focus:bg-secondary/50 transition-all duration-300 placeholder:text-muted-foreground/40 text-sm font-body note-shadow"
+            {/* Color dot */}
+            <button
+              onClick={() => setShowColorPicker(!showColorPicker)}
+              className="w-7 h-7 rounded-md border-2 border-white/60 shadow-sm shrink-0 transition-transform hover:scale-110"
+              style={{ background: NOTE_COLORS.find((c) => c.value === selectedColor)?.dot || "#FEF9C3" }}
+              title="Cor da nota"
             />
-            {renderContentPreview()}
-            {/* Word & char counter */}
-            <div className="flex justify-end gap-3 mt-1.5 px-1">
-              <span className="text-[10px] text-muted-foreground/60">
-                {wordCount.words} {wordCount.words === 1 ? "palavra" : "palavras"}
-              </span>
-              <span className="text-[10px] text-muted-foreground/60">
-                {wordCount.chars} caracteres
-              </span>
-            </div>
-          </div>
 
-          {/* Toolbar: Camera, Gallery, Copy */}
-          <div className="flex items-center gap-2">
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={handleImageSelect}
-            />
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleImageSelect}
-            />
             <button
-              type="button"
-              onClick={() => cameraInputRef.current?.click()}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border/40 text-muted-foreground hover:border-primary/40 hover:text-foreground hover:bg-secondary/50 transition-all duration-200 text-xs"
+              onClick={() => onOpenChange(false)}
+              className="p-2 rounded-lg hover:bg-black/10 transition-colors"
+              title="Fechar"
             >
-              <Camera size={16} />
-              Câmera
-            </button>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border/40 text-muted-foreground hover:border-primary/40 hover:text-foreground hover:bg-secondary/50 transition-all duration-200 text-xs"
-            >
-              <ImagePlus size={16} />
-              Galeria
-            </button>
-            <button
-              type="button"
-              onClick={handleCopy}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border/40 text-muted-foreground hover:border-primary/40 hover:text-foreground hover:bg-secondary/50 transition-all duration-200 text-xs"
-            >
-              {copied ? <Check size={16} className="text-primary" /> : <Copy size={16} />}
-              Copiar
+              <X size={20} className="text-gray-800" />
             </button>
           </div>
 
-          {/* Color selector - fully visible */}
-          <div className="pb-2">
-            <p className="text-xs text-muted-foreground mb-2.5 font-medium">Cor da nota</p>
-            <div className="flex gap-3 flex-wrap">
+          {/* Color picker dropdown */}
+          {showColorPicker && (
+            <div className="flex gap-2 px-4 py-2 justify-center" style={{ background: "#F9C920" }}>
               {NOTE_COLORS.map((c) => (
                 <button
                   key={c.value}
-                  type="button"
-                  onClick={() => setSelectedColor(c.value)}
+                  onClick={() => { setSelectedColor(c.value); setShowColorPicker(false); }}
                   className={cn(
-                    "w-11 h-11 rounded-full border-2 transition-all duration-300 relative shrink-0",
-                    c.value,
+                    "w-9 h-9 rounded-full border-2 transition-all duration-200 shrink-0",
                     selectedColor === c.value
-                      ? `${c.ring} ring-2 ring-offset-2 ring-offset-background border-transparent scale-110`
-                      : "border-border/40 hover:scale-105"
+                      ? "border-gray-800 scale-110 shadow-md"
+                      : "border-white/60 hover:scale-105"
                   )}
+                  style={{ background: c.dot }}
                   title={c.label}
-                >
-                  {selectedColor === c.value && (
-                    <Check
-                      size={16}
-                      className={cn(
-                        "absolute inset-0 m-auto",
-                        isDarkNote && selectedColor === c.value ? "text-white" : "text-foreground"
-                      )}
-                    />
-                  )}
-                </button>
+                />
               ))}
             </div>
+          )}
+
+          {/* ── Sub-header ── */}
+          <div className="flex items-center justify-between px-4 py-1.5 text-[11px]" style={{ color: "#8B7E3C" }}>
+            <span className="font-medium">
+              {editingNote ? "Editando" : "Nova nota"}
+            </span>
+            <span>
+              {format(editingNote?.createdAt ?? new Date(), "d 'de' MMMM, HH:mm", { locale: ptBR })}
+            </span>
+          </div>
+
+          {/* ── LINED PAPER BODY ── */}
+          <div
+            className="flex-1 overflow-y-auto px-4"
+            style={{
+              background: `repeating-linear-gradient(to bottom, transparent, transparent 27px, #E6D97A 28px)`,
+              backgroundPosition: "0 0",
+            }}
+          >
+            {/* Block editor */}
+            <div className="py-2">
+              {blocks.map((block, idx) => {
+                if (block.type === "text") {
+                  return (
+                    <textarea
+                      key={idx}
+                      value={block.content || ""}
+                      onChange={(e) => {
+                        updateTextBlock(idx, e.target.value);
+                        autoResize(e.target);
+                      }}
+                      onFocus={() => { focusedBlockRef.current = idx; }}
+                      onBlur={() => pushHistory(blocks)}
+                      placeholder={idx === 0 && blocks.length === 1 ? "Comece a escrever sua nota..." : ""}
+                      className="w-full bg-transparent border-0 outline-none resize-none text-sm text-gray-800 placeholder:text-gray-400/60"
+                      style={{ lineHeight: "28px", minHeight: "28px", overflow: "hidden" }}
+                      ref={(el) => { if (el) autoResize(el); }}
+                    />
+                  );
+                }
+
+                if (block.type === "image" && block.url) {
+                  return (
+                    <div key={idx} className="relative group/img my-2" style={{ maxWidth: "100%" }}>
+                      <img
+                        src={block.url}
+                        alt=""
+                        className="w-full h-auto shadow-md"
+                        style={{ borderRadius: "8px" }}
+                      />
+                      <button
+                        onClick={() => removeImageBlock(idx)}
+                        className="absolute top-2 right-2 p-1 rounded-full bg-black/50 text-white opacity-0 group-hover/img:opacity-100 transition-opacity duration-200 hover:bg-black/70"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  );
+                }
+
+                return null;
+              })}
+            </div>
+
+            {/* Word/char counter */}
+            <div className="flex justify-end gap-3 pb-2">
+              <span className="text-[10px]" style={{ color: "#8B7E3C" }}>
+                {wordCount} {wordCount === 1 ? "palavra" : "palavras"}
+              </span>
+              <span className="text-[10px]" style={{ color: "#8B7E3C" }}>
+                {charCount} caracteres
+              </span>
+            </div>
+          </div>
+
+          {/* ── TOOLBAR ── */}
+          <div className="flex items-center gap-1 px-3 py-2 border-t shrink-0" style={{ borderColor: "#E6D97A", background: "#FFF9C4" }}>
+            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageSelect} />
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelect} />
+            <input ref={ocrCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleOcrImage} />
+            <input ref={ocrFileRef} type="file" accept="image/*" className="hidden" onChange={handleOcrImage} />
+
+            <button onClick={() => cameraInputRef.current?.click()} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs hover:bg-yellow-200/60 transition-colors" style={{ color: "#5D5320" }}>
+              <Camera size={16} /> Câmera
+            </button>
+            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs hover:bg-yellow-200/60 transition-colors" style={{ color: "#5D5320" }}>
+              <ImagePlus size={16} /> Galeria
+            </button>
+            <button onClick={handleCopy} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs hover:bg-yellow-200/60 transition-colors" style={{ color: "#5D5320" }}>
+              {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} />} Copiar
+            </button>
+
+            <div className="w-px h-5 mx-1" style={{ background: "#E6D97A" }} />
+
+            <button
+              onClick={() => setShowOcrModal(true)}
+              disabled={ocrLoading}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs hover:bg-yellow-200/60 transition-colors" style={{ color: "#5D5320" }}
+            >
+              {ocrLoading ? <Loader2 size={16} className="animate-spin" /> : <ScanSearch size={16} />}
+              {ocrLoading ? "Extraindo..." : "OCR"}
+            </button>
+
+            <div className="flex-1" />
+
+            <button onClick={undo} disabled={historyIdx <= 0} className="p-1.5 rounded-lg hover:bg-yellow-200/60 transition-colors disabled:opacity-30" style={{ color: "#5D5320" }}>
+              <Undo2 size={18} />
+            </button>
+            <button onClick={redo} disabled={historyIdx >= history.length - 1} className="p-1.5 rounded-lg hover:bg-yellow-200/60 transition-colors disabled:opacity-30" style={{ color: "#5D5320" }}>
+              <Redo2 size={18} />
+            </button>
+          </div>
+
+          {/* ── FOOTER BUTTONS ── */}
+          <div className="flex gap-3 px-4 py-3 shrink-0" style={{ background: "#FFF9C4", borderTop: "1px solid #E6D97A" }}>
+            <button
+              onClick={() => onOpenChange(false)}
+              className="flex-1 h-[52px] rounded-xl text-sm font-semibold border-2 transition-all duration-200 hover:bg-yellow-100"
+              style={{ borderColor: "#D4C55A", color: "#5D5320" }}
+            >
+              Salvar rascunho
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={!title.trim()}
+              className="flex-1 h-[52px] rounded-xl text-sm font-semibold text-white shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50"
+              style={{ background: "#2D9E7F" }}
+            >
+              {editingNote ? "Salvar" : "Criar nota"}
+            </button>
           </div>
         </div>
 
-        {/* Footer buttons - always visible */}
-        <div className="px-4 py-3 border-t border-border/30 bg-background/80 backdrop-blur-sm flex gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            className="flex-1 h-[52px] rounded-xl text-sm font-semibold border-border/50 hover:bg-secondary/50 transition-all duration-200"
-            onClick={() => onOpenChange(false)}
-          >
-            Salvar rascunho
-          </Button>
-          <Button
-            type="button"
-            className="flex-1 h-[52px] rounded-xl text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all duration-200"
-            onClick={handleSave}
-            disabled={!title.trim()}
-          >
-            {editingNote ? "Salvar" : "Criar nota"}
-          </Button>
-        </div>
+        {/* ── OCR MODAL ── */}
+        {showOcrModal && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 rounded-2xl">
+            <div className="bg-white rounded-2xl p-6 mx-4 shadow-xl max-w-xs w-full">
+              <h3 className="text-base font-semibold text-gray-800 mb-1">Extrair texto (OCR)</h3>
+              <p className="text-xs text-gray-500 mb-4">De onde deseja extrair o texto?</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => ocrCameraRef.current?.click()}
+                  className="flex-1 flex flex-col items-center gap-2 py-4 rounded-xl border-2 border-gray-200 hover:border-yellow-400 hover:bg-yellow-50 transition-all"
+                >
+                  <Camera size={24} className="text-gray-600" />
+                  <span className="text-xs font-medium text-gray-700">Câmera</span>
+                </button>
+                <button
+                  onClick={() => ocrFileRef.current?.click()}
+                  className="flex-1 flex flex-col items-center gap-2 py-4 rounded-xl border-2 border-gray-200 hover:border-yellow-400 hover:bg-yellow-50 transition-all"
+                >
+                  <ImagePlus size={24} className="text-gray-600" />
+                  <span className="text-xs font-medium text-gray-700">Galeria</span>
+                </button>
+              </div>
+              <button
+                onClick={() => setShowOcrModal(false)}
+                className="w-full mt-3 py-2 text-xs text-gray-500 hover:text-gray-800 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* OCR Loading overlay */}
+        {ocrLoading && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/30 rounded-2xl gap-3">
+            <Loader2 size={32} className="animate-spin text-white" />
+            <p className="text-white text-sm font-medium">Extraindo texto da imagem...</p>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
