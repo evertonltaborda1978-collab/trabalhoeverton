@@ -11,6 +11,7 @@ import {
   MoreVertical,
   ScanSearch,
   Loader2,
+  QrCode,
 } from "lucide-react";
 import {
   Dialog,
@@ -88,6 +89,8 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
   const [copied, setCopied] = useState(false);
   const [showOcrModal, setShowOcrModal] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
+  const [showQrScanner, setShowQrScanner] = useState(false);
+  const [qrLoading, setQrLoading] = useState(false);
 
   // History for undo/redo
   const [history, setHistory] = useState<ContentBlock[][]>([]);
@@ -250,6 +253,55 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
     setCopied(true);
     toast({ title: "Nota copiada com sucesso!", description: "Conteúdo copiado para a área de transferência." });
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // ── QR Code Scanner ─────────────────────────────────
+  const handleStartQrScanner = async () => {
+    setShowQrScanner(true);
+    setQrLoading(true);
+    try {
+      const { Html5Qrcode } = await import("html5-qrcode");
+      // Wait for the DOM element to be ready
+      await new Promise((r) => setTimeout(r, 300));
+      const scanner = new Html5Qrcode("qr-reader");
+      await scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => {
+          // Insert decoded text into current block
+          const idx = focusedBlockRef.current;
+          setBlocks((prev) => {
+            const next = [...prev];
+            if (next[idx]?.type === "text") {
+              next[idx] = { ...next[idx], content: (next[idx].content || "") + decodedText };
+            } else {
+              next.splice(idx + 1, 0, { type: "text", content: decodedText });
+            }
+            return next;
+          });
+          toast({ title: "QR Code lido!", description: decodedText.length > 60 ? decodedText.slice(0, 60) + "…" : decodedText });
+          scanner.stop().catch(() => {});
+          setShowQrScanner(false);
+        },
+        () => {} // ignore scan errors (no QR found yet)
+      );
+      setQrLoading(false);
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Erro ao abrir câmera", description: "Não foi possível acessar a câmera para leitura de QR Code." });
+      setShowQrScanner(false);
+      setQrLoading(false);
+    }
+  };
+
+  const handleStopQrScanner = async () => {
+    try {
+      const { Html5Qrcode } = await import("html5-qrcode");
+      // Try to stop any running instance
+      const el = document.getElementById("qr-reader");
+      if (el) el.innerHTML = "";
+    } catch {}
+    setShowQrScanner(false);
   };
 
   // ── Save ─────────────────────────────────────────────
@@ -437,6 +489,14 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
               {ocrLoading ? <Loader2 size={16} className="animate-spin" /> : <ScanSearch size={16} />}
               {ocrLoading ? "Extraindo..." : "OCR"}
             </button>
+            <button
+              onClick={handleStartQrScanner}
+              disabled={qrLoading}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs hover:bg-yellow-200/60 transition-colors" style={{ color: "#5D5320" }}
+            >
+              {qrLoading ? <Loader2 size={16} className="animate-spin" /> : <QrCode size={16} />}
+              {qrLoading ? "Lendo..." : "QR"}
+            </button>
 
             <div className="flex-1" />
 
@@ -493,6 +553,22 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
               <button
                 onClick={() => setShowOcrModal(false)}
                 className="w-full mt-3 py-2 text-xs text-gray-500 hover:text-gray-800 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* QR Scanner Modal */}
+        {showQrScanner && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/80">
+            <div className="bg-white rounded-2xl p-4 mx-4 shadow-xl max-w-sm w-full">
+              <h3 className="text-base font-semibold text-gray-800 mb-3 text-center">Leitor de QR Code</h3>
+              <div id="qr-reader" className="w-full rounded-lg overflow-hidden" style={{ minHeight: 280 }} />
+              <button
+                onClick={handleStopQrScanner}
+                className="w-full mt-3 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors border rounded-xl"
               >
                 Cancelar
               </button>
