@@ -11,7 +11,7 @@ import {
   MoreVertical,
   ScanSearch,
   Loader2,
-  QrCode,
+  ScanLine,
 } from "lucide-react";
 import {
   Dialog,
@@ -494,7 +494,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
               disabled={qrLoading}
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs hover:bg-yellow-200/60 transition-colors" style={{ color: "#5D5320" }}
             >
-              {qrLoading ? <Loader2 size={16} className="animate-spin" /> : <QrCode size={16} />}
+              {qrLoading ? <Loader2 size={16} className="animate-spin" /> : <ScanLine size={16} />}
               {qrLoading ? "Lendo..." : "QR"}
             </button>
 
