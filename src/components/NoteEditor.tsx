@@ -274,7 +274,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="p-0 gap-0 overflow-hidden flex flex-col border-0 bg-transparent fixed inset-0 w-screen h-screen min-h-[100dvh] max-w-none max-h-none rounded-none shadow-none translate-x-0 translate-y-0 top-0 left-0" style={{ transform: 'none' }}>
+      <DialogContent className="!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !w-screen !h-screen !min-h-[100dvh] !max-w-none !max-h-none !rounded-none !shadow-none !border-0 !p-0 !gap-0 !bg-transparent overflow-hidden flex flex-col z-50">
         {/* ── NOTEPAD CONTAINER ── */}
         <div className="flex flex-col h-full" style={{ background: "#FFFDE7" }}>
 
