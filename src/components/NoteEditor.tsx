@@ -8,7 +8,6 @@ import {
   Check,
   Undo2,
   Redo2,
-  MoreVertical,
   ScanSearch,
   Loader2,
   ScanLine,
@@ -25,9 +24,20 @@ import { toast } from "@/hooks/use-toast";
 // ── Types ──────────────────────────────────────────────
 export interface ContentBlock {
   type: "text" | "image";
-  content?: string; // for text blocks
-  url?: string;     // for image blocks
+  content?: string;
+  url?: string;
 }
+
+// ── Color theme map ────────────────────────────────────
+const COLOR_THEMES: Record<string, { bg: string; lines: string; headerBg: string; toolbarBg: string; textMuted: string; borderAccent: string }> = {
+  "bg-yellow-100": { bg: "#FFFDE7", lines: "#F0E68C", headerBg: "#F0E68C", toolbarBg: "#FFF9C4", textMuted: "#8B7E3C", borderAccent: "#D4C55A" },
+  "bg-orange-100": { bg: "#FFE8D6", lines: "#FFBF9B", headerBg: "#FFBF9B", toolbarBg: "#FFECD2", textMuted: "#8B5E3C", borderAccent: "#E89B6B" },
+  "bg-purple-100": { bg: "#EDE7F6", lines: "#C9B8F0", headerBg: "#C9B8F0", toolbarBg: "#E8E0F4", textMuted: "#5E4B8B", borderAccent: "#B39DDB" },
+  "bg-green-100": { bg: "#E8F5E9", lines: "#A5D6A7", headerBg: "#A5D6A7", toolbarBg: "#E0F2E1", textMuted: "#3C6B3E", borderAccent: "#81C784" },
+  "bg-pink-100": { bg: "#F3E5F5", lines: "#CE93D8", headerBg: "#CE93D8", toolbarBg: "#EFE0F3", textMuted: "#7B3C8B", borderAccent: "#BA68C8" },
+  "bg-blue-100": { bg: "#E3F2FD", lines: "#90CAF9", headerBg: "#90CAF9", toolbarBg: "#DCF0FC", textMuted: "#3C5E8B", borderAccent: "#64B5F6" },
+  "bg-gray-800": { bg: "#2D2D2D", lines: "#444444", headerBg: "#444444", toolbarBg: "#333333", textMuted: "#AAAAAA", borderAccent: "#666666" },
+};
 
 const NOTE_COLORS = [
   { value: "bg-yellow-100", label: "Amarelo", dot: "#FEF9C3" },
@@ -43,12 +53,10 @@ const NOTE_COLORS = [
 export function getFontClass(_f: string) { return "font-body"; }
 export function getSizeClass(_f: string) { return "text-sm"; }
 
-/** Serialize blocks to a JSON string for DB storage */
 function serializeBlocks(blocks: ContentBlock[]): string {
   return JSON.stringify(blocks);
 }
 
-/** Deserialize DB content – handles legacy plain strings */
 function deserializeBlocks(raw: string): ContentBlock[] {
   if (!raw) return [{ type: "text", content: "" }];
   try {
@@ -63,6 +71,10 @@ function blocksToPlainText(blocks: ContentBlock[]): string {
     .filter((b) => b.type === "text")
     .map((b) => b.content || "")
     .join("\n");
+}
+
+function getTheme(color: string) {
+  return COLOR_THEMES[color] || COLOR_THEMES["bg-yellow-100"];
 }
 
 // ── Props ──────────────────────────────────────────────
@@ -92,7 +104,6 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
   const [showQrScanner, setShowQrScanner] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
 
-  // History for undo/redo
   const [history, setHistory] = useState<ContentBlock[][]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
 
@@ -125,6 +136,11 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
     if (lastNoteId.current !== null) lastNoteId.current = null;
   }
 
+  const theme = getTheme(selectedColor);
+  const isDark = selectedColor === "bg-gray-800";
+  const textColor = isDark ? "#E0E0E0" : "#1A1A2E";
+  const placeholderColor = isDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.3)";
+
   // ── Undo / Redo ──────────────────────────────────────
   const pushHistory = useCallback((newBlocks: ContentBlock[]) => {
     setHistory((h) => {
@@ -137,19 +153,13 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
   const undo = () => {
     if (historyIdx <= 0) return;
     const prev = history[historyIdx - 1];
-    if (prev) {
-      setBlocks(JSON.parse(JSON.stringify(prev)));
-      setHistoryIdx((i) => i - 1);
-    }
+    if (prev) { setBlocks(JSON.parse(JSON.stringify(prev))); setHistoryIdx((i) => i - 1); }
   };
 
   const redo = () => {
     if (historyIdx >= history.length - 1) return;
     const next = history[historyIdx + 1];
-    if (next) {
-      setBlocks(JSON.parse(JSON.stringify(next)));
-      setHistoryIdx((i) => i + 1);
-    }
+    if (next) { setBlocks(JSON.parse(JSON.stringify(next))); setHistoryIdx((i) => i + 1); }
   };
 
   // ── Block operations ─────────────────────────────────
@@ -164,30 +174,22 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
   const insertImageAtBlock = (file: File) => {
     const url = URL.createObjectURL(file);
     const idx = focusedBlockRef.current;
-
     setBlocks((prev) => {
       const next = [...prev];
       const currentBlock = next[idx];
-
-      // Split text block at cursor if it's a text block
       if (currentBlock?.type === "text") {
-        const imgBlock: ContentBlock = { type: "image", url };
-        const afterBlock: ContentBlock = { type: "text", content: "" };
-        next.splice(idx + 1, 0, imgBlock, afterBlock);
+        next.splice(idx + 1, 0, { type: "image", url }, { type: "text", content: "" });
       } else {
         next.splice(idx + 1, 0, { type: "image", url }, { type: "text", content: "" });
       }
-
-      const result = next;
-      pushHistory(result);
-      return result;
+      pushHistory(next);
+      return next;
     });
   };
 
   const removeImageBlock = (index: number) => {
     setBlocks((prev) => {
       const next = prev.filter((_, i) => i !== index);
-      // Merge adjacent text blocks
       const merged: ContentBlock[] = [];
       for (const block of next) {
         const last = merged[merged.length - 1];
@@ -203,7 +205,6 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
     });
   };
 
-  // ── Image input handler ──────────────────────────────
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) insertImageAtBlock(file);
@@ -217,13 +218,11 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
     e.target.value = "";
     setShowOcrModal(false);
     setOcrLoading(true);
-
     try {
       const { createWorker } = await import("tesseract.js");
       const worker = await createWorker("por");
       const { data: { text } } = await worker.recognize(file);
       await worker.terminate();
-
       if (text.trim()) {
         const idx = focusedBlockRef.current;
         setBlocks((prev) => {
@@ -246,7 +245,6 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
     }
   };
 
-  // ── Copy ─────────────────────────────────────────────
   const handleCopy = () => {
     const text = `${title}\n\n${blocksToPlainText(blocks)}`;
     navigator.clipboard.writeText(text);
@@ -261,14 +259,12 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
     setQrLoading(true);
     try {
       const { Html5Qrcode } = await import("html5-qrcode");
-      // Wait for the DOM element to be ready
       await new Promise((r) => setTimeout(r, 300));
       const scanner = new Html5Qrcode("qr-reader");
       await scanner.start(
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 250, height: 250 } },
         (decodedText) => {
-          // Insert decoded text into current block
           const idx = focusedBlockRef.current;
           setBlocks((prev) => {
             const next = [...prev];
@@ -283,7 +279,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
           scanner.stop().catch(() => {});
           setShowQrScanner(false);
         },
-        () => {} // ignore scan errors (no QR found yet)
+        () => {}
       );
       setQrLoading(false);
     } catch (err) {
@@ -296,15 +292,12 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
 
   const handleStopQrScanner = async () => {
     try {
-      const { Html5Qrcode } = await import("html5-qrcode");
-      // Try to stop any running instance
       const el = document.getElementById("qr-reader");
       if (el) el.innerHTML = "";
     } catch {}
     setShowQrScanner(false);
   };
 
-  // ── Save ─────────────────────────────────────────────
   const handleSave = () => {
     if (!title.trim()) return;
     const serialized = serializeBlocks(blocks);
@@ -313,12 +306,10 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
     onOpenChange(false);
   };
 
-  // ── Word count ───────────────────────────────────────
   const plainText = blocksToPlainText(blocks);
   const wordCount = plainText.trim().split(/\s+/).filter(Boolean).length;
   const charCount = plainText.length;
 
-  // ── Auto-resize textareas ────────────────────────────
   const autoResize = (el: HTMLTextAreaElement) => {
     el.style.height = "auto";
     el.style.height = el.scrollHeight + "px";
@@ -326,14 +317,24 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !w-screen !h-screen !min-h-[100dvh] !max-w-none !max-h-none !rounded-none !shadow-none !border-0 !p-0 !gap-0 !bg-transparent overflow-hidden flex flex-col z-50">
+      <DialogContent className="!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !w-screen !max-w-none !max-h-none !rounded-none !shadow-none !border-0 !p-0 !gap-0 !bg-transparent z-50"
+        style={{ height: "100dvh" }}
+      >
         {/* ── NOTEPAD CONTAINER ── */}
-        <div className="flex flex-col h-full" style={{ background: "#FFFDE7" }}>
+        <div
+          className="flex flex-col"
+          style={{
+            height: "100dvh",
+            background: theme.bg,
+            transition: "background 0.3s ease",
+            paddingBottom: "env(safe-area-inset-bottom)",
+          }}
+        >
 
-          {/* ── HEADER (yellow bar) ── */}
+          {/* ── HEADER ── */}
           <div
             className="flex items-center gap-2 px-3 py-2.5 shrink-0"
-            style={{ background: "#F9C920" }}
+            style={{ background: theme.headerBg, transition: "background 0.3s ease" }}
           >
             <button
               onClick={handleSave}
@@ -341,17 +342,17 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
               className="p-2 rounded-lg hover:bg-black/10 transition-colors disabled:opacity-40"
               title="Salvar"
             >
-              <Check size={20} className="text-gray-800" />
+              <Check size={20} style={{ color: textColor }} />
             </button>
 
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Título da nota..."
-              className="flex-1 bg-white/90 rounded-lg px-3 py-1.5 text-sm font-semibold text-gray-800 placeholder:text-gray-400 outline-none border-0 shadow-sm"
+              className="flex-1 bg-white/90 rounded-lg px-3 py-1.5 text-sm font-semibold placeholder:text-gray-400 outline-none border-0 shadow-sm"
+              style={{ color: "#1A1A2E" }}
             />
 
-            {/* Color dot */}
             <button
               onClick={() => setShowColorPicker(!showColorPicker)}
               className="w-7 h-7 rounded-md border-2 border-white/60 shadow-sm shrink-0 transition-transform hover:scale-110"
@@ -364,13 +365,13 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
               className="p-2 rounded-lg hover:bg-black/10 transition-colors"
               title="Fechar"
             >
-              <X size={20} className="text-gray-800" />
+              <X size={20} style={{ color: textColor }} />
             </button>
           </div>
 
           {/* Color picker dropdown */}
           {showColorPicker && (
-            <div className="flex gap-2 px-4 py-2 justify-center" style={{ background: "#F9C920" }}>
+            <div className="flex gap-2 px-4 py-2 justify-center shrink-0" style={{ background: theme.headerBg, transition: "background 0.3s ease" }}>
               {NOTE_COLORS.map((c) => (
                 <button
                   key={c.value}
@@ -389,7 +390,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
           )}
 
           {/* ── Sub-header ── */}
-          <div className="flex items-center justify-between px-4 py-1.5 text-[11px]" style={{ color: "#8B7E3C" }}>
+          <div className="flex items-center justify-between px-4 py-1.5 text-[11px] shrink-0" style={{ color: theme.textMuted, transition: "color 0.3s ease" }}>
             <span className="font-medium">
               {editingNote ? "Editando" : "Nova nota"}
             </span>
@@ -400,13 +401,13 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
 
           {/* ── LINED PAPER BODY ── */}
           <div
-            className="flex-1 overflow-y-auto px-4"
+            className="flex-1 overflow-y-auto px-4 min-h-0"
             style={{
-              background: `repeating-linear-gradient(to bottom, transparent, transparent 27px, #E6D97A 28px)`,
+              background: `repeating-linear-gradient(to bottom, transparent, transparent 27px, ${theme.lines} 28px)`,
               backgroundPosition: "0 0",
+              transition: "background 0.3s ease",
             }}
           >
-            {/* Block editor */}
             <div className="py-2">
               {blocks.map((block, idx) => {
                 if (block.type === "text") {
@@ -421,8 +422,14 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
                       onFocus={() => { focusedBlockRef.current = idx; }}
                       onBlur={() => pushHistory(blocks)}
                       placeholder={idx === 0 && blocks.length === 1 ? "Comece a escrever sua nota..." : ""}
-                      className="w-full bg-transparent border-0 outline-none resize-none text-sm text-gray-800 placeholder:text-gray-400/60"
-                      style={{ lineHeight: "28px", minHeight: "28px", overflow: "hidden" }}
+                      className="w-full bg-transparent border-0 outline-none resize-none text-sm"
+                      style={{
+                        lineHeight: "28px",
+                        minHeight: "28px",
+                        overflow: "hidden",
+                        color: textColor,
+                        "--placeholder-color": placeholderColor,
+                      } as React.CSSProperties}
                       ref={(el) => { if (el) autoResize(el); }}
                     />
                   );
@@ -453,38 +460,42 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
 
             {/* Word/char counter */}
             <div className="flex justify-end gap-3 pb-2">
-              <span className="text-[10px]" style={{ color: "#8B7E3C" }}>
+              <span className="text-[10px]" style={{ color: theme.textMuted }}>
                 {wordCount} {wordCount === 1 ? "palavra" : "palavras"}
               </span>
-              <span className="text-[10px]" style={{ color: "#8B7E3C" }}>
+              <span className="text-[10px]" style={{ color: theme.textMuted }}>
                 {charCount} caracteres
               </span>
             </div>
           </div>
 
           {/* ── TOOLBAR ── */}
-          <div className="flex items-center gap-1 px-3 py-2 border-t shrink-0" style={{ borderColor: "#E6D97A", background: "#FFF9C4" }}>
+          <div
+            className="flex items-center gap-1 px-3 py-2 border-t shrink-0"
+            style={{ borderColor: theme.lines, background: theme.toolbarBg, transition: "background 0.3s ease, border-color 0.3s ease" }}
+          >
             <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageSelect} />
             <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelect} />
             <input ref={ocrCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleOcrImage} />
             <input ref={ocrFileRef} type="file" accept="image/*" className="hidden" onChange={handleOcrImage} />
 
-            <button onClick={() => cameraInputRef.current?.click()} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs hover:bg-yellow-200/60 transition-colors" style={{ color: "#5D5320" }}>
+            <button onClick={() => cameraInputRef.current?.click()} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
               <Camera size={16} /> Câmera
             </button>
-            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs hover:bg-yellow-200/60 transition-colors" style={{ color: "#5D5320" }}>
+            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
               <ImagePlus size={16} /> Galeria
             </button>
-            <button onClick={handleCopy} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs hover:bg-yellow-200/60 transition-colors" style={{ color: "#5D5320" }}>
+            <button onClick={handleCopy} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
               {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} />} Copiar
             </button>
 
-            <div className="w-px h-5 mx-1" style={{ background: "#E6D97A" }} />
+            <div className="w-px h-5 mx-1" style={{ background: theme.lines }} />
 
             <button
               onClick={() => setShowOcrModal(true)}
               disabled={ocrLoading}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs hover:bg-yellow-200/60 transition-colors" style={{ color: "#5D5320" }}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors"
+              style={{ color: theme.textMuted }}
             >
               {ocrLoading ? <Loader2 size={16} className="animate-spin" /> : <ScanSearch size={16} />}
               {ocrLoading ? "Extraindo..." : "OCR"}
@@ -492,7 +503,8 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
             <button
               onClick={handleStartQrScanner}
               disabled={qrLoading}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs hover:bg-yellow-200/60 transition-colors" style={{ color: "#5D5320" }}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors"
+              style={{ color: theme.textMuted }}
             >
               {qrLoading ? <Loader2 size={16} className="animate-spin" /> : <ScanLine size={16} />}
               {qrLoading ? "Lendo..." : "QR"}
@@ -500,20 +512,28 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
 
             <div className="flex-1" />
 
-            <button onClick={undo} disabled={historyIdx <= 0} className="p-1.5 rounded-lg hover:bg-yellow-200/60 transition-colors disabled:opacity-30" style={{ color: "#5D5320" }}>
+            <button onClick={undo} disabled={historyIdx <= 0} className="p-1.5 rounded-lg hover:bg-black/5 transition-colors disabled:opacity-30" style={{ color: theme.textMuted }}>
               <Undo2 size={18} />
             </button>
-            <button onClick={redo} disabled={historyIdx >= history.length - 1} className="p-1.5 rounded-lg hover:bg-yellow-200/60 transition-colors disabled:opacity-30" style={{ color: "#5D5320" }}>
+            <button onClick={redo} disabled={historyIdx >= history.length - 1} className="p-1.5 rounded-lg hover:bg-black/5 transition-colors disabled:opacity-30" style={{ color: theme.textMuted }}>
               <Redo2 size={18} />
             </button>
           </div>
 
           {/* ── FOOTER BUTTONS ── */}
-          <div className="flex gap-3 px-4 py-3 shrink-0" style={{ background: "#FFF9C4", borderTop: "1px solid #E6D97A" }}>
+          <div
+            className="flex gap-3 px-4 py-3 shrink-0"
+            style={{
+              background: theme.toolbarBg,
+              borderTop: `1px solid ${theme.lines}`,
+              transition: "background 0.3s ease, border-color 0.3s ease",
+              paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
+            }}
+          >
             <button
               onClick={() => onOpenChange(false)}
-              className="flex-1 h-[52px] rounded-xl text-sm font-semibold border-2 transition-all duration-200 hover:bg-yellow-100"
-              style={{ borderColor: "#D4C55A", color: "#5D5320" }}
+              className="flex-1 h-[52px] rounded-xl text-sm font-semibold border-2 transition-all duration-200 hover:bg-black/5"
+              style={{ borderColor: theme.borderAccent, color: theme.textMuted, transition: "border-color 0.3s ease, color 0.3s ease" }}
             >
               Salvar rascunho
             </button>
@@ -530,7 +550,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
 
         {/* ── OCR MODAL ── */}
         {showOcrModal && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 rounded-2xl">
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40">
             <div className="bg-white rounded-2xl p-6 mx-4 shadow-xl max-w-xs w-full">
               <h3 className="text-base font-semibold text-gray-800 mb-1">Extrair texto (OCR)</h3>
               <p className="text-xs text-gray-500 mb-4">De onde deseja extrair o texto?</p>
@@ -578,7 +598,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
 
         {/* OCR Loading overlay */}
         {ocrLoading && (
-          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/30 rounded-2xl gap-3">
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/30 gap-3">
             <Loader2 size={32} className="animate-spin text-white" />
             <p className="text-white text-sm font-medium">Extraindo texto da imagem...</p>
           </div>
