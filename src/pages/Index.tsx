@@ -26,22 +26,41 @@ const Index = () => {
   const { signOut } = useAuth();
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div className="min-h-screen pb-24" style={{ background: "#F7F5F2" }}>
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-border/40">
+      <header
+        className="sticky top-0 z-40"
+        style={{
+          background: "rgba(247,245,242,0.85)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+          borderBottom: "1px solid rgba(0,0,0,0.04)",
+        }}
+      >
         <div className="max-w-lg mx-auto px-4 pt-4 pb-3">
           <div className="flex items-center justify-between mb-3">
-            <h1 className="text-xl font-display font-bold text-foreground">
+            <h1
+              className="font-display"
+              style={{ fontWeight: 800, fontSize: 26, color: "#1A1A2E" }}
+            >
               {titles[tab]}
             </h1>
             <div className="flex items-center gap-2">
               <MoonPhaseWidget />
               <button
                 onClick={signOut}
-                className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                className="flex items-center justify-center transition-all duration-200 hover:scale-105"
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: "50%",
+                  background: "#FFFFFF",
+                  border: "1px solid #EBEBEB",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+                }}
                 title="Sair"
               >
-                <LogOut size={18} />
+                <LogOut size={16} style={{ color: "#1A1A2E" }} />
               </button>
             </div>
           </div>

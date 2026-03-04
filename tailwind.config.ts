@@ -14,8 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ['"Playfair Display"', 'serif'],
-        body: ['"Plus Jakarta Sans"', 'sans-serif'],
+        display: ['"Nunito"', 'sans-serif'],
+        body: ['"Nunito"', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -82,7 +82,7 @@ export default {
           to: { height: "0" },
         },
         "fade-in": {
-          from: { opacity: "0", transform: "translateY(8px)" },
+          from: { opacity: "0", transform: "translateY(14px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
         "pulse-soft": {
