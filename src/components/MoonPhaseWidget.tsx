@@ -7,13 +7,26 @@ export function MoonPhaseWidget() {
   const today = new Date();
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl glass-card">
-      <span className="text-3xl animate-pulse-soft">{moon.emoji}</span>
+    <div
+      className="flex items-center gap-2 px-3 py-1.5"
+      style={{
+        background: "#FFFFFF",
+        border: "1px solid #EBEBEB",
+        borderRadius: 50,
+        boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+      }}
+    >
+      <span className="text-xl">{moon.emoji}</span>
       <div className="flex flex-col">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        <span
+          className="uppercase tracking-wider font-semibold"
+          style={{ fontSize: 9, color: "#999", lineHeight: 1.2 }}
+        >
           {format(today, "EEEE, d 'de' MMMM", { locale: ptBR })}
         </span>
-        <span className="text-sm font-semibold text-foreground">{moon.label}</span>
+        <span className="font-bold" style={{ fontSize: 12, color: "#1A1A2E", lineHeight: 1.3 }}>
+          {moon.label}
+        </span>
       </div>
     </div>
   );
