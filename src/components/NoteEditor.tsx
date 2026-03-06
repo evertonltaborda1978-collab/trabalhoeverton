@@ -89,6 +89,7 @@ interface NoteEditorProps {
     color: string,
     fontFamily: string,
     fontSize: string,
+    status: "rascunho" | "publicada",
   ) => void;
 }
 
@@ -104,8 +105,10 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
   const [showQrScanner, setShowQrScanner] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
 
+  // Undo/redo with proper history
   const [history, setHistory] = useState<ContentBlock[][]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
+  const historyTimer = useRef<ReturnType<typeof setTimeout>>();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -145,22 +148,34 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
   const pushHistory = useCallback((newBlocks: ContentBlock[]) => {
     setHistory((h) => {
       const trimmed = h.slice(0, historyIdx + 1);
-      return [...trimmed, JSON.parse(JSON.stringify(newBlocks))];
+      const limited = [...trimmed, JSON.parse(JSON.stringify(newBlocks))].slice(-50);
+      return limited;
     });
-    setHistoryIdx((i) => i + 1);
+    setHistoryIdx((i) => Math.min(i + 1, 49));
   }, [historyIdx]);
 
-  const undo = () => {
+  const undo = useCallback(() => {
     if (historyIdx <= 0) return;
     const prev = history[historyIdx - 1];
     if (prev) { setBlocks(JSON.parse(JSON.stringify(prev))); setHistoryIdx((i) => i - 1); }
-  };
+  }, [historyIdx, history]);
 
-  const redo = () => {
+  const redo = useCallback(() => {
     if (historyIdx >= history.length - 1) return;
     const next = history[historyIdx + 1];
     if (next) { setBlocks(JSON.parse(JSON.stringify(next))); setHistoryIdx((i) => i + 1); }
-  };
+  }, [historyIdx, history]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) { e.preventDefault(); redo(); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open, undo, redo]);
 
   // ── Block operations ─────────────────────────────────
   const updateTextBlock = (index: number, text: string) => {
@@ -169,6 +184,11 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
       next[index] = { ...next[index], content: text };
       return next;
     });
+    // Debounced history push
+    clearTimeout(historyTimer.current);
+    historyTimer.current = setTimeout(() => {
+      setBlocks((current) => { pushHistory(current); return current; });
+    }, 500);
   };
 
   const insertImageAtBlock = (file: File) => {
@@ -176,12 +196,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
     const idx = focusedBlockRef.current;
     setBlocks((prev) => {
       const next = [...prev];
-      const currentBlock = next[idx];
-      if (currentBlock?.type === "text") {
-        next.splice(idx + 1, 0, { type: "image", url }, { type: "text", content: "" });
-      } else {
-        next.splice(idx + 1, 0, { type: "image", url }, { type: "text", content: "" });
-      }
+      next.splice(idx + 1, 0, { type: "image", url }, { type: "text", content: "" });
       pushHistory(next);
       return next;
     });
@@ -298,11 +313,37 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
     setShowQrScanner(false);
   };
 
-  const handleSave = () => {
-    if (!title.trim()) return;
+  // ── Save handlers ────────────────────────────────────
+  const doSave = (status: "rascunho" | "publicada") => {
+    if (status === "publicada" && !title.trim() && !blocksToPlainText(blocks).trim()) return;
     const serialized = serializeBlocks(blocks);
     const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
-    onSave(title, serialized, imageUrls, selectedColor, "default", "medium");
+    onSave(title, serialized, imageUrls, selectedColor, "default", "medium", status);
+    onOpenChange(false);
+    if (status === "rascunho") {
+      toast({ title: "Rascunho salvo ✓" });
+    } else {
+      toast({ title: editingNote ? "Nota salva ✓" : "Nota criada ✓" });
+    }
+  };
+
+  const handleSaveDraft = () => doSave("rascunho");
+  const handleSavePublish = () => doSave("publicada");
+
+  // Auto-save on close
+  const handleClose = () => {
+    const hasContent = title.trim() || blocksToPlainText(blocks).trim();
+    if (hasContent) {
+      // Auto-save as draft
+      const serialized = serializeBlocks(blocks);
+      const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
+      const status = editingNote?.status || "rascunho";
+      onSave(title, serialized, imageUrls, selectedColor, "default", "medium", status);
+
+      if (!navigator.onLine) {
+        toast({ title: "Salvo localmente", description: "Sincronizando quando houver conexão..." });
+      }
+    }
     onOpenChange(false);
   };
 
@@ -315,8 +356,11 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
     el.style.height = el.scrollHeight + "px";
   };
 
+  const canUndo = historyIdx > 0;
+  const canRedo = historyIdx < history.length - 1;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); else onOpenChange(v); }}>
       <DialogContent className="!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !w-screen !max-w-none !max-h-none !rounded-none !shadow-none !border-0 !p-0 !gap-0 !bg-transparent z-50"
         style={{ height: "100dvh" }}
       >
@@ -337,8 +381,8 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
             style={{ background: theme.headerBg, transition: "background 0.3s ease" }}
           >
             <button
-              onClick={handleSave}
-              disabled={!title.trim()}
+              onClick={handleSavePublish}
+              disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
               className="p-2 rounded-lg hover:bg-black/10 transition-colors disabled:opacity-40"
               title="Salvar"
             >
@@ -361,7 +405,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
             />
 
             <button
-              onClick={() => onOpenChange(false)}
+              onClick={handleClose}
               className="p-2 rounded-lg hover:bg-black/10 transition-colors"
               title="Fechar"
             >
@@ -420,7 +464,6 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
                         autoResize(e.target);
                       }}
                       onFocus={() => { focusedBlockRef.current = idx; }}
-                      onBlur={() => pushHistory(blocks)}
                       placeholder={idx === 0 && blocks.length === 1 ? "Comece a escrever sua nota..." : ""}
                       className="w-full bg-transparent border-0 outline-none resize-none text-sm"
                       style={{
@@ -479,43 +522,62 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
             <input ref={ocrCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleOcrImage} />
             <input ref={ocrFileRef} type="file" accept="image/*" className="hidden" onChange={handleOcrImage} />
 
-            <button onClick={() => cameraInputRef.current?.click()} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+            <button onClick={() => cameraInputRef.current?.click()} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
               <Camera size={16} /> Câmera
             </button>
-            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
               <ImagePlus size={16} /> Galeria
             </button>
-            <button onClick={handleCopy} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+            <button onClick={handleCopy} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
               {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} />} Copiar
             </button>
-
-            <div className="w-px h-5 mx-1" style={{ background: theme.lines }} />
-
             <button
               onClick={() => setShowOcrModal(true)}
               disabled={ocrLoading}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors"
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors"
               style={{ color: theme.textMuted }}
             >
               {ocrLoading ? <Loader2 size={16} className="animate-spin" /> : <ScanSearch size={16} />}
-              {ocrLoading ? "Extraindo..." : "OCR"}
+              OCR
             </button>
             <button
               onClick={handleStartQrScanner}
               disabled={qrLoading}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors"
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors"
               style={{ color: theme.textMuted }}
             >
               {qrLoading ? <Loader2 size={16} className="animate-spin" /> : <ScanLine size={16} />}
-              {qrLoading ? "Lendo..." : "QR"}
+              QR
             </button>
 
-            <div className="flex-1" />
+            {/* Separator */}
+            <div className="w-px h-5 mx-1" style={{ background: theme.lines }} />
 
-            <button onClick={undo} disabled={historyIdx <= 0} className="p-1.5 rounded-lg hover:bg-black/5 transition-colors disabled:opacity-30" style={{ color: theme.textMuted }}>
+            {/* Undo/Redo centered group */}
+            <button
+              onClick={undo}
+              disabled={!canUndo}
+              className="p-1.5 rounded-lg hover:bg-black/5 transition-all duration-200"
+              style={{
+                color: canUndo ? "#555" : "#BDBDBD",
+                opacity: canUndo ? 1 : 0.4,
+                cursor: canUndo ? "pointer" : "not-allowed",
+              }}
+              title="Desfazer (Ctrl+Z)"
+            >
               <Undo2 size={18} />
             </button>
-            <button onClick={redo} disabled={historyIdx >= history.length - 1} className="p-1.5 rounded-lg hover:bg-black/5 transition-colors disabled:opacity-30" style={{ color: theme.textMuted }}>
+            <button
+              onClick={redo}
+              disabled={!canRedo}
+              className="p-1.5 rounded-lg hover:bg-black/5 transition-all duration-200"
+              style={{
+                color: canRedo ? "#555" : "#BDBDBD",
+                opacity: canRedo ? 1 : 0.4,
+                cursor: canRedo ? "pointer" : "not-allowed",
+              }}
+              title="Refazer (Ctrl+Y)"
+            >
               <Redo2 size={18} />
             </button>
           </div>
@@ -531,15 +593,15 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
             }}
           >
             <button
-              onClick={() => onOpenChange(false)}
+              onClick={handleSaveDraft}
               className="flex-1 h-[52px] rounded-xl text-sm font-semibold border-2 transition-all duration-200 hover:bg-black/5"
               style={{ borderColor: theme.borderAccent, color: theme.textMuted, transition: "border-color 0.3s ease, color 0.3s ease" }}
             >
               Salvar rascunho
             </button>
             <button
-              onClick={handleSave}
-              disabled={!title.trim()}
+              onClick={handleSavePublish}
+              disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
               className="flex-1 h-[52px] rounded-xl text-sm font-semibold text-white shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50"
               style={{ background: "#2D9E7F" }}
             >
