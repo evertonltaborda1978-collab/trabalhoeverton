@@ -75,6 +75,11 @@ const Index = () => {
             onAdd={addNote}
             onDelete={deleteNote}
             onUpdate={updateNote}
+            syncStatus={syncStatus}
+            draftCount={draftCount}
+            exportBackup={exportBackup}
+            importBackup={importBackup}
+            shouldRemindBackup={shouldRemindBackup}
           />
         )}
         {tab === "calendar" && (
