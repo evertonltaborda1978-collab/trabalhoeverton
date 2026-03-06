@@ -1,5 +1,5 @@
 import { Note } from "@/hooks/useNotes";
-import { Trash2, Clock, ChevronRight } from "lucide-react";
+import { Trash2, Clock, ChevronRight, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -21,6 +21,7 @@ interface NoteCardProps {
 
 export function NoteCard({ note, onDelete, onClick, index = 0 }: NoteCardProps) {
   const colors = COLOR_MAP[note.color] || { bg: "#F3E5F5", bar: "#C9B8F0" };
+  const isDraft = note.status === "rascunho";
 
   return (
     <div
@@ -39,9 +40,24 @@ export function NoteCard({ note, onDelete, onClick, index = 0 }: NoteCardProps) 
 
       <div className="flex items-center gap-3 px-4 py-3 flex-1 min-w-0">
         <div className="flex-1 min-w-0">
-          <h3 className="font-bold text-[15px] leading-tight line-clamp-1" style={{ color: "#1A1A2E" }}>
-            {note.title || "Sem título"}
-          </h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-[15px] leading-tight line-clamp-1" style={{ color: "#1A1A2E" }}>
+              {note.title || "Sem título"}
+            </h3>
+            {isDraft && (
+              <span
+                className="inline-flex items-center gap-0.5 shrink-0 text-white font-bold"
+                style={{
+                  fontSize: 10,
+                  background: "#F9A825",
+                  borderRadius: 6,
+                  padding: "2px 8px",
+                }}
+              >
+                <Pencil size={9} /> Rascunho
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-1 mt-1">
             <Clock size={11} style={{ color: "#999" }} />
             <span className="text-[11.5px] font-semibold" style={{ color: "#999" }}>

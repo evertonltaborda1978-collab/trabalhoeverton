@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -12,6 +12,8 @@ export interface Note {
   color: string;
   fontFamily: string;
   fontSize: string;
+  status: "rascunho" | "publicada";
+  sincronizado: boolean;
 }
 
 const COLORS = [
@@ -23,63 +25,217 @@ const COLORS = [
   "bg-purple-100",
 ];
 
+export type SyncStatus = "synced" | "syncing" | "offline";
+
+function getLocalKey(userId: string) {
+  return `notas_usuario_${userId}`;
+}
+
+function saveLocal(userId: string, notes: Note[]) {
+  try {
+    localStorage.setItem(getLocalKey(userId), JSON.stringify(notes));
+  } catch {}
+}
+
+function loadLocal(userId: string): Note[] {
+  try {
+    const raw = localStorage.getItem(getLocalKey(userId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return parsed.map((n: any) => ({
+      ...n,
+      createdAt: new Date(n.createdAt),
+      updatedAt: new Date(n.updatedAt),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function mergeNotes(local: Note[], remote: Note[]): Note[] {
+  const map = new Map<string, Note>();
+  for (const n of remote) map.set(n.id, { ...n, sincronizado: true });
+  for (const n of local) {
+    const existing = map.get(n.id);
+    if (!existing) {
+      map.set(n.id, n);
+    } else if (n.updatedAt > existing.updatedAt) {
+      map.set(n.id, n);
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+}
+
+function mapRow(n: any): Note {
+  return {
+    id: n.id,
+    title: n.title,
+    content: n.content,
+    images: n.images || [],
+    createdAt: new Date(n.created_at),
+    updatedAt: new Date(n.updated_at),
+    color: n.color || COLORS[0],
+    fontFamily: n.font_family || "default",
+    fontSize: n.font_size || "medium",
+    status: n.status || "publicada",
+    sincronizado: true,
+  };
+}
+
 export function useNotes() {
   const { user } = useAuth();
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("synced");
+  const syncingRef = useRef(false);
+
+  // Save to localStorage whenever notes change
+  useEffect(() => {
+    if (user && notes.length > 0) {
+      saveLocal(user.id, notes);
+    }
+  }, [notes, user]);
+
+  // Sync unsynced notes to Supabase
+  const syncToSupabase = useCallback(async (notesToSync: Note[]) => {
+    if (!user || syncingRef.current) return;
+    const unsynced = notesToSync.filter((n) => !n.sincronizado);
+    if (unsynced.length === 0) {
+      setSyncStatus("synced");
+      return;
+    }
+
+    syncingRef.current = true;
+    setSyncStatus("syncing");
+
+    for (const note of unsynced) {
+      try {
+        const payload = {
+          id: note.id,
+          user_id: user.id,
+          title: note.title,
+          content: note.content,
+          images: note.images,
+          color: note.color,
+          font_family: note.fontFamily,
+          font_size: note.fontSize,
+          status: note.status,
+          sincronizado: true,
+        };
+        await (supabase.from("notes") as any).upsert(payload, { onConflict: "id" });
+      } catch {
+        setSyncStatus("offline");
+        syncingRef.current = false;
+        return;
+      }
+    }
+
+    setNotes((prev) => prev.map((n) => ({ ...n, sincronizado: true })));
+    setSyncStatus("synced");
+    syncingRef.current = false;
+  }, [user]);
 
   const fetchNotes = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase
-      .from("notes")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const localNotes = loadLocal(user.id);
 
-    if (data) {
-      setNotes(
-        data.map((n) => ({
-          id: n.id,
-          title: n.title,
-          content: n.content,
-          images: n.images || [],
-          createdAt: new Date(n.created_at),
-          updatedAt: new Date(n.updated_at),
-          color: n.color || COLORS[0],
-          fontFamily: (n as any).font_family || "default",
-          fontSize: (n as any).font_size || "medium",
-        }))
-      );
+    try {
+      const { data, error } = await supabase
+        .from("notes")
+        .select("*")
+        .order("updated_at", { ascending: false });
+
+      if (error) throw error;
+
+      const remoteNotes = data ? data.map(mapRow) : [];
+      const merged = mergeNotes(localNotes, remoteNotes);
+      setNotes(merged);
+      saveLocal(user.id, merged);
+
+      // Sync any local-only notes
+      const unsynced = merged.filter((n) => !n.sincronizado);
+      if (unsynced.length > 0) {
+        syncToSupabase(merged);
+      } else {
+        setSyncStatus("synced");
+      }
+    } catch {
+      // Offline - use local
+      if (localNotes.length > 0) {
+        setNotes(localNotes);
+        setSyncStatus("offline");
+      }
     }
     setLoading(false);
-  }, [user]);
+  }, [user, syncToSupabase]);
 
   useEffect(() => {
     fetchNotes();
   }, [fetchNotes]);
 
+  // Listen for online/offline
+  useEffect(() => {
+    const handleOnline = () => {
+      syncToSupabase(notes);
+    };
+    const handleOffline = () => setSyncStatus("offline");
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, [notes, syncToSupabase]);
+
   const addNote = useCallback(
-    async (title: string, content: string, images: string[] = [], color?: string, fontFamily?: string, fontSize?: string) => {
+    async (title: string, content: string, images: string[] = [], color?: string, fontFamily?: string, fontSize?: string, status: "rascunho" | "publicada" = "publicada") => {
       if (!user) return;
       const noteColor = color || COLORS[Math.floor(Math.random() * COLORS.length)];
-      const { data } = await supabase
-        .from("notes")
-        .insert({ user_id: user.id, title, content, images, color: noteColor, font_family: fontFamily || "default", font_size: fontSize || "medium" } as any)
-        .select()
-        .single();
+      const newId = crypto.randomUUID();
+      const now = new Date();
 
-      if (data) {
-        const note: Note = {
-          id: data.id,
-          title: data.title,
-          content: data.content,
-          images: data.images || [],
-          createdAt: new Date(data.created_at),
-          updatedAt: new Date(data.updated_at),
-          color: data.color,
-          fontFamily: (data as any).font_family || "default",
-          fontSize: (data as any).font_size || "medium",
-        };
-        setNotes((prev) => [note, ...prev]);
+      const note: Note = {
+        id: newId,
+        title,
+        content,
+        images,
+        createdAt: now,
+        updatedAt: now,
+        color: noteColor,
+        fontFamily: fontFamily || "default",
+        fontSize: fontSize || "medium",
+        status,
+        sincronizado: false,
+      };
+
+      setNotes((prev) => [note, ...prev]);
+
+      try {
+        const { data } = await (supabase.from("notes") as any)
+          .insert({
+            id: newId,
+            user_id: user.id,
+            title,
+            content,
+            images,
+            color: noteColor,
+            font_family: fontFamily || "default",
+            font_size: fontSize || "medium",
+            status,
+            sincronizado: true,
+          })
+          .select()
+          .single();
+
+        if (data) {
+          setNotes((prev) =>
+            prev.map((n) => (n.id === newId ? { ...n, sincronizado: true, createdAt: new Date(data.created_at), updatedAt: new Date(data.updated_at) } : n))
+          );
+          setSyncStatus("synced");
+        }
+        return note;
+      } catch {
+        setSyncStatus("offline");
         return note;
       }
     },
@@ -87,29 +243,120 @@ export function useNotes() {
   );
 
   const deleteNote = useCallback(async (id: string) => {
-    await supabase.from("notes").delete().eq("id", id);
     setNotes((prev) => prev.filter((n) => n.id !== id));
+    try {
+      await supabase.from("notes").delete().eq("id", id);
+    } catch {}
   }, []);
 
   const updateNote = useCallback(
-    async (id: string, title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string) => {
-      const updates: any = { title, content };
-      if (images !== undefined) updates.images = images;
-      if (color !== undefined) updates.color = color;
-      if (fontFamily !== undefined) updates.font_family = fontFamily;
-      if (fontSize !== undefined) updates.font_size = fontSize;
-
-      await supabase.from("notes").update(updates).eq("id", id);
+    async (id: string, title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string, status?: "rascunho" | "publicada") => {
+      const now = new Date();
       setNotes((prev) =>
         prev.map((n) =>
           n.id === id
-            ? { ...n, title, content, images: images ?? n.images, color: color ?? n.color, fontFamily: fontFamily ?? n.fontFamily, fontSize: fontSize ?? n.fontSize, updatedAt: new Date() }
+            ? {
+                ...n,
+                title,
+                content,
+                images: images ?? n.images,
+                color: color ?? n.color,
+                fontFamily: fontFamily ?? n.fontFamily,
+                fontSize: fontSize ?? n.fontSize,
+                status: status ?? n.status,
+                updatedAt: now,
+                sincronizado: false,
+              }
             : n
         )
       );
+
+      try {
+        const updates: any = { title, content, updated_at: now.toISOString() };
+        if (images !== undefined) updates.images = images;
+        if (color !== undefined) updates.color = color;
+        if (fontFamily !== undefined) updates.font_family = fontFamily;
+        if (fontSize !== undefined) updates.font_size = fontSize;
+        if (status !== undefined) updates.status = status;
+        updates.sincronizado = true;
+
+        await (supabase.from("notes") as any).update(updates).eq("id", id);
+        setNotes((prev) => prev.map((n) => (n.id === id ? { ...n, sincronizado: true } : n)));
+        setSyncStatus("synced");
+      } catch {
+        setSyncStatus("offline");
+      }
     },
     []
   );
 
-  return { notes, addNote, deleteNote, updateNote, loading };
+  const draftCount = notes.filter((n) => n.status === "rascunho").length;
+
+  // Export backup
+  const exportBackup = useCallback(() => {
+    const data = notes.map((n) => ({
+      id: n.id,
+      titulo: n.title,
+      conteudo: n.content,
+      cor: n.color,
+      status: n.status,
+      criado_em: n.createdAt.toISOString(),
+      atualizado_em: n.updatedAt.toISOString(),
+      images: n.images,
+      fontFamily: n.fontFamily,
+      fontSize: n.fontSize,
+    }));
+    const blob = new Blob([JSON.stringify({ app: "minhas_notas", version: 1, notas: data }, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `minhas_notas_backup_${dateStr}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    localStorage.setItem("ultimo_backup", new Date().toISOString());
+    return true;
+  }, [notes]);
+
+  // Import backup
+  const importBackup = useCallback(async (file: File): Promise<number> => {
+    const text = await file.text();
+    let parsed: any;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw new Error("Arquivo inválido");
+    }
+    if (!parsed.app || parsed.app !== "minhas_notas" || !Array.isArray(parsed.notas)) {
+      throw new Error("Formato de backup não reconhecido");
+    }
+
+    const existingIds = new Set(notes.map((n) => n.id));
+    let imported = 0;
+
+    for (const item of parsed.notas) {
+      if (existingIds.has(item.id)) {
+        // Merge: keep more recent
+        const existing = notes.find((n) => n.id === item.id);
+        if (existing && new Date(item.atualizado_em) > existing.updatedAt) {
+          await updateNote(item.id, item.titulo, item.conteudo, item.images, item.cor, item.fontFamily, item.fontSize, item.status);
+          imported++;
+        }
+      } else {
+        await addNote(item.titulo, item.conteudo, item.images || [], item.cor, item.fontFamily, item.fontSize, item.status || "publicada");
+        imported++;
+      }
+    }
+    return imported;
+  }, [notes, addNote, updateNote]);
+
+  // Check if backup reminder needed (weekly)
+  const shouldRemindBackup = useCallback(() => {
+    const last = localStorage.getItem("ultimo_backup");
+    if (!last) return notes.length > 0;
+    const diff = Date.now() - new Date(last).getTime();
+    return diff > 7 * 24 * 60 * 60 * 1000 && notes.length > 0;
+  }, [notes]);
+
+  return { notes, addNote, deleteNote, updateNote, loading, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup };
 }

@@ -1,24 +1,44 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { NoteCard } from "./NoteCard";
 import { NoteEditor } from "./NoteEditor";
-import { Note } from "@/hooks/useNotes";
-import { Search } from "lucide-react";
+import { Note, SyncStatus } from "@/hooks/useNotes";
+import { Search, Cloud, CloudOff, RefreshCw, Download, Upload } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 
-// Re-export helpers for NoteCard usage
 export { getFontClass, getSizeClass } from "./NoteEditor";
 
 interface NotesViewProps {
   notes: Note[];
-  onAdd: (title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string) => void;
+  onAdd: (title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string, status?: "rascunho" | "publicada") => void;
   onDelete: (id: string) => void;
-  onUpdate: (id: string, title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string) => void;
+  onUpdate: (id: string, title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string, status?: "rascunho" | "publicada") => void;
+  syncStatus: SyncStatus;
+  draftCount: number;
+  exportBackup: () => boolean;
+  importBackup: (file: File) => Promise<number>;
+  shouldRemindBackup: () => boolean;
 }
 
-export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) {
+export function NotesView({ notes, onAdd, onDelete, onUpdate, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup }: NotesViewProps) {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [showBackupMenu, setShowBackupMenu] = useState(false);
+  const importRef = useRef<HTMLInputElement>(null);
+
+  // Backup reminder
+  useEffect(() => {
+    if (shouldRemindBackup()) {
+      const timer = setTimeout(() => {
+        toast({
+          title: "📦 Hora do backup!",
+          description: "Faz mais de uma semana desde seu último backup. Que tal exportar suas notas?",
+        });
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [shouldRemindBackup]);
 
   const filtered = notes.filter(
     (n) =>
@@ -42,17 +62,85 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate }: NotesViewProps) 
     images: string[],
     color: string,
     fontFamily: string,
-    fontSize: string
+    fontSize: string,
+    status: "rascunho" | "publicada"
   ) => {
     if (editingNote) {
-      onUpdate(editingNote.id, title, content, images, color, fontFamily, fontSize);
+      onUpdate(editingNote.id, title, content, images, color, fontFamily, fontSize, status);
     } else {
-      onAdd(title, content, images, color, fontFamily, fontSize);
+      onAdd(title, content, images, color, fontFamily, fontSize, status);
     }
+  };
+
+  const handleExport = () => {
+    exportBackup();
+    toast({ title: "Backup exportado ✓", description: "Arquivo JSON salvo com sucesso." });
+    setShowBackupMenu(false);
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    try {
+      const count = await importBackup(file);
+      toast({ title: `${count} notas importadas com sucesso!` });
+    } catch (err: any) {
+      toast({ title: "Erro na importação", description: err.message });
+    }
+    setShowBackupMenu(false);
+  };
+
+  const syncIcon = () => {
+    if (syncStatus === "synced") return <Cloud size={16} style={{ color: "#4CAF50" }} />;
+    if (syncStatus === "syncing") return <RefreshCw size={16} className="animate-spin" style={{ color: "#F9A825" }} />;
+    return <CloudOff size={16} style={{ color: "#BDBDBD" }} />;
   };
 
   return (
     <div className="animate-fade-in">
+      {/* Sync indicator + draft counter */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowBackupMenu(!showBackupMenu)}
+            className="flex items-center gap-1 transition-opacity hover:opacity-70"
+            title={syncStatus === "synced" ? "Sincronizado" : syncStatus === "syncing" ? "Sincronizando..." : "Sem conexão"}
+          >
+            {syncIcon()}
+          </button>
+          {draftCount > 0 && (
+            <span className="text-[11px] font-semibold" style={{ color: "#F9A825" }}>
+              ✏️ {draftCount} rascunho{draftCount > 1 ? "s" : ""} pendente{draftCount > 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Backup dropdown */}
+      {showBackupMenu && (
+        <div
+          className="mb-3 rounded-xl p-3 flex flex-col gap-2"
+          style={{ background: "#FFF", border: "1px solid #EBEBEB", boxShadow: "0 4px 12px rgba(0,0,0,0.06)" }}
+        >
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+            style={{ color: "#1A1A2E" }}
+          >
+            <Download size={16} /> Exportar backup (.json)
+          </button>
+          <button
+            onClick={() => importRef.current?.click()}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+            style={{ color: "#1A1A2E" }}
+          >
+            <Upload size={16} /> Importar backup
+          </button>
+          <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImportFile} />
+        </div>
+      )}
+
       <div className="flex items-center gap-3 mb-2">
         <div
           className="relative flex-1 transition-all duration-200"
