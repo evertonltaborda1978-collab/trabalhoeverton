@@ -2,6 +2,7 @@ import { Note } from "@/hooks/useNotes";
 import { Trash2, Clock, ChevronRight, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { HighlightText } from "./HighlightText";
 
 const COLOR_MAP: Record<string, { bg: string; bar: string }> = {
   "bg-orange-100": { bg: "#FFE8D6", bar: "#FFBF9B" },
@@ -12,16 +13,38 @@ const COLOR_MAP: Record<string, { bg: string; bar: string }> = {
   "bg-blue-100": { bg: "#E3F2FD", bar: "#90CAF9" },
 };
 
+// Extract plain text from content blocks
+function getPlainContent(content: string): string {
+  try {
+    const parsed = JSON.parse(content);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .filter((b: any) => b.type === "text" || b.type === "checklist")
+        .map((b: any) => {
+          if (b.type === "checklist" && Array.isArray(b.items)) {
+            return b.items.map((item: any) => item.text || "").join(" ");
+          }
+          return b.content || "";
+        })
+        .join(" ");
+    }
+  } catch {}
+  return content;
+}
+
 interface NoteCardProps {
   note: Note;
   onDelete: (id: string) => void;
   onClick: (note: Note) => void;
   index?: number;
+  searchQuery?: string;
 }
 
-export function NoteCard({ note, onDelete, onClick, index = 0 }: NoteCardProps) {
+export function NoteCard({ note, onDelete, onClick, index = 0, searchQuery = "" }: NoteCardProps) {
   const colors = COLOR_MAP[note.color] || { bg: "#F3E5F5", bar: "#C9B8F0" };
   const isDraft = note.status === "rascunho";
+  const plainContent = getPlainContent(note.content);
+  const preview = plainContent.length > 80 ? plainContent.slice(0, 80) + "…" : plainContent;
 
   return (
     <div
@@ -41,9 +64,12 @@ export function NoteCard({ note, onDelete, onClick, index = 0 }: NoteCardProps) 
       <div className="flex items-center gap-3 px-4 py-3 flex-1 min-w-0">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="font-bold text-[15px] leading-tight line-clamp-1" style={{ color: "#1A1A2E" }}>
-              {note.title || "Sem título"}
-            </h3>
+            <HighlightText
+              text={note.title || "Sem título"}
+              highlight={searchQuery}
+              className="font-bold text-[15px] leading-tight line-clamp-1"
+              style={{ color: "#1A1A2E" }}
+            />
             {isDraft && (
               <span
                 className="inline-flex items-center gap-0.5 shrink-0 text-white font-bold"
@@ -58,6 +84,14 @@ export function NoteCard({ note, onDelete, onClick, index = 0 }: NoteCardProps) 
               </span>
             )}
           </div>
+          {preview && (
+            <HighlightText
+              text={preview}
+              highlight={searchQuery}
+              className="text-[12px] mt-0.5 line-clamp-1"
+              style={{ color: "#777" }}
+            />
+          )}
           <div className="flex items-center gap-1 mt-1">
             <Clock size={11} style={{ color: "#999" }} />
             <span className="text-[11.5px] font-semibold" style={{ color: "#999" }}>

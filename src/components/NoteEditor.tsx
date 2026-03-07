@@ -11,6 +11,12 @@ import {
   ScanSearch,
   Loader2,
   ScanLine,
+  Mic,
+  MicOff,
+  ListChecks,
+  Square,
+  CheckSquare,
+  Trash2,
 } from "lucide-react";
 import {
   Dialog,
@@ -20,12 +26,20 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "@/hooks/use-toast";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 
 // ── Types ──────────────────────────────────────────────
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  checked: boolean;
+}
+
 export interface ContentBlock {
-  type: "text" | "image";
+  type: "text" | "image" | "checklist";
   content?: string;
   url?: string;
+  items?: ChecklistItem[];
 }
 
 // ── Color theme map ────────────────────────────────────
@@ -105,7 +119,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
   const [showQrScanner, setShowQrScanner] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
 
-  // Undo/redo with proper history
+  // Undo/redo
   const [history, setHistory] = useState<ContentBlock[][]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
   const historyTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -115,6 +129,25 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
   const ocrFileRef = useRef<HTMLInputElement>(null);
   const ocrCameraRef = useRef<HTMLInputElement>(null);
   const focusedBlockRef = useRef<number>(0);
+  const activeFieldRef = useRef<"title" | "content">("content");
+
+  // Voice dictation
+  const handleVoiceResult = useCallback((text: string) => {
+    if (activeFieldRef.current === "title") {
+      setTitle((prev) => (prev + " " + text).trim());
+    } else {
+      const idx = focusedBlockRef.current;
+      setBlocks((prev) => {
+        const next = [...prev];
+        if (next[idx]?.type === "text") {
+          next[idx] = { ...next[idx], content: ((next[idx].content || "") + " " + text).trim() };
+        }
+        return next;
+      });
+    }
+  }, []);
+
+  const { isListening, isSupported: voiceSupported, toggle: toggleVoice } = useSpeechRecognition(handleVoiceResult);
 
   // ── Sync on open ─────────────────────────────────────
   const lastNoteId = useRef<string | null>(null);
@@ -184,7 +217,6 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
       next[index] = { ...next[index], content: text };
       return next;
     });
-    // Debounced history push
     clearTimeout(historyTimer.current);
     historyTimer.current = setTimeout(() => {
       setBlocks((current) => { pushHistory(current); return current; });
@@ -224,6 +256,72 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
     const file = e.target.files?.[0];
     if (file) insertImageAtBlock(file);
     e.target.value = "";
+  };
+
+  // ── Checklist operations ─────────────────────────────
+  const addChecklist = () => {
+    const idx = focusedBlockRef.current;
+    const newItem: ChecklistItem = { id: crypto.randomUUID(), text: "", checked: false };
+    setBlocks((prev) => {
+      const next = [...prev];
+      // If current block is already a checklist, add item to it
+      if (next[idx]?.type === "checklist" && next[idx].items) {
+        next[idx] = { ...next[idx], items: [...next[idx].items!, newItem] };
+      } else {
+        // Insert new checklist block after current
+        next.splice(idx + 1, 0, { type: "checklist", items: [newItem] });
+      }
+      pushHistory(next);
+      return next;
+    });
+  };
+
+  const updateChecklistItem = (blockIdx: number, itemId: string, updates: Partial<ChecklistItem>) => {
+    setBlocks((prev) => {
+      const next = [...prev];
+      if (next[blockIdx]?.type === "checklist" && next[blockIdx].items) {
+        next[blockIdx] = {
+          ...next[blockIdx],
+          items: next[blockIdx].items!.map((item) =>
+            item.id === itemId ? { ...item, ...updates } : item
+          ),
+        };
+      }
+      return next;
+    });
+    clearTimeout(historyTimer.current);
+    historyTimer.current = setTimeout(() => {
+      setBlocks((current) => { pushHistory(current); return current; });
+    }, 500);
+  };
+
+  const removeChecklistItem = (blockIdx: number, itemId: string) => {
+    setBlocks((prev) => {
+      const next = [...prev];
+      if (next[blockIdx]?.type === "checklist" && next[blockIdx].items) {
+        const remaining = next[blockIdx].items!.filter((item) => item.id !== itemId);
+        if (remaining.length === 0) {
+          // Remove the whole checklist block
+          next.splice(blockIdx, 1);
+          if (next.length === 0) next.push({ type: "text", content: "" });
+        } else {
+          next[blockIdx] = { ...next[blockIdx], items: remaining };
+        }
+      }
+      pushHistory(next);
+      return next;
+    });
+  };
+
+  const addChecklistItemAfter = (blockIdx: number) => {
+    const newItem: ChecklistItem = { id: crypto.randomUUID(), text: "", checked: false };
+    setBlocks((prev) => {
+      const next = [...prev];
+      if (next[blockIdx]?.type === "checklist" && next[blockIdx].items) {
+        next[blockIdx] = { ...next[blockIdx], items: [...next[blockIdx].items!, newItem] };
+      }
+      return next;
+    });
   };
 
   // ── OCR ──────────────────────────────────────────────
@@ -332,9 +430,11 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
 
   // Auto-save on close
   const handleClose = () => {
+    // Stop voice if active
+    if (isListening) toggleVoice();
+    
     const hasContent = title.trim() || blocksToPlainText(blocks).trim();
     if (hasContent) {
-      // Auto-save as draft
       const serialized = serializeBlocks(blocks);
       const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
       const status = editingNote?.status || "rascunho";
@@ -392,6 +492,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              onFocus={() => { activeFieldRef.current = "title"; }}
               placeholder="Título da nota..."
               className="flex-1 bg-white/90 rounded-lg px-3 py-1.5 text-sm font-semibold placeholder:text-gray-400 outline-none border-0 shadow-sm"
               style={{ color: "#1A1A2E" }}
@@ -437,6 +538,11 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
           <div className="flex items-center justify-between px-4 py-1.5 text-[11px] shrink-0" style={{ color: theme.textMuted, transition: "color 0.3s ease" }}>
             <span className="font-medium">
               {editingNote ? "Editando" : "Nova nota"}
+              {isListening && (
+                <span className="ml-2 text-red-500 font-semibold animate-pulse">
+                  🎤 {activeFieldRef.current === "title" ? "Ditando no título" : "Ditando no conteúdo"}
+                </span>
+              )}
             </span>
             <span>
               {format(editingNote?.createdAt ?? new Date(), "d 'de' MMMM, HH:mm", { locale: ptBR })}
@@ -457,13 +563,13 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
                 if (block.type === "text") {
                   return (
                     <textarea
-                      key={idx}
+                      key={`text-${idx}`}
                       value={block.content || ""}
                       onChange={(e) => {
                         updateTextBlock(idx, e.target.value);
                         autoResize(e.target);
                       }}
-                      onFocus={() => { focusedBlockRef.current = idx; }}
+                      onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
                       placeholder={idx === 0 && blocks.length === 1 ? "Comece a escrever sua nota..." : ""}
                       className="w-full bg-transparent border-0 outline-none resize-none text-sm"
                       style={{
@@ -478,9 +584,60 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
                   );
                 }
 
+                if (block.type === "checklist" && block.items) {
+                  return (
+                    <div key={`checklist-${idx}`} className="my-2 space-y-1">
+                      {block.items.map((item) => (
+                        <div key={item.id} className="flex items-center gap-2 group/check">
+                          <button
+                            onClick={() => updateChecklistItem(idx, item.id, { checked: !item.checked })}
+                            className="shrink-0 transition-colors"
+                            style={{ color: item.checked ? "#4CAF50" : (isDark ? "#888" : "#BDBDBD") }}
+                          >
+                            {item.checked ? <CheckSquare size={18} /> : <Square size={18} />}
+                          </button>
+                          <input
+                            value={item.text}
+                            onChange={(e) => updateChecklistItem(idx, item.id, { text: e.target.value })}
+                            onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                addChecklistItemAfter(idx);
+                              }
+                            }}
+                            placeholder="Item da lista..."
+                            className="flex-1 bg-transparent border-0 outline-none text-sm"
+                            style={{
+                              lineHeight: "28px",
+                              color: item.checked ? "#999" : textColor,
+                              textDecoration: item.checked ? "line-through" : "none",
+                              opacity: item.checked ? 0.7 : 1,
+                            }}
+                          />
+                          <button
+                            onClick={() => removeChecklistItem(idx, item.id)}
+                            className="shrink-0 opacity-0 group-hover/check:opacity-100 transition-opacity p-1 rounded hover:bg-black/5"
+                            style={{ color: "#BDBDBD" }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => addChecklistItemAfter(idx)}
+                        className="flex items-center gap-1 text-xs ml-7 py-1 hover:opacity-80 transition-opacity"
+                        style={{ color: theme.textMuted }}
+                      >
+                        + Adicionar item
+                      </button>
+                    </div>
+                  );
+                }
+
                 if (block.type === "image" && block.url) {
                   return (
-                    <div key={idx} className="relative group/img my-2" style={{ maxWidth: "100%" }}>
+                    <div key={`img-${idx}`} className="relative group/img my-2" style={{ maxWidth: "100%" }}>
                       <img
                         src={block.url}
                         alt=""
@@ -514,7 +671,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
 
           {/* ── TOOLBAR ── */}
           <div
-            className="flex items-center gap-1 px-3 py-2 border-t shrink-0"
+            className="flex items-center px-3 py-2 border-t shrink-0 overflow-x-auto"
             style={{ borderColor: theme.lines, background: theme.toolbarBg, transition: "background 0.3s ease, border-color 0.3s ease" }}
           >
             <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageSelect} />
@@ -522,64 +679,100 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
             <input ref={ocrCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleOcrImage} />
             <input ref={ocrFileRef} type="file" accept="image/*" className="hidden" onChange={handleOcrImage} />
 
-            <button onClick={() => cameraInputRef.current?.click()} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
-              <Camera size={16} /> Câmera
-            </button>
-            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
-              <ImagePlus size={16} /> Galeria
-            </button>
-            <button onClick={handleCopy} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
-              {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} />} Copiar
-            </button>
-            <button
-              onClick={() => setShowOcrModal(true)}
-              disabled={ocrLoading}
-              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors"
-              style={{ color: theme.textMuted }}
-            >
-              {ocrLoading ? <Loader2 size={16} className="animate-spin" /> : <ScanSearch size={16} />}
-              OCR
-            </button>
-            <button
-              onClick={handleStartQrScanner}
-              disabled={qrLoading}
-              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors"
-              style={{ color: theme.textMuted }}
-            >
-              {qrLoading ? <Loader2 size={16} className="animate-spin" /> : <ScanLine size={16} />}
-              QR
-            </button>
+            <div className="flex items-center gap-0.5">
+              <button onClick={() => cameraInputRef.current?.click()} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors whitespace-nowrap" style={{ color: theme.textMuted }}>
+                <Camera size={16} /> Câmera
+              </button>
+              <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors whitespace-nowrap" style={{ color: theme.textMuted }}>
+                <ImagePlus size={16} /> Galeria
+              </button>
+              <button onClick={handleCopy} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors whitespace-nowrap" style={{ color: theme.textMuted }}>
+                {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} />} Copiar
+              </button>
+              <button
+                onClick={() => setShowOcrModal(true)}
+                disabled={ocrLoading}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors whitespace-nowrap"
+                style={{ color: theme.textMuted }}
+              >
+                {ocrLoading ? <Loader2 size={16} className="animate-spin" /> : <ScanSearch size={16} />}
+                OCR
+              </button>
+              <button
+                onClick={handleStartQrScanner}
+                disabled={qrLoading}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors whitespace-nowrap"
+                style={{ color: theme.textMuted }}
+              >
+                {qrLoading ? <Loader2 size={16} className="animate-spin" /> : <ScanLine size={16} />}
+                QR
+              </button>
+              <button
+                onClick={addChecklist}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors whitespace-nowrap"
+                style={{ color: theme.textMuted }}
+              >
+                <ListChecks size={16} /> Lista
+              </button>
+            </div>
 
             {/* Separator */}
-            <div className="w-px h-5 mx-1" style={{ background: theme.lines }} />
+            <div className="w-px h-5 mx-1.5 shrink-0" style={{ background: theme.lines }} />
 
-            {/* Undo/Redo centered group */}
-            <button
-              onClick={undo}
-              disabled={!canUndo}
-              className="p-1.5 rounded-lg hover:bg-black/5 transition-all duration-200"
-              style={{
-                color: canUndo ? "#555" : "#BDBDBD",
-                opacity: canUndo ? 1 : 0.4,
-                cursor: canUndo ? "pointer" : "not-allowed",
-              }}
-              title="Desfazer (Ctrl+Z)"
-            >
-              <Undo2 size={18} />
-            </button>
-            <button
-              onClick={redo}
-              disabled={!canRedo}
-              className="p-1.5 rounded-lg hover:bg-black/5 transition-all duration-200"
-              style={{
-                color: canRedo ? "#555" : "#BDBDBD",
-                opacity: canRedo ? 1 : 0.4,
-                cursor: canRedo ? "pointer" : "not-allowed",
-              }}
-              title="Refazer (Ctrl+Y)"
-            >
-              <Redo2 size={18} />
-            </button>
+            {/* Voice dictation */}
+            {voiceSupported && (
+              <>
+                <button
+                  onClick={toggleVoice}
+                  className="p-1.5 rounded-lg transition-all duration-200 shrink-0"
+                  style={{
+                    color: isListening ? "#E53935" : theme.textMuted,
+                    background: isListening ? "rgba(229,57,53,0.1)" : "transparent",
+                  }}
+                  title={isListening ? "Parar ditado" : "Ditar por voz"}
+                >
+                  {isListening ? (
+                    <div className="relative">
+                      <MicOff size={18} />
+                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                    </div>
+                  ) : (
+                    <Mic size={18} />
+                  )}
+                </button>
+                <div className="w-px h-5 mx-1.5 shrink-0" style={{ background: theme.lines }} />
+              </>
+            )}
+
+            {/* Undo/Redo */}
+            <div className="flex items-center gap-0.5 shrink-0">
+              <button
+                onClick={undo}
+                disabled={!canUndo}
+                className="p-1.5 rounded-lg hover:bg-black/5 transition-all duration-200"
+                style={{
+                  color: canUndo ? "#555" : "#BDBDBD",
+                  opacity: canUndo ? 1 : 0.4,
+                  cursor: canUndo ? "pointer" : "not-allowed",
+                }}
+                title="Desfazer (Ctrl+Z)"
+              >
+                <Undo2 size={18} />
+              </button>
+              <button
+                onClick={redo}
+                disabled={!canRedo}
+                className="p-1.5 rounded-lg hover:bg-black/5 transition-all duration-200"
+                style={{
+                  color: canRedo ? "#555" : "#BDBDBD",
+                  opacity: canRedo ? 1 : 0.4,
+                  cursor: canRedo ? "pointer" : "not-allowed",
+                }}
+                title="Refazer (Ctrl+Y)"
+              >
+                <Redo2 size={18} />
+              </button>
+            </div>
           </div>
 
           {/* ── FOOTER BUTTONS ── */}
