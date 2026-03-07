@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { NoteCard } from "./NoteCard";
 import { NoteEditor } from "./NoteEditor";
 import { Note, SyncStatus } from "@/hooks/useNotes";
-import { Search, Cloud, CloudOff, RefreshCw, Download, Upload } from "lucide-react";
+import { Search, Cloud, CloudOff, RefreshCw, Download, Upload, Mic, MicOff } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 
 export { getFontClass, getSizeClass } from "./NoteEditor";
 
@@ -26,6 +27,12 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, syncStatus, draftC
   const [searchFocused, setSearchFocused] = useState(false);
   const [showBackupMenu, setShowBackupMenu] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
+
+  // Voice search
+  const handleVoiceResult = useCallback((text: string) => {
+    setSearch((prev) => (prev + " " + text).trim());
+  }, []);
+  const { isListening, isSupported: voiceSupported, toggle: toggleVoice } = useSpeechRecognition(handleVoiceResult);
 
   // Backup reminder
   useEffect(() => {
@@ -145,10 +152,10 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, syncStatus, draftC
         <div
           className="relative flex-1 transition-all duration-200"
           style={{
-            border: searchFocused ? "1.5px solid #B39DDB" : "1.5px solid #EBEBEB",
+            border: searchFocused || isListening ? "1.5px solid #B39DDB" : "1.5px solid #EBEBEB",
             borderRadius: 16,
             background: "#FFFFFF",
-            boxShadow: searchFocused
+            boxShadow: searchFocused || isListening
               ? "0 0 0 3px rgba(179,157,219,0.15), 0 2px 8px -2px rgba(0,0,0,0.06)"
               : "0 2px 8px -2px rgba(0,0,0,0.04)",
           }}
@@ -160,9 +167,30 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, syncStatus, draftC
             onChange={(e) => setSearch(e.target.value)}
             onFocus={() => setSearchFocused(true)}
             onBlur={() => setSearchFocused(false)}
-            className="w-full pl-9 pr-3 py-2.5 bg-transparent border-0 outline-none text-sm font-medium"
+            className="w-full pl-9 pr-10 py-2.5 bg-transparent border-0 outline-none text-sm font-medium"
             style={{ color: "#1A1A2E", borderRadius: 16 }}
           />
+          {/* Voice search button */}
+          {voiceSupported && (
+            <button
+              onClick={toggleVoice}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full transition-all duration-200"
+              style={{
+                color: isListening ? "#E53935" : "#BDBDBD",
+                background: isListening ? "rgba(229,57,53,0.1)" : "transparent",
+              }}
+              title={isListening ? "Parar busca por voz" : "Buscar por voz"}
+            >
+              {isListening ? (
+                <div className="relative">
+                  <MicOff size={16} />
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                </div>
+              ) : (
+                <Mic size={16} />
+              )}
+            </button>
+          )}
         </div>
         <button
           onClick={openNew}
@@ -195,16 +223,16 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, syncStatus, draftC
             <span className="text-3xl">📝</span>
           </div>
           <p className="mt-4 text-sm font-semibold" style={{ color: "#BDBDBD" }}>
-            Nenhuma nota encontrada
+            {search ? "Nenhuma nota encontrada para essa busca" : "Nenhuma nota encontrada"}
           </p>
           <p className="text-xs mt-1 font-medium" style={{ color: "#D5D5D5" }}>
-            Toque em + para criar uma nova nota
+            {search ? "Tente outro termo" : "Toque em + para criar uma nova nota"}
           </p>
         </div>
       ) : (
         <div className="flex flex-col gap-2.5">
           {filtered.map((note, i) => (
-            <NoteCard key={note.id} note={note} onDelete={onDelete} onClick={openEdit} index={i} />
+            <NoteCard key={note.id} note={note} onDelete={onDelete} onClick={openEdit} index={i} searchQuery={search} />
           ))}
         </div>
       )}
