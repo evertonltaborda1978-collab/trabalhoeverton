@@ -47,15 +47,23 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
   }, []);
   const { isListening, isSupported: voiceSupported, toggle: toggleVoice } = useSpeechRecognition(handleVoiceResult);
 
-  // Backup reminder
+  // Backup reminder - show once on first open, auto-dismiss
   useEffect(() => {
-    if (shouldRemindBackup()) {
-      const timer = setTimeout(() => {
-        toast({ title: "📦 Hora do backup!", description: "Faz mais de uma semana desde seu último backup. Que tal exportar suas notas?" });
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [shouldRemindBackup]);
+    const shownKey = "backup_reminder_shown_session";
+    if (sessionStorage.getItem(shownKey)) return;
+    if (!shouldRemindBackup()) return;
+    
+    sessionStorage.setItem(shownKey, "true");
+    const timer = setTimeout(() => {
+      toast({
+        title: "📦 Hora do backup!",
+        description: "Faz mais de uma semana desde seu último backup. Que tal exportar suas notas?",
+        duration: 6000,
+      });
+    }, 2000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filtered = notes.filter(
     (n) =>
