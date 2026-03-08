@@ -177,7 +177,10 @@ export function CalendarView({ appointments, onAdd, onDelete }: CalendarViewProp
                 ✓ Será sincronizado com Google Agenda
               </p>
             )}
-            <Button onClick={handleAdd} className="w-full">Agendar</Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setDialogOpen(false)} className="flex-1">Cancelar</Button>
+              <Button onClick={handleAdd} className="flex-1">Agendar</Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

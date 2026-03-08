@@ -720,6 +720,16 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
               >
                 <ListChecks size={16} /> Lista
               </button>
+              {onSchedule && (
+                <button
+                  onClick={() => onSchedule(title, blocksToPlainText(blocks))}
+                  className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors whitespace-nowrap"
+                  style={{ color: theme.textMuted }}
+                  title="Agendar na agenda"
+                >
+                  <CalendarPlus size={16} /> Agendar
+                </button>
+              )}
             </div>
 
             {/* Separator */}
