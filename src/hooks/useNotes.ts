@@ -302,6 +302,24 @@ export function useNotes() {
     []
   );
 
+  // Set/remove reminder
+  const setNoteReminder = useCallback(async (id: string, reminderDate: string | null, reminderTime: string | null) => {
+    setNotes((prev) => prev.map((n) => n.id === id ? { ...n, reminderDate, reminderTime, updatedAt: new Date(), sincronizado: false } : n));
+    try {
+      await (supabase.from("notes") as any).update({ reminder_date: reminderDate, reminder_time: reminderTime, updated_at: new Date().toISOString(), sincronizado: true }).eq("id", id);
+      setNotes((prev) => prev.map((n) => n.id === id ? { ...n, sincronizado: true } : n));
+    } catch { setSyncStatus("offline"); }
+  }, []);
+
+  // Set/remove lock
+  const setNoteLock = useCallback(async (id: string, isLocked: boolean, lockPin: string | null) => {
+    setNotes((prev) => prev.map((n) => n.id === id ? { ...n, isLocked, lockPin, updatedAt: new Date(), sincronizado: false } : n));
+    try {
+      await (supabase.from("notes") as any).update({ is_locked: isLocked, lock_pin: lockPin, updated_at: new Date().toISOString(), sincronizado: true }).eq("id", id);
+      setNotes((prev) => prev.map((n) => n.id === id ? { ...n, sincronizado: true } : n));
+    } catch { setSyncStatus("offline"); }
+  }, []);
+
   const draftCount = notes.filter((n) => n.status === "rascunho").length;
 
   // Export backup
