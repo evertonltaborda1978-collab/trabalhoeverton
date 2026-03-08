@@ -806,7 +806,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
           >
             <button
               onClick={handleSaveDraft}
-              className="flex-1 h-[34px] rounded-lg text-[11px] font-semibold border transition-all duration-200 hover:bg-black/5"
+              className="flex-1 h-[38px] rounded-xl text-[13px] font-semibold border transition-all duration-200 hover:bg-black/5"
               style={{ borderColor: theme.borderAccent, color: theme.textMuted }}
             >
               Rascunho
@@ -814,7 +814,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
             <button
               onClick={handleSavePublish}
               disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
-              className="flex-1 h-[34px] rounded-lg text-[11px] font-semibold text-white shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50"
+              className="flex-1 h-[38px] rounded-xl text-[13px] font-semibold text-white shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50"
               style={{ background: "#2D9E7F" }}
             >
               {editingNote ? "Salvar" : "Criar nota"}
