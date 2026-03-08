@@ -4,7 +4,7 @@ import { Appointment } from "@/hooks/useAppointments";
 import { GoogleEvent, useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 import { format, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, Trash2, Clock, RefreshCw, Unplug } from "lucide-react";
+import { Plus, Trash2, Clock, RefreshCw, Unplug, Pencil } from "lucide-react";
 import {
   Dialog,
   DialogContent,
