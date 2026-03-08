@@ -1,43 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { MapPin, Navigation, AlertTriangle, Share2, Copy, Loader2, MapPinOff, Phone } from "lucide-react";
+import { MapPin, Navigation, AlertTriangle, Share2, Copy, Loader2, MapPinOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-
-// Fix leaflet default marker icons
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
-  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
-});
-
-const emergencyIcon = new L.Icon({
-  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
-  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-  className: "emergency-marker",
-});
 
 interface Position {
   lat: number;
   lng: number;
   accuracy: number;
   timestamp: number;
-}
-
-function RecenterMap({ position }: { position: [number, number] }) {
-  const map = useMap();
-  useEffect(() => {
-    map.setView(position, map.getZoom());
-  }, [position, map]);
-  return null;
 }
 
 export function LocationView() {
@@ -48,6 +18,7 @@ export function LocationView() {
   const [emergencyMode, setEmergencyMode] = useState(false);
   const [locationHistory, setLocationHistory] = useState<Position[]>([]);
   const watchIdRef = useRef<number | null>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
 
   const startTracking = useCallback(() => {
     if (!navigator.geolocation) {
@@ -58,7 +29,6 @@ export function LocationView() {
     setLoading(true);
     setError(null);
 
-    // Get initial position
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const newPos: Position = {
@@ -83,7 +53,6 @@ export function LocationView() {
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
 
-    // Watch position
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         const newPos: Position = {
@@ -118,16 +87,12 @@ export function LocationView() {
 
   const shareLocation = useCallback(async () => {
     if (!position) return;
-
     const text = `📍 Minha localização atual:\nhttps://www.google.com/maps?q=${position.lat},${position.lng}`;
-
     if (navigator.share) {
       try {
         await navigator.share({ title: "Minha Localização", text });
         toast({ title: "Localização compartilhada!" });
-      } catch {
-        // User cancelled
-      }
+      } catch { /* cancelled */ }
     } else {
       await navigator.clipboard.writeText(text);
       toast({ title: "Link copiado!", description: "Cole para compartilhar sua localização." });
@@ -154,45 +119,29 @@ export function LocationView() {
     }
   }, [emergencyMode, tracking, startTracking]);
 
-  const callEmergency = useCallback(() => {
-    window.open("tel:190", "_self");
-  }, []);
+  const mapSrc = position
+    ? `https://www.openstreetmap.org/export/embed.html?bbox=${position.lng - 0.005},${position.lat - 0.003},${position.lng + 0.005},${position.lat + 0.003}&layer=mapnik&marker=${position.lat},${position.lng}`
+    : null;
 
   return (
     <div className="animate-fade-in space-y-4">
       {/* Map */}
       <div
+        ref={mapRef}
         className="rounded-2xl overflow-hidden relative"
         style={{
-          height: 300,
+          height: 280,
           border: emergencyMode ? "2px solid #E53935" : "1px solid #F0F0F0",
           boxShadow: emergencyMode ? "0 0 20px rgba(229,57,53,0.2)" : "0 2px 8px rgba(0,0,0,0.06)",
         }}
       >
-        {position ? (
-          <MapContainer
-            center={[position.lat, position.lng]}
-            zoom={16}
-            style={{ height: "100%", width: "100%" }}
-            zoomControl={false}
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            <Marker
-              position={[position.lat, position.lng]}
-              icon={emergencyMode ? emergencyIcon : new L.Icon.Default()}
-            >
-              <Popup>
-                <div className="text-xs">
-                  <p className="font-semibold">Sua localização</p>
-                  <p>Precisão: ~{Math.round(position.accuracy)}m</p>
-                </div>
-              </Popup>
-            </Marker>
-            <RecenterMap position={[position.lat, position.lng]} />
-          </MapContainer>
+        {position && mapSrc ? (
+          <iframe
+            src={mapSrc}
+            style={{ width: "100%", height: "100%", border: 0 }}
+            title="Mapa"
+            loading="lazy"
+          />
         ) : (
           <div className="h-full flex flex-col items-center justify-center gap-3" style={{ background: "#F5F5F5" }}>
             {loading ? (
@@ -211,16 +160,15 @@ export function LocationView() {
             ) : (
               <>
                 <MapPin size={28} style={{ color: "#9E9E9E" }} />
-                <p className="text-xs" style={{ color: "#9E9E9E" }}>Toque para ativar o rastreamento</p>
+                <p className="text-xs" style={{ color: "#9E9E9E" }}>Toque em "Rastrear" para ver o mapa</p>
               </>
             )}
           </div>
         )}
 
-        {/* Emergency badge */}
         {emergencyMode && (
           <div
-            className="absolute top-3 left-3 z-[500] flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold animate-pulse"
+            className="absolute top-3 left-3 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold animate-pulse"
             style={{ background: "#E53935", color: "#FFF" }}
           >
             <AlertTriangle size={14} /> EMERGÊNCIA
@@ -251,10 +199,7 @@ export function LocationView() {
 
       {/* Position info */}
       {position && (
-        <div
-          className="rounded-2xl p-4 space-y-2"
-          style={{ background: "#FFF", border: "1px solid #F0F0F0" }}
-        >
+        <div className="rounded-2xl p-4 space-y-2" style={{ background: "#FFF", border: "1px solid #F0F0F0" }}>
           <div className="flex items-center justify-between">
             <h4 className="font-bold text-sm" style={{ color: "#1A1A2E" }}>Posição atual</h4>
             <button onClick={copyCoords} className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg hover:bg-black/5 transition-colors" style={{ color: "#9E9E9E" }}>
