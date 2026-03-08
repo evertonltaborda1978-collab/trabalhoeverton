@@ -4,17 +4,19 @@ import { BottomNav } from "@/components/BottomNav";
 import { NotesView } from "@/components/NotesView";
 import { CalendarView } from "@/components/CalendarView";
 import { LocationView } from "@/components/LocationView";
+import { WeatherView } from "@/components/WeatherView";
 import { DevicesView } from "@/components/DevicesView";
 import { useNotes } from "@/hooks/useNotes";
 import { useAppointments } from "@/hooks/useAppointments";
 import { useAuth } from "@/contexts/AuthContext";
 import { LogOut } from "lucide-react";
 
-type Tab = "notes" | "calendar" | "location" | "devices";
+type Tab = "notes" | "calendar" | "weather" | "location" | "devices";
 
 const titles: Record<Tab, string> = {
   notes: "Minhas Notas",
   calendar: "Agenda",
+  weather: "Tempo",
   location: "Localização",
   devices: "Segurança",
 };
@@ -92,6 +94,7 @@ const Index = () => {
             onDelete={deleteAppointment}
           />
         )}
+        {tab === "weather" && <WeatherView />}
         {tab === "location" && <LocationView />}
         {tab === "devices" && <DevicesView />}
       </main>

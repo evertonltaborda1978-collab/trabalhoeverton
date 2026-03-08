@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { MapPin, Navigation, AlertTriangle, Share2, Copy, Loader2, MapPinOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
-import { WeatherWidget } from "@/components/WeatherWidget";
+
 
 interface Position {
   lat: number;
@@ -126,9 +126,6 @@ export function LocationView() {
 
   return (
     <div className="animate-fade-in space-y-4">
-      {/* Weather */}
-      <WeatherWidget lat={position?.lat} lng={position?.lng} />
-
       {/* Map */}
       <div
         ref={mapRef}
