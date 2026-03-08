@@ -806,15 +806,15 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
           >
             <button
               onClick={handleSaveDraft}
-              className="flex-1 h-[40px] rounded-xl text-xs font-semibold border-2 transition-all duration-200 hover:bg-black/5"
-              style={{ borderColor: theme.borderAccent, color: theme.textMuted, transition: "border-color 0.3s ease, color 0.3s ease" }}
+              className="flex-1 h-[34px] rounded-lg text-[11px] font-semibold border transition-all duration-200 hover:bg-black/5"
+              style={{ borderColor: theme.borderAccent, color: theme.textMuted }}
             >
               Rascunho
             </button>
             <button
               onClick={handleSavePublish}
               disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
-              className="flex-1 h-[40px] rounded-xl text-xs font-semibold text-white shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50"
+              className="flex-1 h-[34px] rounded-lg text-[11px] font-semibold text-white shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50"
               style={{ background: "#2D9E7F" }}
             >
               {editingNote ? "Salvar" : "Criar nota"}
