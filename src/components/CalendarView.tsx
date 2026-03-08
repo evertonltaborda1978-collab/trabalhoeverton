@@ -43,21 +43,41 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete }: Calend
     ...googleEvents.map((e) => { try { return new Date(e.date + "T00:00:00"); } catch { return null; } }).filter(Boolean) as Date[],
   ];
 
-  const handleAdd = async () => {
+  const handleSave = async () => {
     if (!title.trim()) return;
-    onAdd(title, selected, time, description);
 
-    // Also push to Google Calendar if connected
-    if (connected) {
-      const dateStr = format(selected, "yyyy-MM-dd");
-      const ok = await pushEvent(title, dateStr, time, description);
-      if (ok) {
-        toast({ title: "📅 Sincronizado com Google Agenda!" });
-        fetchEvents();
+    if (editingId) {
+      onUpdate(editingId, title, selected, time, description);
+      toast({ title: "✅ Compromisso atualizado!" });
+    } else {
+      onAdd(title, selected, time, description);
+
+      // Also push to Google Calendar if connected
+      if (connected) {
+        const dateStr = format(selected, "yyyy-MM-dd");
+        const ok = await pushEvent(title, dateStr, time, description);
+        if (ok) {
+          toast({ title: "📅 Sincronizado com Google Agenda!" });
+          fetchEvents();
+        }
       }
     }
 
+    closeDialog();
+  };
+
+  const openEdit = (apt: Appointment) => {
+    setEditingId(apt.id);
+    setTitle(apt.title);
+    setTime(apt.time);
+    setDescription(apt.description);
+    setSelected(apt.date);
+    setDialogOpen(true);
+  };
+
+  const closeDialog = () => {
     setDialogOpen(false);
+    setEditingId(null);
     setTitle("");
     setTime("09:00");
     setDescription("");
