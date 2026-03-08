@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { SnoozeAlertData } from "@/components/SnoozeAlert";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -388,5 +389,59 @@ export function useNotes() {
     return diff > 7 * 24 * 60 * 60 * 1000 && notes.length > 0;
   }, [notes]);
 
-  return { notes, addNote, deleteNote, updateNote, setNoteReminder, setNoteLock, loading, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup };
+  // Reminder alert system
+  const [reminderAlert, setReminderAlert] = useState<SnoozeAlertData | null>(null);
+  const snoozedRemindersRef = useRef<Map<string, number>>(new Map());
+
+  const dismissReminderAlert = useCallback((id: string) => {
+    setReminderAlert(null);
+    const key = "reminder_fired_ids";
+    try {
+      const fired = JSON.parse(sessionStorage.getItem(key) || "[]") as string[];
+      if (!fired.includes(id)) {
+        fired.push(id);
+        sessionStorage.setItem(key, JSON.stringify(fired));
+      }
+    } catch {}
+  }, []);
+
+  const snoozeReminderAlert = useCallback((id: string, minutes: number) => {
+    setReminderAlert(null);
+    snoozedRemindersRef.current.set(id, Date.now() + minutes * 60 * 1000);
+  }, []);
+
+  useEffect(() => {
+    const firedKey = "reminder_fired_ids";
+    const getFired = (): string[] => {
+      try { return JSON.parse(sessionStorage.getItem(firedKey) || "[]"); } catch { return []; }
+    };
+    const checkReminders = () => {
+      const now = new Date();
+      const fired = getFired();
+      for (const note of notes) {
+        if (!note.reminderDate || !note.reminderTime) continue;
+        if (fired.includes(note.id)) continue;
+        if (reminderAlert) break;
+        const snoozeUntil = snoozedRemindersRef.current.get(note.id);
+        if (snoozeUntil && Date.now() < snoozeUntil) continue;
+        const reminderDateTime = new Date(`${note.reminderDate}T${note.reminderTime}:00`);
+        const diff = now.getTime() - reminderDateTime.getTime();
+        if (diff >= 0 && diff < 24 * 60 * 60 * 1000) {
+          snoozedRemindersRef.current.delete(note.id);
+          setReminderAlert({
+            id: note.id,
+            title: note.title || "Nota sem título",
+            time: note.reminderTime,
+            type: "reminder",
+          });
+          break;
+        }
+      }
+    };
+    checkReminders();
+    const interval = setInterval(checkReminders, 15000);
+    return () => clearInterval(interval);
+  }, [notes, reminderAlert]);
+
+  return { notes, addNote, deleteNote, updateNote, setNoteReminder, setNoteLock, loading, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert };
 }

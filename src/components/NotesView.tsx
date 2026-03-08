@@ -6,7 +6,6 @@ import { LockNoteModal } from "./LockNoteModal";
 import { Note, SyncStatus } from "@/hooks/useNotes";
 import { Search, Cloud, CloudOff, RefreshCw, Download, Upload, Mic, MicOff } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { triggerAlert } from "@/lib/alertSound";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 
 export { getFontClass, getSizeClass } from "./NoteEditor";
@@ -65,37 +64,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Check for due reminders every 30 seconds
-  useEffect(() => {
-    const firedKey = "reminder_fired_ids";
-    const getFired = (): string[] => {
-      try { return JSON.parse(sessionStorage.getItem(firedKey) || "[]"); } catch { return []; }
-    };
-    const checkReminders = () => {
-      const now = new Date();
-      const fired = getFired();
-      notes.forEach((note) => {
-        if (!note.reminderDate || !note.reminderTime) return;
-        if (fired.includes(note.id)) return;
-        const reminderDateTime = new Date(`${note.reminderDate}T${note.reminderTime}:00`);
-        const diff = now.getTime() - reminderDateTime.getTime();
-        if (diff >= 0 && diff < 24 * 60 * 60 * 1000) {
-          fired.push(note.id);
-          sessionStorage.setItem(firedKey, JSON.stringify(fired));
-          triggerAlert();
-          toast({
-            title: "🔔 Lembrete!",
-            description: `"${note.title || 'Nota sem título'}" — agendado para ${note.reminderTime}`,
-            duration: 15000,
-          });
-        }
-      });
-    };
-    checkReminders();
-    const interval = setInterval(checkReminders, 30000);
-    return () => clearInterval(interval);
-  }, [notes]);
 
   const filtered = notes.filter(
     (n) =>
