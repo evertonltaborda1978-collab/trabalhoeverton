@@ -188,6 +188,10 @@ export default function Auth() {
             </>
           )}
         </p>
+
+        <p className="text-center text-xs text-muted-foreground/60 pt-4">
+          Criado por <span className="font-semibold text-muted-foreground/80">Everton Taborda</span>
+        </p>
       </div>
     </div>
   );
