@@ -6,14 +6,13 @@ import { CalendarView } from "@/components/CalendarView";
 import { LocationView } from "@/components/LocationView";
 import { WeatherView } from "@/components/WeatherView";
 import { DevicesView } from "@/components/DevicesView";
-import { HolidaysView } from "@/components/HolidaysView";
 import { SnoozeAlert } from "@/components/SnoozeAlert";
 import { useNotes } from "@/hooks/useNotes";
 import { useAppointments } from "@/hooks/useAppointments";
 import { useAuth } from "@/contexts/AuthContext";
 import { LogOut } from "lucide-react";
 
-type Tab = "notes" | "calendar" | "weather" | "location" | "devices" | "holidays";
+type Tab = "notes" | "calendar" | "weather" | "location" | "devices";
 
 const titles: Record<Tab, string> = {
   notes: "Minhas Notas",
@@ -21,7 +20,6 @@ const titles: Record<Tab, string> = {
   weather: "Tempo",
   location: "Localização",
   devices: "Segurança",
-  holidays: "Feriados",
 };
 
 const Index = () => {
@@ -114,7 +112,6 @@ const Index = () => {
           />
         )}
         {tab === "weather" && <WeatherView />}
-        {tab === "holidays" && <HolidaysView />}
         {tab === "location" && <LocationView />}
         {tab === "devices" && <DevicesView />}
       </main>
