@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
+import { triggerAlert } from "@/lib/alertSound";
 
 export interface Appointment {
   id: string;
@@ -102,10 +103,11 @@ export function useAppointments() {
         if (diff >= 0 && diff < 15 * 60 * 1000) {
           fired.push(apt.id);
           sessionStorage.setItem(key, JSON.stringify(fired));
+          triggerAlert();
           toast({
             title: "⏰ Compromisso agora",
             description: `${apt.title} às ${apt.time}`,
-            duration: 10000,
+            duration: 15000,
           });
         }
       });

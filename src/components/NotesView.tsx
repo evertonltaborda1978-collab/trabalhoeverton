@@ -6,6 +6,7 @@ import { LockNoteModal } from "./LockNoteModal";
 import { Note, SyncStatus } from "@/hooks/useNotes";
 import { Search, Cloud, CloudOff, RefreshCw, Download, Upload, Mic, MicOff } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { triggerAlert } from "@/lib/alertSound";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 
 export { getFontClass, getSizeClass } from "./NoteEditor";
@@ -82,10 +83,11 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
         if (diff >= 0 && diff < 24 * 60 * 60 * 1000) {
           fired.push(note.id);
           sessionStorage.setItem(firedKey, JSON.stringify(fired));
+          triggerAlert();
           toast({
             title: "🔔 Lembrete!",
             description: `"${note.title || 'Nota sem título'}" — agendado para ${note.reminderTime}`,
-            duration: 10000,
+            duration: 15000,
           });
         }
       });
