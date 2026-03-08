@@ -107,7 +107,7 @@ const Index = () => {
           <CalendarView
             appointments={appointments}
             onAdd={addAppointment}
-            onDelete={deleteAppointment}
+            onDelete={handleDeleteAppointment}
           />
         )}
         {tab === "weather" && <WeatherView />}
