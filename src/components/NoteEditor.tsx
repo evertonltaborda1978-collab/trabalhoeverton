@@ -678,9 +678,9 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
             </div>
           </div>
 
-          {/* ── TOOLBAR ── */}
+          {/* ── TOOLBAR (2 rows for mobile) ── */}
           <div
-            className="flex items-center px-3 py-2 border-t shrink-0 overflow-x-auto"
+            className="px-3 py-1.5 border-t shrink-0"
             style={{ borderColor: theme.lines, background: theme.toolbarBg, transition: "background 0.3s ease, border-color 0.3s ease" }}
           >
             <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageSelect} />
@@ -688,125 +688,68 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
             <input ref={ocrCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleOcrImage} />
             <input ref={ocrFileRef} type="file" accept="image/*" className="hidden" onChange={handleOcrImage} />
 
-            <div className="flex items-center gap-0.5">
-              <button onClick={() => cameraInputRef.current?.click()} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors whitespace-nowrap" style={{ color: theme.textMuted }}>
-                <Camera size={16} /> Câmera
-              </button>
-              <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors whitespace-nowrap" style={{ color: theme.textMuted }}>
-                <ImagePlus size={16} /> Galeria
-              </button>
-              <button onClick={handleCopy} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors whitespace-nowrap" style={{ color: theme.textMuted }}>
-                {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} />} Copiar
-              </button>
-              <button
-                onClick={() => setShowOcrModal(true)}
-                disabled={ocrLoading}
-                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors whitespace-nowrap"
-                style={{ color: theme.textMuted }}
-              >
-                {ocrLoading ? <Loader2 size={16} className="animate-spin" /> : <ScanSearch size={16} />}
-                OCR
-              </button>
-              <button
-                onClick={handleStartQrScanner}
-                disabled={qrLoading}
-                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors whitespace-nowrap"
-                style={{ color: theme.textMuted }}
-              >
-                {qrLoading ? <Loader2 size={16} className="animate-spin" /> : <ScanLine size={16} />}
-                QR
-              </button>
-              <button
-                onClick={addChecklist}
-                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors whitespace-nowrap"
-                style={{ color: theme.textMuted }}
-              >
-                <ListChecks size={16} /> Lista
-              </button>
-              {onSchedule && (
-                <button
-                  onClick={() => {
-                    const today = new Date().toISOString().slice(0, 10);
-                    setScheduleDate(today);
-                    setScheduleTime("09:00");
-                    setShowScheduleDialog(true);
-                  }}
-                  className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors whitespace-nowrap"
-                  style={{ color: theme.textMuted }}
-                  title="Agendar na agenda"
-                >
-                  <CalendarPlus size={16} /> Agendar
+            {/* Row 1 */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-0.5">
+                <button onClick={() => cameraInputRef.current?.click()} className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+                  <Camera size={16} />
+                  <span>Câmera</span>
                 </button>
-              )}
-
-              {/* Schedule Dialog */}
-              {showScheduleDialog && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)" }}>
-                  <div className="rounded-2xl p-5 w-[90%] max-w-sm space-y-4" style={{ background: "#FFF", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
-                    <h3 className="text-base font-bold flex items-center gap-2" style={{ color: "#1A1A2E" }}>
-                      <CalendarPlus size={18} /> Agendar na Agenda
-                    </h3>
-                    <p className="text-xs" style={{ color: "#9E9E9E" }}>
-                      "{title || "Nota sem título"}"
-                    </p>
-                    <div>
-                      <label className="text-xs font-medium block mb-1" style={{ color: "#666" }}>Data</label>
-                      <input
-                        type="date"
-                        value={scheduleDate}
-                        min={new Date().toISOString().slice(0, 10)}
-                        onChange={(e) => setScheduleDate(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl text-sm border outline-none focus:ring-2 focus:ring-blue-200"
-                        style={{ borderColor: "#E0E0E0", color: "#1A1A2E" }}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium block mb-1" style={{ color: "#666" }}>Hora</label>
-                      <input
-                        type="time"
-                        value={scheduleTime}
-                        onChange={(e) => setScheduleTime(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl text-sm border outline-none focus:ring-2 focus:ring-blue-200"
-                        style={{ borderColor: "#E0E0E0", color: "#1A1A2E" }}
-                      />
-                    </div>
-                    <div className="flex gap-2 pt-2">
-                      <button
-                        onClick={() => setShowScheduleDialog(false)}
-                        className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
-                        style={{ background: "#F5F5F5", color: "#666" }}
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (scheduleDate && onSchedule) {
-                            onSchedule(title, blocksToPlainText(blocks), scheduleDate, scheduleTime);
-                            toast({ title: "📅 Agendado!", description: `${scheduleDate} às ${scheduleTime}` });
-                            setShowScheduleDialog(false);
-                          }
-                        }}
-                        disabled={!scheduleDate}
-                        className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-colors disabled:opacity-40"
-                        style={{ background: "#1A1A2E" }}
-                      >
-                        Agendar
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
+                <button onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+                  <ImagePlus size={16} />
+                  <span>Galeria</span>
+                </button>
+                <button onClick={handleCopy} className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+                  {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} />}
+                  <span>Copiar</span>
+                </button>
+                <button onClick={() => setShowOcrModal(true)} disabled={ocrLoading} className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+                  {ocrLoading ? <Loader2 size={16} className="animate-spin" /> : <ScanSearch size={16} />}
+                  <span>OCR</span>
+                </button>
+              </div>
+              <div className="flex items-center gap-0.5">
+                <button onClick={undo} disabled={!canUndo} className="p-1.5 rounded-lg hover:bg-black/5 transition-all" style={{ color: canUndo ? "#555" : "#BDBDBD", opacity: canUndo ? 1 : 0.4 }} title="Desfazer">
+                  <Undo2 size={16} />
+                </button>
+                <button onClick={redo} disabled={!canRedo} className="p-1.5 rounded-lg hover:bg-black/5 transition-all" style={{ color: canRedo ? "#555" : "#BDBDBD", opacity: canRedo ? 1 : 0.4 }} title="Refazer">
+                  <Redo2 size={16} />
+                </button>
+              </div>
             </div>
 
-            {/* Separator */}
-            <div className="w-px h-5 mx-1.5 shrink-0" style={{ background: theme.lines }} />
-
-            {/* Voice dictation */}
-            {voiceSupported && (
-              <>
+            {/* Row 2 */}
+            <div className="flex items-center justify-between mt-0.5">
+              <div className="flex items-center gap-0.5">
+                <button onClick={handleStartQrScanner} disabled={qrLoading} className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+                  {qrLoading ? <Loader2 size={16} className="animate-spin" /> : <ScanLine size={16} />}
+                  <span>QR</span>
+                </button>
+                <button onClick={addChecklist} className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+                  <ListChecks size={16} />
+                  <span>Lista</span>
+                </button>
+                {onSchedule && (
+                  <button
+                    onClick={() => {
+                      const today = new Date().toISOString().slice(0, 10);
+                      setScheduleDate(today);
+                      setScheduleTime("09:00");
+                      setShowScheduleDialog(true);
+                    }}
+                    className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-colors"
+                    style={{ color: theme.textMuted }}
+                    title="Agendar na agenda"
+                  >
+                    <CalendarPlus size={16} />
+                    <span>Agendar</span>
+                  </button>
+                )}
+              </div>
+              {voiceSupported && (
                 <button
                   onClick={toggleVoice}
-                  className="p-1.5 rounded-lg transition-all duration-200 shrink-0"
+                  className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] transition-all duration-200"
                   style={{
                     color: isListening ? "#E53935" : theme.textMuted,
                     background: isListening ? "rgba(229,57,53,0.1)" : "transparent",
@@ -815,46 +758,74 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
                 >
                   {isListening ? (
                     <div className="relative">
-                      <MicOff size={18} />
+                      <MicOff size={16} />
                       <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
                     </div>
                   ) : (
-                    <Mic size={18} />
+                    <Mic size={16} />
                   )}
+                  <span>Voz</span>
                 </button>
-                <div className="w-px h-5 mx-1.5 shrink-0" style={{ background: theme.lines }} />
-              </>
-            )}
-
-            {/* Undo/Redo */}
-            <div className="flex items-center gap-0.5 shrink-0">
-              <button
-                onClick={undo}
-                disabled={!canUndo}
-                className="p-1.5 rounded-lg hover:bg-black/5 transition-all duration-200"
-                style={{
-                  color: canUndo ? "#555" : "#BDBDBD",
-                  opacity: canUndo ? 1 : 0.4,
-                  cursor: canUndo ? "pointer" : "not-allowed",
-                }}
-                title="Desfazer (Ctrl+Z)"
-              >
-                <Undo2 size={18} />
-              </button>
-              <button
-                onClick={redo}
-                disabled={!canRedo}
-                className="p-1.5 rounded-lg hover:bg-black/5 transition-all duration-200"
-                style={{
-                  color: canRedo ? "#555" : "#BDBDBD",
-                  opacity: canRedo ? 1 : 0.4,
-                  cursor: canRedo ? "pointer" : "not-allowed",
-                }}
-                title="Refazer (Ctrl+Y)"
-              >
-                <Redo2 size={18} />
-              </button>
+              )}
             </div>
+
+            {/* Schedule Dialog */}
+            {showScheduleDialog && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)" }}>
+                <div className="rounded-2xl p-5 w-[90%] max-w-sm space-y-4" style={{ background: "#FFF", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+                  <h3 className="text-base font-bold flex items-center gap-2" style={{ color: "#1A1A2E" }}>
+                    <CalendarPlus size={18} /> Agendar na Agenda
+                  </h3>
+                  <p className="text-xs" style={{ color: "#9E9E9E" }}>
+                    "{title || "Nota sem título"}"
+                  </p>
+                  <div>
+                    <label className="text-xs font-medium block mb-1" style={{ color: "#666" }}>Data</label>
+                    <input
+                      type="date"
+                      value={scheduleDate}
+                      min={new Date().toISOString().slice(0, 10)}
+                      onChange={(e) => setScheduleDate(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl text-sm border outline-none focus:ring-2 focus:ring-blue-200"
+                      style={{ borderColor: "#E0E0E0", color: "#1A1A2E" }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium block mb-1" style={{ color: "#666" }}>Hora</label>
+                    <input
+                      type="time"
+                      value={scheduleTime}
+                      onChange={(e) => setScheduleTime(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl text-sm border outline-none focus:ring-2 focus:ring-blue-200"
+                      style={{ borderColor: "#E0E0E0", color: "#1A1A2E" }}
+                    />
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      onClick={() => setShowScheduleDialog(false)}
+                      className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                      style={{ background: "#F5F5F5", color: "#666" }}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (scheduleDate && onSchedule) {
+                          onSchedule(title, blocksToPlainText(blocks), scheduleDate, scheduleTime);
+                          toast({ title: "📅 Agendado!", description: `${scheduleDate} às ${scheduleTime}` });
+                          setShowScheduleDialog(false);
+                        }
+                      }}
+                      disabled={!scheduleDate}
+                      className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-colors disabled:opacity-40"
+                      style={{ background: "#1A1A2E" }}
+                    >
+                      Agendar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ── FOOTER BUTTONS ── */}
