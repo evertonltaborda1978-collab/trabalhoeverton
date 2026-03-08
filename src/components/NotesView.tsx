@@ -314,9 +314,8 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
         onOpenChange={setDialogOpen}
         editingNote={editingNote}
         onSave={handleSave}
-        onSchedule={onAddAppointment ? (noteTitle, noteContent) => {
-          onAddAppointment(noteTitle || "Nota sem título", new Date(), "09:00", noteContent);
-          toast({ title: "📅 Agendado!", description: `"${noteTitle || "Nota"}" foi adicionado à agenda.` });
+        onSchedule={onAddAppointment ? (noteTitle, noteContent, date, time) => {
+          onAddAppointment(noteTitle || "Nota sem título", new Date(date + "T00:00:00"), time, noteContent);
         } : undefined}
       />
 
