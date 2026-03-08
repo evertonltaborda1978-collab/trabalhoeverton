@@ -158,6 +158,9 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete }: Calend
                   <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{apt.description}</p>
                 )}
               </div>
+              <button onClick={() => openEdit(apt)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary">
+                <Pencil size={14} />
+              </button>
               <button onClick={() => onDelete(apt.id)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
                 <Trash2 size={14} />
               </button>
