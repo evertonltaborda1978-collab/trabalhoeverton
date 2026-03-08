@@ -107,6 +107,7 @@ interface NoteEditorProps {
     fontSize: string,
     status: "rascunho" | "publicada",
   ) => void;
+  onSchedule?: (title: string, content: string) => void;
 }
 
 // ── Component ──────────────────────────────────────────
