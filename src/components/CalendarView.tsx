@@ -19,6 +19,7 @@ import { toast } from "@/hooks/use-toast";
 interface CalendarViewProps {
   appointments: Appointment[];
   onAdd: (title: string, date: Date, time: string, description: string) => void;
+  onUpdate: (id: string, title: string, date: Date, time: string, description: string) => void;
   onDelete: (id: string) => void;
 }
 
