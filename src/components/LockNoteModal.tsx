@@ -154,7 +154,7 @@ export function LockNoteModal({ open, onOpenChange, mode, onSetPin, onUnlock, on
           </div>
 
           <button
-            onClick={handleClose}
+            onClick={() => handleClose(false)}
             className="w-full py-2.5 rounded-xl text-sm font-medium transition-all hover:bg-gray-100"
             style={{ color: "#999" }}
           >
