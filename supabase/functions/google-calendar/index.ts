@@ -167,7 +167,8 @@ Deno.serve(async (req) => {
 
       const calData = await calRes.json();
       if (!calRes.ok) {
-        return new Response(JSON.stringify({ error: 'Failed to fetch events', details: calData }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        console.error('Failed to fetch events:', calData);
+        return new Response(JSON.stringify({ error: 'Failed to fetch events. Please try again.' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       const events = (calData.items || []).map((e: any) => ({
