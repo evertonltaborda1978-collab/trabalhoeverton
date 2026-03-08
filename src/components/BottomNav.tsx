@@ -1,6 +1,6 @@
-import { StickyNote, Calendar, MapPin, Shield } from "lucide-react";
+import { StickyNote, Calendar, MapPin, Shield, CloudSun } from "lucide-react";
 
-type Tab = "notes" | "calendar" | "location" | "devices";
+type Tab = "notes" | "calendar" | "weather" | "location" | "devices";
 
 interface BottomNavProps {
   active: Tab;
@@ -10,6 +10,7 @@ interface BottomNavProps {
 const tabs: { id: Tab; icon: typeof StickyNote; label: string }[] = [
   { id: "notes", icon: StickyNote, label: "Notas" },
   { id: "calendar", icon: Calendar, label: "Agenda" },
+  { id: "weather", icon: CloudSun, label: "Tempo" },
   { id: "location", icon: MapPin, label: "Local" },
   { id: "devices", icon: Shield, label: "Segurança" },
 ];

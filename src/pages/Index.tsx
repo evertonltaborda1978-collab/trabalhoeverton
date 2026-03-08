@@ -94,6 +94,7 @@ const Index = () => {
             onDelete={deleteAppointment}
           />
         )}
+        {tab === "weather" && <WeatherView />}
         {tab === "location" && <LocationView />}
         {tab === "devices" && <DevicesView />}
       </main>
