@@ -126,6 +126,9 @@ export function LocationView() {
 
   return (
     <div className="animate-fade-in space-y-4">
+      {/* Weather */}
+      <WeatherWidget lat={position?.lat} lng={position?.lng} />
+
       {/* Map */}
       <div
         ref={mapRef}
