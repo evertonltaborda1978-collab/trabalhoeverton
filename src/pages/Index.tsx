@@ -107,6 +107,7 @@ const Index = () => {
           <CalendarView
             appointments={appointments}
             onAdd={addAppointment}
+            onUpdate={(id, title, date, time, desc) => updateAppointment(id, title, date, time, desc)}
             onDelete={handleDeleteAppointment}
           />
         )}
