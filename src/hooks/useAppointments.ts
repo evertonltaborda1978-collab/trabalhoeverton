@@ -1,8 +1,7 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "@/hooks/use-toast";
-import { triggerAlert } from "@/lib/alertSound";
+import { SnoozeAlertData } from "@/components/SnoozeAlert";
 
 export interface Appointment {
   id: string;
@@ -15,6 +14,8 @@ export interface Appointment {
 export function useAppointments() {
   const { user } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [activeAlert, setActiveAlert] = useState<SnoozeAlertData | null>(null);
+  const snoozedRef = useRef<Map<string, number>>(new Map());
 
   const fetchAppointments = useCallback(async () => {
     if (!user) return;
@@ -68,6 +69,7 @@ export function useAppointments() {
   const deleteAppointment = useCallback(async (id: string) => {
     await supabase.from("appointments").delete().eq("id", id);
     setAppointments((prev) => prev.filter((a) => a.id !== id));
+    snoozedRef.current.delete(id);
 
     const key = "appointments_fired_ids";
     try {
@@ -76,6 +78,24 @@ export function useAppointments() {
     } catch {
       sessionStorage.removeItem(key);
     }
+  }, []);
+
+  const dismissAlert = useCallback((id: string) => {
+    setActiveAlert(null);
+    const key = "appointments_fired_ids";
+    try {
+      const fired = JSON.parse(sessionStorage.getItem(key) || "[]") as string[];
+      if (!fired.includes(id)) {
+        fired.push(id);
+        sessionStorage.setItem(key, JSON.stringify(fired));
+      }
+    } catch {}
+  }, []);
+
+  const snoozeAlert = useCallback((id: string, minutes: number) => {
+    setActiveAlert(null);
+    const snoozeUntil = Date.now() + minutes * 60 * 1000;
+    snoozedRef.current.set(id, snoozeUntil);
   }, []);
 
   useEffect(() => {
@@ -95,28 +115,33 @@ export function useAppointments() {
 
       appointments.forEach((apt) => {
         if (fired.includes(apt.id)) return;
+        if (activeAlert) return; // Don't stack alerts
+
+        // Check if snoozed
+        const snoozeUntil = snoozedRef.current.get(apt.id);
+        if (snoozeUntil && Date.now() < snoozeUntil) return;
 
         const dateStr = apt.date.toISOString().slice(0, 10);
         const aptDateTime = new Date(`${dateStr}T${apt.time}:00`);
         const diff = now.getTime() - aptDateTime.getTime();
 
-        if (diff >= 0 && diff < 15 * 60 * 1000) {
-          fired.push(apt.id);
-          sessionStorage.setItem(key, JSON.stringify(fired));
-          triggerAlert();
-          toast({
-            title: "⏰ Compromisso agora",
-            description: `${apt.title} às ${apt.time}`,
-            duration: 15000,
+        if (diff >= 0 && diff < 60 * 60 * 1000) {
+          // Clear snooze if expired
+          snoozedRef.current.delete(apt.id);
+          setActiveAlert({
+            id: apt.id,
+            title: apt.title,
+            time: apt.time,
+            type: "appointment",
           });
         }
       });
     };
 
     checkAppointments();
-    const interval = setInterval(checkAppointments, 30000);
+    const interval = setInterval(checkAppointments, 15000);
     return () => clearInterval(interval);
-  }, [appointments]);
+  }, [appointments, activeAlert]);
 
-  return { appointments, addAppointment, deleteAppointment };
+  return { appointments, addAppointment, deleteAppointment, activeAlert, dismissAlert, snoozeAlert };
 }

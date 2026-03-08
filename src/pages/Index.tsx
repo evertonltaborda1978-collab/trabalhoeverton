@@ -6,6 +6,7 @@ import { CalendarView } from "@/components/CalendarView";
 import { LocationView } from "@/components/LocationView";
 import { WeatherView } from "@/components/WeatherView";
 import { DevicesView } from "@/components/DevicesView";
+import { SnoozeAlert } from "@/components/SnoozeAlert";
 import { useNotes } from "@/hooks/useNotes";
 import { useAppointments } from "@/hooks/useAppointments";
 import { useAuth } from "@/contexts/AuthContext";
@@ -24,7 +25,7 @@ const titles: Record<Tab, string> = {
 const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
   const { notes, addNote, deleteNote, updateNote, setNoteReminder, setNoteLock, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup } = useNotes();
-  const { appointments, addAppointment, deleteAppointment } = useAppointments();
+  const { appointments, addAppointment, deleteAppointment, activeAlert, dismissAlert, snoozeAlert } = useAppointments();
   const { signOut } = useAuth();
 
   return (
@@ -101,6 +102,7 @@ const Index = () => {
 
       {/* Bottom Navigation */}
       <BottomNav active={tab} onChange={setTab} />
+      <SnoozeAlert alert={activeAlert} onDismiss={dismissAlert} onSnooze={snoozeAlert} />
     </div>
   );
 };
