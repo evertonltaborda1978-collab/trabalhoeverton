@@ -102,7 +102,7 @@ const Index = () => {
 
       {/* Bottom Navigation */}
       <BottomNav active={tab} onChange={setTab} />
-      <SnoozeAlert alert={activeAlert} onDismiss={dismissAlert} onSnooze={snoozeAlert} />
+      <SnoozeAlert alert={activeAlert || reminderAlert} onDismiss={(id) => { dismissAlert(id); dismissReminderAlert(id); }} onSnooze={(id, min) => { snoozeAlert(id, min); snoozeReminderAlert(id, min); }} />
     </div>
   );
 };
