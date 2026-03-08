@@ -75,7 +75,8 @@ Deno.serve(async (req) => {
 
     const tokens = await tokenRes.json();
     if (!tokens.access_token) {
-      return new Response(`Token exchange failed: ${JSON.stringify(tokens)}`, { status: 400, headers: corsHeaders });
+      console.error('Token exchange failed:', tokens);
+      return new Response('Authentication failed. Please reconnect.', { status: 400, headers: corsHeaders });
     }
 
     // Get user from state (JWT)
@@ -166,7 +167,8 @@ Deno.serve(async (req) => {
 
       const calData = await calRes.json();
       if (!calRes.ok) {
-        return new Response(JSON.stringify({ error: 'Failed to fetch events', details: calData }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        console.error('Failed to fetch events:', calData);
+        return new Response(JSON.stringify({ error: 'Failed to fetch events. Please try again.' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       const events = (calData.items || []).map((e: any) => ({
@@ -207,7 +209,8 @@ Deno.serve(async (req) => {
 
       const created = await createRes.json();
       if (!createRes.ok) {
-        return new Response(JSON.stringify({ error: 'Failed to create event', details: created }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        console.error('Failed to create event:', created);
+        return new Response(JSON.stringify({ error: 'Failed to create event. Please try again.' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       return new Response(JSON.stringify({ success: true, event: created }), {
