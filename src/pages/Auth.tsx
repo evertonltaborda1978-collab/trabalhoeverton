@@ -13,6 +13,7 @@ export default function Auth() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [forgotPassword, setForgotPassword] = useState(false);
   const { toast } = useToast();
   const { biometricEnabled, biometricAvailable, enableBiometric, biometricLogin, storedEmail } = useBiometricAuth();
 
@@ -21,6 +22,17 @@ export default function Auth() {
     setLoading(true);
 
     try {
+      if (forgotPassword) {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/reset-password`,
+        });
+        if (error) throw error;
+        toast({ title: "Email enviado!", description: "Verifique sua caixa de entrada para redefinir a senha." });
+        setForgotPassword(false);
+        setLoading(false);
+        return;
+      }
+
       if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -78,7 +90,7 @@ export default function Auth() {
             Secretária Virtual
           </h1>
           <p className="text-sm text-muted-foreground">
-            {isLogin ? "Entre na sua conta" : "Crie sua conta"}
+            {forgotPassword ? "Recupere sua senha" : isLogin ? "Entre na sua conta" : "Crie sua conta"}
           </p>
         </div>
 
@@ -118,39 +130,63 @@ export default function Auth() {
               required
             />
           </div>
-          <div className="relative">
-            <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type={showPassword ? "text" : "password"}
-              placeholder="Senha"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="pl-10 pr-10"
-              required
-              minLength={6}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
+          {!forgotPassword && (
+            <div className="relative">
+              <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type={showPassword ? "text" : "password"}
+                placeholder="Senha"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="pl-10 pr-10"
+                required
+                minLength={6}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          )}
+          {isLogin && !forgotPassword && (
+            <div className="text-right">
+              <button
+                type="button"
+                onClick={() => setForgotPassword(true)}
+                className="text-xs text-primary hover:underline"
+              >
+                Esqueceu a senha?
+              </button>
+            </div>
+          )}
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Aguarde..." : isLogin ? "Entrar" : "Cadastrar"}
+            {loading ? "Aguarde..." : forgotPassword ? "Enviar email de recuperação" : isLogin ? "Entrar" : "Cadastrar"}
           </Button>
         </form>
 
         {/* Toggle */}
         <p className="text-center text-sm text-muted-foreground">
-          {isLogin ? "Não tem conta?" : "Já tem conta?"}{" "}
-          <button
-            onClick={() => setIsLogin(!isLogin)}
-            className="text-primary font-semibold hover:underline"
-          >
-            {isLogin ? "Cadastre-se" : "Entrar"}
-          </button>
+          {forgotPassword ? (
+            <button
+              onClick={() => setForgotPassword(false)}
+              className="text-primary font-semibold hover:underline"
+            >
+              Voltar ao login
+            </button>
+          ) : (
+            <>
+              {isLogin ? "Não tem conta?" : "Já tem conta?"}{" "}
+              <button
+                onClick={() => setIsLogin(!isLogin)}
+                className="text-primary font-semibold hover:underline"
+              >
+                {isLogin ? "Cadastre-se" : "Entrar"}
+              </button>
+            </>
+          )}
         </p>
       </div>
     </div>
