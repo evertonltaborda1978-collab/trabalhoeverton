@@ -304,7 +304,7 @@ export function LocationView() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 mb-3">
           <Button
             onClick={toggleEmergency}
             variant={emergencyMode ? "destructive" : "outline"}
@@ -313,16 +313,27 @@ export function LocationView() {
             <AlertTriangle size={14} />
             {emergencyMode ? "Desativar" : "Ativar Emergência"}
           </Button>
-          {emergencyMode && (
-            <Button
-              onClick={callEmergency}
-              variant="destructive"
-              className="gap-2 rounded-xl text-xs"
-            >
-              <Phone size={14} /> Ligar 190
-            </Button>
-          )}
         </div>
+        {emergencyMode && (
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { label: "Polícia", number: "190", emoji: "🚔" },
+              { label: "SAMU", number: "192", emoji: "🚑" },
+              { label: "Bombeiros", number: "193", emoji: "🚒" },
+            ].map((svc) => (
+              <button
+                key={svc.number}
+                onClick={() => window.open(`tel:${svc.number}`, "_self")}
+                className="flex flex-col items-center gap-1 py-3 rounded-xl transition-all active:scale-95"
+                style={{ background: "#FFEBEE", border: "1px solid #FFCDD2" }}
+              >
+                <span className="text-lg">{svc.emoji}</span>
+                <span className="text-[11px] font-bold" style={{ color: "#C62828" }}>{svc.number}</span>
+                <span className="text-[9px] font-medium" style={{ color: "#E53935" }}>{svc.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Google Maps link */}
