@@ -35,7 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    supabase.auth
+    (supabase.auth as any)
       .getSession()
       .then(({ data: { session } }) => {
         if (!isMounted) return;
