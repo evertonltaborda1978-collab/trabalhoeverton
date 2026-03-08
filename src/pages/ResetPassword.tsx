@@ -17,7 +17,7 @@ export default function ResetPassword() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = (supabase.auth as any).onAuthStateChange((event: string) => {
       if (event === "PASSWORD_RECOVERY") {
         setIsRecovery(true);
       }
@@ -40,7 +40,7 @@ export default function ResetPassword() {
 
     setLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password });
+      const { error } = await (supabase.auth as any).updateUser({ password });
       if (error) throw error;
       setSuccess(true);
       toast({ title: "Senha atualizada!", description: "Sua senha foi alterada com sucesso." });

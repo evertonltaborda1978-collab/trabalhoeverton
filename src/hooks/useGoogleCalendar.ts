@@ -20,7 +20,7 @@ export function useGoogleCalendar() {
   const [syncing, setSyncing] = useState(false);
 
   const getAuthHeader = async () => {
-    const { data } = await supabase.auth.getSession();
+    const { data } = await (supabase.auth as any).getSession();
     return data.session?.access_token || "";
   };
 

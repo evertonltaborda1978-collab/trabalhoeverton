@@ -73,7 +73,7 @@ export function useBiometricAuth() {
       }
 
       const password = atob(token);
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await (supabase.auth as any).signInWithPassword({ email, password });
 
       if (error) {
         return { success: false, error: "Credenciais inválidas. Configure a biometria novamente." };

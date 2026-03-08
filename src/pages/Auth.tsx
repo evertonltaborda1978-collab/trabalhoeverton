@@ -23,7 +23,7 @@ export default function Auth() {
 
     try {
       if (forgotPassword) {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        const { error } = await (supabase.auth as any).resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/reset-password`,
         });
         if (error) throw error;
@@ -34,7 +34,7 @@ export default function Auth() {
       }
 
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await (supabase.auth as any).signInWithPassword({ email, password });
         if (error) throw error;
 
         // After successful login, offer biometric if available and not enabled
@@ -45,7 +45,7 @@ export default function Auth() {
           }
         }
       } else {
-        const { error } = await supabase.auth.signUp({
+        const { error } = await (supabase.auth as any).signUp({
           email,
           password,
           options: { emailRedirectTo: window.location.origin },
