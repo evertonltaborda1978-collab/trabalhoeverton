@@ -27,7 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let isMounted = true;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const { data: { subscription } } = (supabase.auth as any).onAuthStateChange(
       (_event, session) => {
         if (!isMounted) return;
         setSession(session);
