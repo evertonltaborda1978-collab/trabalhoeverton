@@ -11,11 +11,12 @@ import { useAppointments } from "@/hooks/useAppointments";
 import { useAuth } from "@/contexts/AuthContext";
 import { LogOut } from "lucide-react";
 
-type Tab = "notes" | "calendar" | "location" | "devices";
+type Tab = "notes" | "calendar" | "weather" | "location" | "devices";
 
 const titles: Record<Tab, string> = {
   notes: "Minhas Notas",
   calendar: "Agenda",
+  weather: "Tempo",
   location: "Localização",
   devices: "Segurança",
 };
