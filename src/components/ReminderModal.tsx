@@ -88,6 +88,9 @@ export function ReminderModal({ open, onOpenChange, noteTitle, existingDate, exi
                 <Trash2 size={14} /> Remover
               </Button>
             )}
+            <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
+              Cancelar
+            </Button>
             <Button onClick={handleSave} className="flex-1">
               {hasReminder ? "Atualizar" : "Agendar"}
             </Button>
