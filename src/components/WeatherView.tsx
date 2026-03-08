@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { Cloud, CloudRain, CloudSnow, Sun, CloudLightning, Wind, Droplets, Thermometer, Search, MapPin, Loader2, CloudFog, CloudSun } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
+import { HolidaysView } from "./HolidaysView";
 
 interface WeatherData {
   temperature: number;
@@ -80,7 +80,6 @@ export function WeatherView() {
         cityName,
         isDay: current.is_day === 1,
       });
-      // Save last searched city
       localStorage.setItem("weather_last_city", JSON.stringify({ lat: latitude, lng: longitude, city: cityName }));
     } catch {
       toast({ title: "Erro ao buscar clima", variant: "destructive" });
@@ -89,7 +88,6 @@ export function WeatherView() {
     }
   }, []);
 
-  // On mount: load saved city or use geolocation
   useEffect(() => {
     const saved = localStorage.getItem("weather_last_city");
     if (saved) {
@@ -136,7 +134,7 @@ export function WeatherView() {
   const WeatherIcon = info?.icon || Cloud;
 
   return (
-    <div className="animate-fade-in space-y-4">
+    <div className="animate-fade-in space-y-5">
       {/* Search bar */}
       <div className="flex gap-2">
         <div className="relative flex-1">
@@ -193,30 +191,17 @@ export function WeatherView() {
           }}
         >
           <div className="p-5">
-            {/* City name */}
             <div className="flex items-center gap-2 mb-4">
               <MapPin size={18} style={{ color: "rgba(255,255,255,0.8)" }} />
-              <h2 className="text-lg font-bold" style={{ color: "#FFF" }}>
-                {weather.cityName}
-              </h2>
+              <h2 className="text-lg font-bold" style={{ color: "#FFF" }}>{weather.cityName}</h2>
             </div>
-
-            {/* Temperature + icon */}
             <div className="flex items-center justify-between mb-4">
               <div>
-                <div className="flex items-end gap-1">
-                  <span className="font-bold" style={{ fontSize: 64, color: "#FFF", lineHeight: 1 }}>
-                    {weather.temperature}°
-                  </span>
-                </div>
-                <p className="text-sm mt-2 font-medium" style={{ color: "rgba(255,255,255,0.85)" }}>
-                  {info?.label}
-                </p>
+                <span className="font-bold" style={{ fontSize: 64, color: "#FFF", lineHeight: 1 }}>{weather.temperature}°</span>
+                <p className="text-sm mt-2 font-medium" style={{ color: "rgba(255,255,255,0.85)" }}>{info?.label}</p>
               </div>
               <WeatherIcon size={72} style={{ color: "rgba(255,255,255,0.85)" }} strokeWidth={1.2} />
             </div>
-
-            {/* Details grid */}
             <div className="grid grid-cols-3 gap-3 pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.15)" }}>
               <div className="flex flex-col items-center gap-1 py-2 rounded-xl" style={{ background: "rgba(255,255,255,0.1)" }}>
                 <Thermometer size={18} style={{ color: "rgba(255,255,255,0.7)" }} />
@@ -239,14 +224,20 @@ export function WeatherView() {
       ) : (
         <div className="rounded-2xl p-8 text-center" style={{ background: "#FFF", border: "1px solid #F0F0F0" }}>
           <CloudSun size={40} className="mx-auto mb-3" style={{ color: "#BDBDBD" }} />
-          <p className="text-sm font-semibold" style={{ color: "#9E9E9E" }}>
-            {geoError || "Buscando clima..."}
-          </p>
-          <p className="text-xs mt-1" style={{ color: "#BDBDBD" }}>
-            Busque uma cidade acima para ver o clima
-          </p>
+          <p className="text-sm font-semibold" style={{ color: "#9E9E9E" }}>{geoError || "Buscando clima..."}</p>
+          <p className="text-xs mt-1" style={{ color: "#BDBDBD" }}>Busque uma cidade acima para ver o clima</p>
         </div>
       )}
+
+      {/* Divider */}
+      <div className="flex items-center gap-3 pt-2">
+        <div className="flex-1 h-px" style={{ background: "#EBEBEB" }} />
+        <span className="text-[10px] font-bold tracking-wider uppercase" style={{ color: "#BDBDBD" }}>Feriados</span>
+        <div className="flex-1 h-px" style={{ background: "#EBEBEB" }} />
+      </div>
+
+      {/* Holidays section */}
+      <HolidaysView />
     </div>
   );
 }

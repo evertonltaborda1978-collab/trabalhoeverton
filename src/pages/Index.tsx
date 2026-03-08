@@ -112,7 +112,6 @@ const Index = () => {
           />
         )}
         {tab === "weather" && <WeatherView />}
-        {tab === "holidays" && <HolidaysView />}
         {tab === "location" && <LocationView />}
         {tab === "devices" && <DevicesView />}
       </main>
