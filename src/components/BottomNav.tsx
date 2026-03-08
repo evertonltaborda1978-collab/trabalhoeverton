@@ -1,6 +1,6 @@
-import { StickyNote, Calendar, Mic, MapPin } from "lucide-react";
+import { StickyNote, Calendar, Mic, MapPin, Shield } from "lucide-react";
 
-type Tab = "notes" | "calendar" | "audio" | "location";
+type Tab = "notes" | "calendar" | "audio" | "location" | "devices";
 
 interface BottomNavProps {
   active: Tab;
@@ -12,6 +12,7 @@ const tabs: { id: Tab; icon: typeof StickyNote; label: string }[] = [
   { id: "calendar", icon: Calendar, label: "Agenda" },
   { id: "audio", icon: Mic, label: "Áudio" },
   { id: "location", icon: MapPin, label: "Local" },
+  { id: "devices", icon: Shield, label: "Segurança" },
 ];
 
 export function BottomNav({ active, onChange }: BottomNavProps) {
@@ -34,7 +35,7 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
             <button
               key={id}
               onClick={() => onChange(id)}
-              className="flex flex-col items-center gap-0.5 py-2.5 px-4 rounded-xl transition-all duration-200"
+              className="flex flex-col items-center gap-0.5 py-2.5 px-3 rounded-xl transition-all duration-200"
             >
               <div
                 className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors"
@@ -43,7 +44,7 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
                 }}
               >
                 <Icon
-                  size={22}
+                  size={20}
                   strokeWidth={isActive ? 2.5 : 1.8}
                   style={{ color: isActive ? "#1A1A2E" : "#BDBDBD" }}
                   className="transition-all"
@@ -52,7 +53,7 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
               <span
                 className="font-bold tracking-wide"
                 style={{
-                  fontSize: 10.5,
+                  fontSize: 9.5,
                   color: isActive ? "#1A1A2E" : "#BDBDBD",
                 }}
               >
