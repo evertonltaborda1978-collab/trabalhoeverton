@@ -75,6 +75,9 @@ const Index = () => {
             onAdd={addNote}
             onDelete={deleteNote}
             onUpdate={updateNote}
+            onSetReminder={setNoteReminder}
+            onSetLock={setNoteLock}
+            onAddAppointment={addAppointment}
             syncStatus={syncStatus}
             draftCount={draftCount}
             exportBackup={exportBackup}
