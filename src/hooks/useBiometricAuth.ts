@@ -4,26 +4,68 @@ import { supabase } from "@/integrations/supabase/client";
 const BIOMETRIC_KEY = "biometric_enabled";
 const BIOMETRIC_EMAIL_KEY = "biometric_email";
 
+// Encrypt/decrypt using Web Crypto API with a device-derived key
+async function deriveKey(): Promise<CryptoKey> {
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(window.location.hostname + navigator.userAgent.slice(0, 50)),
+    "PBKDF2",
+    false,
+    ["deriveKey"]
+  );
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt: new TextEncoder().encode("biometric_salt_v2"), iterations: 100000, hash: "SHA-256" },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+async function encryptToken(plaintext: string): Promise<string> {
+  const key = await deriveKey();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    new TextEncoder().encode(plaintext)
+  );
+  // Store iv + ciphertext as base64
+  const combined = new Uint8Array(iv.length + new Uint8Array(encrypted).length);
+  combined.set(iv);
+  combined.set(new Uint8Array(encrypted), iv.length);
+  return btoa(String.fromCharCode(...combined));
+}
+
+async function decryptToken(stored: string): Promise<string> {
+  const key = await deriveKey();
+  const combined = Uint8Array.from(atob(stored), c => c.charCodeAt(0));
+  const iv = combined.slice(0, 12);
+  const ciphertext = combined.slice(12);
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv },
+    key,
+    ciphertext
+  );
+  return new TextDecoder().decode(decrypted);
+}
+
 export function useBiometricAuth() {
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
 
   useEffect(() => {
-    // Check if Web Credentials API / biometric is available
     const available = !!window.PublicKeyCredential || !!navigator.credentials;
     setBiometricAvailable(available);
     setBiometricEnabled(localStorage.getItem(BIOMETRIC_KEY) === "true");
   }, []);
 
-  // Enable biometric: store credentials locally for quick re-login
   const enableBiometric = useCallback(async (email: string, password: string) => {
     try {
-      // Store encrypted credentials locally for biometric unlock
-      // In production, use WebAuthn. For broad compatibility, we use localStorage + device lock
       localStorage.setItem(BIOMETRIC_KEY, "true");
       localStorage.setItem(BIOMETRIC_EMAIL_KEY, email);
-      // Store password securely (base64 encoded - in real app use Credential Management API)
-      localStorage.setItem("biometric_token", btoa(password));
+      const encrypted = await encryptToken(password);
+      localStorage.setItem("biometric_token", encrypted);
       setBiometricEnabled(true);
       return true;
     } catch {
@@ -38,7 +80,6 @@ export function useBiometricAuth() {
     setBiometricEnabled(false);
   }, []);
 
-  // Attempt biometric login using stored credentials
   const biometricLogin = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
     const email = localStorage.getItem(BIOMETRIC_EMAIL_KEY);
     const token = localStorage.getItem("biometric_token");
@@ -48,11 +89,9 @@ export function useBiometricAuth() {
     }
 
     try {
-      // Use Credential Management API if available for device-level auth
       if (navigator.credentials && "get" in navigator.credentials) {
         try {
-          // Try to use platform authenticator (fingerprint/face)
-          const credential = await navigator.credentials.get({
+          await navigator.credentials.get({
             publicKey: {
               challenge: crypto.getRandomValues(new Uint8Array(32)),
               timeout: 60000,
@@ -61,18 +100,12 @@ export function useBiometricAuth() {
               allowCredentials: [],
             },
           } as CredentialRequestOptions).catch(() => null);
-
-          // If no WebAuthn, fall through to password-based login
-          if (!credential) {
-            // On mobile browsers, the biometric prompt may have been shown by the OS
-            // Proceed with stored credentials
-          }
         } catch {
           // WebAuthn not supported, proceed with stored credentials
         }
       }
 
-      const password = atob(token);
+      const password = await decryptToken(token);
       const { error } = await (supabase.auth as any).signInWithPassword({ email, password });
 
       if (error) {

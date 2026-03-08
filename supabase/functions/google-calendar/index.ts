@@ -209,7 +209,8 @@ Deno.serve(async (req) => {
 
       const created = await createRes.json();
       if (!createRes.ok) {
-        return new Response(JSON.stringify({ error: 'Failed to create event', details: created }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        console.error('Failed to create event:', created);
+        return new Response(JSON.stringify({ error: 'Failed to create event. Please try again.' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       return new Response(JSON.stringify({ success: true, event: created }), {
