@@ -91,7 +91,8 @@ export function HolidaysView() {
       .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then((data: Array<{ date: string; name: string; type: string }>) => {
         clearTimeout(timeout);
-        setNationals(data.map(h => ({ date: h.date, name: h.name, type: (h.type === "national" ? "nacional" : "facultativo") as HolidayType })));
+        const mapped: Holiday[] = data.map(h => ({ date: h.date, name: h.name, type: (h.type === "national" ? "nacional" : "facultativo") as HolidayType }));
+        setNationals(mapped);
         setFetchedYear(year);
         setApiStatus("ok");
       })
