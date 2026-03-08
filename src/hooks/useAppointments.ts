@@ -66,6 +66,20 @@ export function useAppointments() {
     [user]
   );
 
+  const updateAppointment = useCallback(
+    async (id: string, title: string, date: Date, time: string, description: string) => {
+      const dateStr = date.toISOString().split("T")[0];
+      await supabase
+        .from("appointments")
+        .update({ title, date: dateStr, time, description })
+        .eq("id", id);
+      setAppointments((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, title, date, time, description } : a))
+      );
+    },
+    []
+  );
+
   const deleteAppointment = useCallback(async (id: string) => {
     await supabase.from("appointments").delete().eq("id", id);
     setAppointments((prev) => prev.filter((a) => a.id !== id));
