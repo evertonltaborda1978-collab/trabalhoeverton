@@ -90,7 +90,7 @@ export default function Auth() {
             Secretária Virtual
           </h1>
           <p className="text-sm text-muted-foreground">
-            {isLogin ? "Entre na sua conta" : "Crie sua conta"}
+            {forgotPassword ? "Recupere sua senha" : isLogin ? "Entre na sua conta" : "Crie sua conta"}
           </p>
         </div>
 
