@@ -14,6 +14,10 @@ export interface Note {
   fontSize: string;
   status: "rascunho" | "publicada";
   sincronizado: boolean;
+  reminderDate?: string | null;
+  reminderTime?: string | null;
+  isLocked: boolean;
+  lockPin?: string | null;
 }
 
 const COLORS = [
