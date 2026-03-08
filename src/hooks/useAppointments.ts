@@ -157,5 +157,5 @@ export function useAppointments() {
     return () => clearInterval(interval);
   }, [appointments, activeAlert]);
 
-  return { appointments, addAppointment, deleteAppointment, activeAlert, dismissAlert, snoozeAlert };
+  return { appointments, addAppointment, updateAppointment, deleteAppointment, activeAlert, dismissAlert, snoozeAlert };
 }
