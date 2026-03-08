@@ -34,7 +34,7 @@ export default function Auth() {
       }
 
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await (supabase.auth as any).signInWithPassword({ email, password });
         if (error) throw error;
 
         // After successful login, offer biometric if available and not enabled
