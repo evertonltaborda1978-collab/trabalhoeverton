@@ -28,9 +28,11 @@ export function useGoogleCalendar() {
   const checkStatus = useCallback(async () => {
     try {
       const token = await getAuthHeader();
+      if (!token) { setLoading(false); return; }
       const res = await fetch(`${FUNCTION_URL}?action=status`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) { setConnected(false); setLoading(false); return; }
       const data = await res.json();
       setConnected(data.connected);
     } catch {
