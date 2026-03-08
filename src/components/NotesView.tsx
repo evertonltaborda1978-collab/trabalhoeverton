@@ -271,7 +271,16 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
         </div>
       )}
 
-      <NoteEditor open={dialogOpen} onOpenChange={setDialogOpen} editingNote={editingNote} onSave={handleSave} />
+      <NoteEditor
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        editingNote={editingNote}
+        onSave={handleSave}
+        onSchedule={onAddAppointment ? (noteTitle, noteContent) => {
+          onAddAppointment(noteTitle || "Nota sem título", new Date(), "09:00", noteContent);
+          toast({ title: "📅 Agendado!", description: `"${noteTitle || "Nota"}" foi adicionado à agenda.` });
+        } : undefined}
+      />
 
       {/* Reminder Modal */}
       <ReminderModal
