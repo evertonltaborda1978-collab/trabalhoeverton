@@ -781,7 +781,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
                       <button
                         onClick={() => {
                           if (scheduleDate && onSchedule) {
-                            onSchedule(title, blocksToPlainText(blocks));
+                            onSchedule(title, blocksToPlainText(blocks), scheduleDate, scheduleTime);
                             toast({ title: "📅 Agendado!", description: `${scheduleDate} às ${scheduleTime}` });
                             setShowScheduleDialog(false);
                           }
