@@ -47,6 +47,30 @@ export type Database = {
         }
         Relationships: []
       }
+      biometric_credentials: {
+        Row: {
+          created_at: string
+          credential_id: string
+          credential_label: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credential_id: string
+          credential_label?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          credential_id?: string
+          credential_label?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       google_calendar_tokens: {
         Row: {
           access_token: string
@@ -130,6 +154,45 @@ export type Database = {
           status?: string
           title?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_devices: {
+        Row: {
+          browser: string
+          created_at: string
+          device_fingerprint: string
+          device_name: string
+          id: string
+          ip_address: string | null
+          is_current: boolean
+          last_seen_at: string
+          os: string
+          user_id: string
+        }
+        Insert: {
+          browser?: string
+          created_at?: string
+          device_fingerprint?: string
+          device_name?: string
+          id?: string
+          ip_address?: string | null
+          is_current?: boolean
+          last_seen_at?: string
+          os?: string
+          user_id: string
+        }
+        Update: {
+          browser?: string
+          created_at?: string
+          device_fingerprint?: string
+          device_name?: string
+          id?: string
+          ip_address?: string | null
+          is_current?: boolean
+          last_seen_at?: string
+          os?: string
           user_id?: string
         }
         Relationships: []
