@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="100%" style="stop-color:#16213e"/>
+    </linearGradient>
+    <linearGradient id="paperGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f5f0e8"/>
+      <stop offset="100%" style="stop-color:#ede8dc"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f5a623"/>
+      <stop offset="100%" style="stop-color:#f76b1c"/>
+    </linearGradient>
+    <linearGradient id="penGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#f5a623"/>
+      <stop offset="100%" style="stop-color:#ffe082"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#000000" flood-opacity="0.4"/>
+    </filter>
+    <filter id="paperShadow" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="4" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.2"/>
+    </filter>
+    <clipPath id="roundedClip">
+      <rect x="0" y="0" width="512" height="512" rx="112" ry="112"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+
+  <!-- Subtle dot grid pattern -->
+  <g opacity="0.07">
+    <circle cx="80" cy="80" r="3" fill="#f5a623"/>
+    <circle cx="160" cy="80" r="3" fill="#f5a623"/>
+    <circle cx="240" cy="80" r="3" fill="#f5a623"/>
+    <circle cx="320" cy="80" r="3" fill="#f5a623"/>
+    <circle cx="400" cy="80" r="3" fill="#f5a623"/>
+    <circle cx="80" cy="160" r="3" fill="#f5a623"/>
+    <circle cx="400" cy="160" r="3" fill="#f5a623"/>
+    <circle cx="80" cy="240" r="3" fill="#f5a623"/>
+    <circle cx="400" cy="240" r="3" fill="#f5a623"/>
+    <circle cx="80" cy="320" r="3" fill="#f5a623"/>
+    <circle cx="400" cy="320" r="3" fill="#f5a623"/>
+    <circle cx="80" cy="400" r="3" fill="#f5a623"/>
+    <circle cx="160" cy="400" r="3" fill="#f5a623"/>
+    <circle cx="240" cy="400" r="3" fill="#f5a623"/>
+    <circle cx="320" cy="400" r="3" fill="#f5a623"/>
+    <circle cx="400" cy="400" r="3" fill="#f5a623"/>
+  </g>
+
+  <!-- Paper shadow layer (slightly offset) -->
+  <rect x="118" y="108" width="276" height="316" rx="16" fill="#0a0a1a" opacity="0.5" filter="url(#paperShadow)"/>
+
+  <!-- Paper base -->
+  <rect x="108" y="96" width="276" height="316" rx="16" fill="url(#paperGrad)" filter="url(#paperShadow)"/>
+
+  <!-- Spiral binding holes -->
+  <g fill="#1a1a2e" opacity="0.25">
+    <circle cx="256" cy="112" r="7"/>
+    <circle cx="218" cy="112" r="7"/>
+    <circle cx="294" cy="112" r="7"/>
+  </g>
+  <!-- Spiral wire line -->
+  <path d="M200 112 Q218 98 236 112 Q254 126 272 112 Q290 98 308 112" 
+        fill="none" stroke="#c0a060" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Orange accent left bar -->
+  <rect x="108" y="96" width="28" height="316" rx="0" fill="url(#accentGrad)" opacity="0.9"/>
+  <rect x="108" y="96" width="28" height="316" rx="16" fill="url(#accentGrad)"/>
+  <!-- Fix right corners of accent bar -->
+  <rect x="122" y="96" width="14" height="316" fill="url(#accentGrad)"/>
+
+  <!-- Decorative line on accent bar -->
+  <line x1="122" y1="140" x2="122" y2="380" stroke="rgba(255,255,255,0.2)" stroke-width="1.5" stroke-dasharray="6,8"/>
+
+  <!-- Text lines on paper -->
+  <g fill="none" stroke="#b0a898" stroke-linecap="round">
+    <!-- Line 1 (short - title) -->
+    <line x1="158" y1="168" x2="330" y2="168" stroke-width="3.5" stroke="#6b6050"/>
+    <!-- Line 2 -->
+    <line x1="158" y1="206" x2="340" y2="206" stroke-width="2"/>
+    <!-- Line 3 -->
+    <line x1="158" y1="230" x2="310" y2="230" stroke-width="2"/>
+    <!-- Line 4 -->
+    <line x1="158" y1="254" x2="335" y2="254" stroke-width="2"/>
+    <!-- Line 5 (shorter) -->
+    <line x1="158" y1="278" x2="285" y2="278" stroke-width="2"/>
+    <!-- Line 6 -->
+    <line x1="158" y1="314" x2="340" y2="314" stroke-width="2"/>
+    <!-- Line 7 -->
+    <line x1="158" y1="338" x2="300" y2="338" stroke-width="2"/>
+  </g>
+
+  <!-- Pencil / pen element -->
+  <g transform="translate(300, 290) rotate(-38)" filter="url(#shadow)">
+    <!-- Pencil body -->
+    <rect x="-12" y="-80" width="24" height="120" rx="4" fill="url(#penGrad)"/>
+    <!-- Pencil eraser end -->
+    <rect x="-12" y="-90" width="24" height="14" rx="4" fill="#ff8a80"/>
+    <!-- Pencil metal band -->
+    <rect x="-12" y="-78" width="24" height="8" fill="#b0bec5"/>
+    <!-- Pencil tip wood -->
+    <polygon points="-12,40 12,40 0,72" fill="#d4a96a"/>
+    <!-- Pencil tip dark -->
+    <polygon points="-5,58 5,58 0,72" fill="#2c2c2c"/>
+    <!-- Pencil shine -->
+    <rect x="-4" y="-76" width="6" height="110" rx="3" fill="rgba(255,255,255,0.25)"/>
+  </g>
+
+</svg>
