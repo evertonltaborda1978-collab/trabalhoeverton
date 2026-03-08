@@ -28,6 +28,21 @@ const Index = () => {
   const { appointments, addAppointment, deleteAppointment, activeAlert, dismissAlert, snoozeAlert } = useAppointments();
   const { signOut } = useAuth();
 
+  // When deleting an appointment, also clear matching note reminders
+  const handleDeleteAppointment = (id: string) => {
+    const apt = appointments.find((a) => a.id === id);
+    if (apt) {
+      const dateStr = apt.date.toISOString().split("T")[0];
+      // Clear reminders from notes that match this appointment's date/time
+      notes.forEach((note) => {
+        if (note.reminderDate === dateStr && note.reminderTime === apt.time) {
+          setNoteReminder(note.id, null, null);
+        }
+      });
+    }
+    deleteAppointment(id);
+  };
+
   return (
     <div className="min-h-screen pb-24" style={{ background: "#F7F5F2" }}>
       {/* Header */}
@@ -92,7 +107,7 @@ const Index = () => {
           <CalendarView
             appointments={appointments}
             onAdd={addAppointment}
-            onDelete={deleteAppointment}
+            onDelete={handleDeleteAppointment}
           />
         )}
         {tab === "weather" && <WeatherView />}
