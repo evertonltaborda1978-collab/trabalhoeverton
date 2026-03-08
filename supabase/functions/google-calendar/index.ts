@@ -75,7 +75,8 @@ Deno.serve(async (req) => {
 
     const tokens = await tokenRes.json();
     if (!tokens.access_token) {
-      return new Response(`Token exchange failed: ${JSON.stringify(tokens)}`, { status: 400, headers: corsHeaders });
+      console.error('Token exchange failed:', tokens);
+      return new Response('Authentication failed. Please reconnect.', { status: 400, headers: corsHeaders });
     }
 
     // Get user from state (JWT)
