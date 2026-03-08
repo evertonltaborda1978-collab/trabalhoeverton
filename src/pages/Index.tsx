@@ -6,6 +6,7 @@ import { CalendarView } from "@/components/CalendarView";
 import { LocationView } from "@/components/LocationView";
 import { WeatherView } from "@/components/WeatherView";
 import { DevicesView } from "@/components/DevicesView";
+import { SnoozeAlert } from "@/components/SnoozeAlert";
 import { useNotes } from "@/hooks/useNotes";
 import { useAppointments } from "@/hooks/useAppointments";
 import { useAuth } from "@/contexts/AuthContext";
