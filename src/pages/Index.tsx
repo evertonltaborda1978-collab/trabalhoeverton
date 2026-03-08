@@ -25,7 +25,7 @@ const titles: Record<Tab, string> = {
 const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
   const { notes, addNote, deleteNote, updateNote, setNoteReminder, setNoteLock, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert } = useNotes();
-  const { appointments, addAppointment, deleteAppointment, activeAlert, dismissAlert, snoozeAlert } = useAppointments();
+  const { appointments, addAppointment, updateAppointment, deleteAppointment, activeAlert, dismissAlert, snoozeAlert } = useAppointments();
   const { signOut } = useAuth();
 
   // When deleting an appointment, also clear matching note reminders
@@ -107,6 +107,7 @@ const Index = () => {
           <CalendarView
             appointments={appointments}
             onAdd={addAppointment}
+            onUpdate={(id, title, date, time, desc) => updateAppointment(id, title, date, time, desc)}
             onDelete={handleDeleteAppointment}
           />
         )}

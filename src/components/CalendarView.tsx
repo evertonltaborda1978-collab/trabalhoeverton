@@ -4,7 +4,7 @@ import { Appointment } from "@/hooks/useAppointments";
 import { GoogleEvent, useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 import { format, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, Trash2, Clock, RefreshCw, Unplug } from "lucide-react";
+import { Plus, Trash2, Clock, RefreshCw, Unplug, Pencil } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -19,12 +19,14 @@ import { toast } from "@/hooks/use-toast";
 interface CalendarViewProps {
   appointments: Appointment[];
   onAdd: (title: string, date: Date, time: string, description: string) => void;
+  onUpdate: (id: string, title: string, date: Date, time: string, description: string) => void;
   onDelete: (id: string) => void;
 }
 
-export function CalendarView({ appointments, onAdd, onDelete }: CalendarViewProps) {
+export function CalendarView({ appointments, onAdd, onUpdate, onDelete }: CalendarViewProps) {
   const [selected, setSelected] = useState<Date>(new Date());
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [time, setTime] = useState("09:00");
   const [description, setDescription] = useState("");
@@ -41,21 +43,41 @@ export function CalendarView({ appointments, onAdd, onDelete }: CalendarViewProp
     ...googleEvents.map((e) => { try { return new Date(e.date + "T00:00:00"); } catch { return null; } }).filter(Boolean) as Date[],
   ];
 
-  const handleAdd = async () => {
+  const handleSave = async () => {
     if (!title.trim()) return;
-    onAdd(title, selected, time, description);
 
-    // Also push to Google Calendar if connected
-    if (connected) {
-      const dateStr = format(selected, "yyyy-MM-dd");
-      const ok = await pushEvent(title, dateStr, time, description);
-      if (ok) {
-        toast({ title: "📅 Sincronizado com Google Agenda!" });
-        fetchEvents();
+    if (editingId) {
+      onUpdate(editingId, title, selected, time, description);
+      toast({ title: "✅ Compromisso atualizado!" });
+    } else {
+      onAdd(title, selected, time, description);
+
+      // Also push to Google Calendar if connected
+      if (connected) {
+        const dateStr = format(selected, "yyyy-MM-dd");
+        const ok = await pushEvent(title, dateStr, time, description);
+        if (ok) {
+          toast({ title: "📅 Sincronizado com Google Agenda!" });
+          fetchEvents();
+        }
       }
     }
 
+    closeDialog();
+  };
+
+  const openEdit = (apt: Appointment) => {
+    setEditingId(apt.id);
+    setTitle(apt.title);
+    setTime(apt.time);
+    setDescription(apt.description);
+    setSelected(apt.date);
+    setDialogOpen(true);
+  };
+
+  const closeDialog = () => {
     setDialogOpen(false);
+    setEditingId(null);
     setTitle("");
     setTime("09:00");
     setDescription("");
@@ -136,6 +158,9 @@ export function CalendarView({ appointments, onAdd, onDelete }: CalendarViewProp
                   <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{apt.description}</p>
                 )}
               </div>
+              <button onClick={() => openEdit(apt)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary">
+                <Pencil size={14} />
+              </button>
               <button onClick={() => onDelete(apt.id)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
                 <Trash2 size={14} />
               </button>
@@ -163,23 +188,23 @@ export function CalendarView({ appointments, onAdd, onDelete }: CalendarViewProp
         </div>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); else setDialogOpen(true); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-display">Novo compromisso</DialogTitle>
+            <DialogTitle className="font-display">{editingId ? "Editar compromisso" : "Novo compromisso"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 mt-2">
             <Input placeholder="Título" value={title} onChange={(e) => setTitle(e.target.value)} className="font-semibold" />
             <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
             <Textarea placeholder="Descrição (opcional)" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="resize-none" />
-            {connected && (
+            {connected && !editingId && (
               <p className="text-[11px] font-medium flex items-center gap-1" style={{ color: "#4CAF50" }}>
                 ✓ Será sincronizado com Google Agenda
               </p>
             )}
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setDialogOpen(false)} className="flex-1">Cancelar</Button>
-              <Button onClick={handleAdd} className="flex-1">Agendar</Button>
+              <Button variant="outline" onClick={closeDialog} className="flex-1">Cancelar</Button>
+              <Button onClick={handleSave} className="flex-1">{editingId ? "Salvar" : "Agendar"}</Button>
             </div>
           </div>
         </DialogContent>
