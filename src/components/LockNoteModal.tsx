@@ -153,6 +153,14 @@ export function LockNoteModal({ open, onOpenChange, mode, onSetPin, onUnlock, on
             </button>
           </div>
 
+          <button
+            onClick={() => handleClose(false)}
+            className="w-full py-2.5 rounded-xl text-sm font-medium transition-all hover:bg-gray-100"
+            style={{ color: "#999" }}
+          >
+            Cancelar
+          </button>
+
           {mode === "manage" && (
             <p className="text-[10px] text-gray-400 text-center">
               Após confirmar, a proteção será removida
