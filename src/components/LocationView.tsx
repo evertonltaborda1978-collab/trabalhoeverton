@@ -120,7 +120,7 @@ export function LocationView() {
   }, [emergencyMode, tracking, startTracking]);
 
   const mapSrc = position
-    ? `https://www.openstreetmap.org/export/embed.html?bbox=${position.lng - 0.005},${position.lat - 0.003},${position.lng + 0.005},${position.lat + 0.003}&layer=mapnik&marker=${position.lat},${position.lng}`
+    ? `https://maps.google.com/maps?q=${position.lat},${position.lng}&z=17&output=embed`
     : null;
 
   return (
