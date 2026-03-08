@@ -83,6 +83,10 @@ function mapRow(n: any): Note {
     fontSize: n.font_size || "medium",
     status: n.status || "publicada",
     sincronizado: true,
+    reminderDate: n.reminder_date || null,
+    reminderTime: n.reminder_time || null,
+    isLocked: n.is_locked || false,
+    lockPin: n.lock_pin || null,
   };
 }
 
