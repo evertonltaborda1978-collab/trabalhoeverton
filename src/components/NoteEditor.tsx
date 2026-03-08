@@ -122,6 +122,9 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
   const [ocrLoading, setOcrLoading] = useState(false);
   const [showQrScanner, setShowQrScanner] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("09:00");
 
   // Undo/redo
   const [history, setHistory] = useState<ContentBlock[][]>([]);
