@@ -688,50 +688,53 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
             <input ref={ocrCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleOcrImage} />
             <input ref={ocrFileRef} type="file" accept="image/*" className="hidden" onChange={handleOcrImage} />
 
-            {/* Single row with horizontal scroll */}
-            <div className="flex items-center gap-1 overflow-x-auto py-0.5" style={{ scrollbarWidth: "none" }}>
-              <button onClick={() => cameraInputRef.current?.click()} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium whitespace-nowrap hover:bg-black/5 transition-colors shrink-0" style={{ color: theme.textMuted }}>
-                <Camera size={14} /> Câmera
+            {/* Row 1 */}
+            <div className="flex items-center justify-center gap-0.5 flex-wrap">
+              <button onClick={() => cameraInputRef.current?.click()} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+                <Camera size={13} /> Câmera
               </button>
-              <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium whitespace-nowrap hover:bg-black/5 transition-colors shrink-0" style={{ color: theme.textMuted }}>
-                <ImagePlus size={14} /> Galeria
+              <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+                <ImagePlus size={13} /> Galeria
               </button>
-              <button onClick={handleCopy} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium whitespace-nowrap hover:bg-black/5 transition-colors shrink-0" style={{ color: theme.textMuted }}>
-                {copied ? <Check size={14} className="text-green-600" /> : <Copy size={14} />} Copiar
+              <button onClick={handleCopy} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+                {copied ? <Check size={13} className="text-green-600" /> : <Copy size={13} />} Copiar
               </button>
-              <button onClick={() => setShowOcrModal(true)} disabled={ocrLoading} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium whitespace-nowrap hover:bg-black/5 transition-colors shrink-0" style={{ color: theme.textMuted }}>
-                {ocrLoading ? <Loader2 size={14} className="animate-spin" /> : <ScanSearch size={14} />} OCR
+              <button onClick={() => setShowOcrModal(true)} disabled={ocrLoading} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+                {ocrLoading ? <Loader2 size={13} className="animate-spin" /> : <ScanSearch size={13} />} OCR
               </button>
-              <button onClick={handleStartQrScanner} disabled={qrLoading} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium whitespace-nowrap hover:bg-black/5 transition-colors shrink-0" style={{ color: theme.textMuted }}>
-                {qrLoading ? <Loader2 size={14} className="animate-spin" /> : <ScanLine size={14} />} QR
+              <button onClick={handleStartQrScanner} disabled={qrLoading} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+                {qrLoading ? <Loader2 size={13} className="animate-spin" /> : <ScanLine size={13} />} QR
               </button>
-              <button onClick={addChecklist} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium whitespace-nowrap hover:bg-black/5 transition-colors shrink-0" style={{ color: theme.textMuted }}>
-                <ListChecks size={14} /> Lista
+            </div>
+            {/* Row 2 */}
+            <div className="flex items-center justify-center gap-0.5 flex-wrap mt-0.5">
+              <button onClick={addChecklist} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+                <ListChecks size={13} /> Lista
               </button>
               {onSchedule && (
                 <button
                   onClick={() => { setScheduleDate(new Date().toISOString().slice(0, 10)); setScheduleTime("09:00"); setShowScheduleDialog(true); }}
-                  className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium whitespace-nowrap hover:bg-black/5 transition-colors shrink-0"
+                  className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors"
                   style={{ color: theme.textMuted }}
                 >
-                  <CalendarPlus size={14} /> Agendar
+                  <CalendarPlus size={13} /> Agendar
                 </button>
               )}
               {voiceSupported && (
                 <button
                   onClick={toggleVoice}
-                  className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium whitespace-nowrap transition-all shrink-0"
+                  className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium transition-all"
                   style={{ color: isListening ? "#E53935" : theme.textMuted, background: isListening ? "rgba(229,57,53,0.1)" : "transparent" }}
                 >
-                  {isListening ? <MicOff size={14} /> : <Mic size={14} />} Voz
+                  {isListening ? <MicOff size={13} /> : <Mic size={13} />} Voz
                 </button>
               )}
-              <div className="w-px h-4 shrink-0" style={{ background: theme.lines }} />
-              <button onClick={undo} disabled={!canUndo} className="p-1.5 rounded-lg hover:bg-black/5 transition-all shrink-0" style={{ color: canUndo ? "#555" : "#BDBDBD", opacity: canUndo ? 1 : 0.4 }}>
-                <Undo2 size={14} />
+              <div className="w-px h-3.5 mx-0.5" style={{ background: theme.lines }} />
+              <button onClick={undo} disabled={!canUndo} className="p-1 rounded-md hover:bg-black/5 transition-all" style={{ color: canUndo ? "#555" : "#BDBDBD", opacity: canUndo ? 1 : 0.4 }}>
+                <Undo2 size={13} />
               </button>
-              <button onClick={redo} disabled={!canRedo} className="p-1.5 rounded-lg hover:bg-black/5 transition-all shrink-0" style={{ color: canRedo ? "#555" : "#BDBDBD", opacity: canRedo ? 1 : 0.4 }}>
-                <Redo2 size={14} />
+              <button onClick={redo} disabled={!canRedo} className="p-1 rounded-md hover:bg-black/5 transition-all" style={{ color: canRedo ? "#555" : "#BDBDBD", opacity: canRedo ? 1 : 0.4 }}>
+                <Redo2 size={13} />
               </button>
             </div>
 
