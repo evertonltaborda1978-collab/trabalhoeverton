@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MoonPhaseWidget } from "@/components/MoonPhaseWidget";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { useBiometricAuth } from "@/hooks/useBiometricAuth";
+import { Mail, Lock, Eye, EyeOff, Fingerprint } from "lucide-react";
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -13,6 +14,7 @@ export default function Auth() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { biometricEnabled, biometricAvailable, enableBiometric, biometricLogin, storedEmail } = useBiometricAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,6 +24,14 @@ export default function Auth() {
       if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+
+        // After successful login, offer biometric if available and not enabled
+        if (biometricAvailable && !biometricEnabled) {
+          const enabled = await enableBiometric(email, password);
+          if (enabled) {
+            toast({ title: "Biometria ativada!", description: "No próximo login, use sua biometria." });
+          }
+        }
       } else {
         const { error } = await supabase.auth.signUp({
           email,
@@ -47,6 +57,15 @@ export default function Auth() {
     }
   };
 
+  const handleBiometricLogin = async () => {
+    setLoading(true);
+    const result = await biometricLogin();
+    if (!result.success) {
+      toast({ title: "Erro", description: result.error, variant: "destructive" });
+    }
+    setLoading(false);
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-8">
@@ -62,6 +81,29 @@ export default function Auth() {
             {isLogin ? "Entre na sua conta" : "Crie sua conta"}
           </p>
         </div>
+
+        {/* Biometric quick login */}
+        {isLogin && biometricEnabled && storedEmail && (
+          <div className="space-y-2">
+            <Button
+              onClick={handleBiometricLogin}
+              disabled={loading}
+              className="w-full gap-2"
+              variant="outline"
+              style={{ borderColor: "#C8E6C9", background: "#F0FFF4" }}
+            >
+              <Fingerprint size={20} style={{ color: "#4CAF50" }} />
+              <span style={{ color: "#2E7D32" }}>
+                {loading ? "Autenticando..." : `Entrar como ${storedEmail}`}
+              </span>
+            </Button>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground">ou use email</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+          </div>
+        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">

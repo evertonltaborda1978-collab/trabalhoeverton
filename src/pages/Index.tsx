@@ -5,18 +5,20 @@ import { NotesView } from "@/components/NotesView";
 import { CalendarView } from "@/components/CalendarView";
 import { AudioView } from "@/components/AudioView";
 import { LocationView } from "@/components/LocationView";
+import { DevicesView } from "@/components/DevicesView";
 import { useNotes } from "@/hooks/useNotes";
 import { useAppointments } from "@/hooks/useAppointments";
 import { useAuth } from "@/contexts/AuthContext";
 import { LogOut } from "lucide-react";
 
-type Tab = "notes" | "calendar" | "audio" | "location";
+type Tab = "notes" | "calendar" | "audio" | "location" | "devices";
 
 const titles: Record<Tab, string> = {
   notes: "Minhas Notas",
   calendar: "Agenda",
   audio: "Gravação",
   location: "Localização",
+  devices: "Segurança",
 };
 
 const Index = () => {
@@ -94,6 +96,7 @@ const Index = () => {
         )}
         {tab === "audio" && <AudioView />}
         {tab === "location" && <LocationView />}
+        {tab === "devices" && <DevicesView />}
       </main>
 
       {/* Bottom Navigation */}
