@@ -103,10 +103,11 @@ export function useAppointments() {
         if (diff >= 0 && diff < 15 * 60 * 1000) {
           fired.push(apt.id);
           sessionStorage.setItem(key, JSON.stringify(fired));
+          triggerAlert();
           toast({
             title: "⏰ Compromisso agora",
             description: `${apt.title} às ${apt.time}`,
-            duration: 10000,
+            duration: 15000,
           });
         }
       });

@@ -83,10 +83,11 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
         if (diff >= 0 && diff < 24 * 60 * 60 * 1000) {
           fired.push(note.id);
           sessionStorage.setItem(firedKey, JSON.stringify(fired));
+          triggerAlert();
           toast({
             title: "🔔 Lembrete!",
             description: `"${note.title || 'Nota sem título'}" — agendado para ${note.reminderTime}`,
-            duration: 10000,
+            duration: 15000,
           });
         }
       });
