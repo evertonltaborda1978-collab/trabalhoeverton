@@ -17,7 +17,7 @@ export default function ResetPassword() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = (supabase.auth as any).onAuthStateChange((event: string) => {
       if (event === "PASSWORD_RECOVERY") {
         setIsRecovery(true);
       }
