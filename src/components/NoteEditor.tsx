@@ -21,7 +21,9 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
 } from "@/components/ui/dialog";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -463,7 +465,9 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); else onOpenChange(v); }}>
       <DialogContent className="!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !w-screen !max-w-none !max-h-none !rounded-none !shadow-none !border-0 !p-0 !gap-0 !bg-transparent z-50"
         style={{ height: "100dvh" }}
+        aria-describedby={undefined}
       >
+        <VisuallyHidden><DialogTitle>Editor de Nota</DialogTitle></VisuallyHidden>
         {/* ── NOTEPAD CONTAINER ── */}
         <div
           className="flex flex-col"
