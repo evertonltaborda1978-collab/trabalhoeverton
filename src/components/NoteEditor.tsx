@@ -826,25 +826,25 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
 
           {/* ── FOOTER BUTTONS ── */}
           <div
-            className="flex gap-3 px-4 py-3 shrink-0"
+            className="flex gap-2 px-3 py-2 shrink-0"
             style={{
               background: theme.toolbarBg,
               borderTop: `1px solid ${theme.lines}`,
               transition: "background 0.3s ease, border-color 0.3s ease",
-              paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
+              paddingBottom: "calc(8px + env(safe-area-inset-bottom))",
             }}
           >
             <button
               onClick={handleSaveDraft}
-              className="flex-1 h-[52px] rounded-xl text-sm font-semibold border-2 transition-all duration-200 hover:bg-black/5"
+              className="flex-1 h-[40px] rounded-xl text-xs font-semibold border-2 transition-all duration-200 hover:bg-black/5"
               style={{ borderColor: theme.borderAccent, color: theme.textMuted, transition: "border-color 0.3s ease, color 0.3s ease" }}
             >
-              Salvar rascunho
+              Rascunho
             </button>
             <button
               onClick={handleSavePublish}
               disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
-              className="flex-1 h-[52px] rounded-xl text-sm font-semibold text-white shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50"
+              className="flex-1 h-[40px] rounded-xl text-xs font-semibold text-white shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50"
               style={{ background: "#2D9E7F" }}
             >
               {editingNote ? "Salvar" : "Criar nota"}
