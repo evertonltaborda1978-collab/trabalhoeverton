@@ -214,7 +214,10 @@ export function useNotes() {
         fontSize: fontSize || "medium",
         status,
         sincronizado: false,
-      };
+        isLocked: false,
+        lockPin: null,
+        reminderDate: null,
+        reminderTime: null,
 
       setNotes((prev) => [note, ...prev]);
 
