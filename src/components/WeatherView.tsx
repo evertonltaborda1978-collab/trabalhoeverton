@@ -80,6 +80,8 @@ export function WeatherView() {
         cityName,
         isDay: current.is_day === 1,
       });
+      // Save last searched city
+      localStorage.setItem("weather_last_city", JSON.stringify({ lat: latitude, lng: longitude, city: cityName }));
     } catch {
       toast({ title: "Erro ao buscar clima", variant: "destructive" });
     } finally {
@@ -87,8 +89,16 @@ export function WeatherView() {
     }
   }, []);
 
-  // Auto-detect location on mount
+  // On mount: load saved city or use geolocation
   useEffect(() => {
+    const saved = localStorage.getItem("weather_last_city");
+    if (saved) {
+      try {
+        const { lat, lng, city } = JSON.parse(saved);
+        fetchWeather(lat, lng, city);
+        return;
+      } catch {}
+    }
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => fetchWeather(pos.coords.latitude, pos.coords.longitude),
