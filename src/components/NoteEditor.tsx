@@ -689,63 +689,59 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
             <input ref={ocrFileRef} type="file" accept="image/*" className="hidden" onChange={handleOcrImage} />
 
             {/* Row 1 */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-0.5">
-                <button onClick={() => cameraInputRef.current?.click()} className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
-                  <Camera size={16} />
-                  <span>Câmera</span>
-                </button>
-                <button onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
-                  <ImagePlus size={16} />
-                  <span>Galeria</span>
-                </button>
-                <button onClick={handleCopy} className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
-                  {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} />}
-                  <span>Copiar</span>
-                </button>
-                <button onClick={() => setShowOcrModal(true)} disabled={ocrLoading} className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
-                  {ocrLoading ? <Loader2 size={16} className="animate-spin" /> : <ScanSearch size={16} />}
-                  <span>OCR</span>
-                </button>
-              </div>
-              <div className="flex items-center gap-0.5">
-                <button onClick={undo} disabled={!canUndo} className="p-1.5 rounded-lg hover:bg-black/5 transition-all" style={{ color: canUndo ? "#555" : "#BDBDBD", opacity: canUndo ? 1 : 0.4 }} title="Desfazer">
-                  <Undo2 size={16} />
-                </button>
-                <button onClick={redo} disabled={!canRedo} className="p-1.5 rounded-lg hover:bg-black/5 transition-all" style={{ color: canRedo ? "#555" : "#BDBDBD", opacity: canRedo ? 1 : 0.4 }} title="Refazer">
-                  <Redo2 size={16} />
-                </button>
-              </div>
+            <div className="flex items-center justify-center gap-1">
+              <button onClick={() => cameraInputRef.current?.click()} className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+                <Camera size={16} />
+                <span>Câmera</span>
+              </button>
+              <button onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+                <ImagePlus size={16} />
+                <span>Galeria</span>
+              </button>
+              <button onClick={handleCopy} className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+                {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} />}
+                <span>Copiar</span>
+              </button>
+              <button onClick={() => setShowOcrModal(true)} disabled={ocrLoading} className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+                {ocrLoading ? <Loader2 size={16} className="animate-spin" /> : <ScanSearch size={16} />}
+                <span>OCR</span>
+              </button>
+              <button onClick={undo} disabled={!canUndo} className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-all" style={{ color: canUndo ? "#555" : "#BDBDBD", opacity: canUndo ? 1 : 0.4 }} title="Desfazer">
+                <Undo2 size={16} />
+                <span>Desfaz</span>
+              </button>
+              <button onClick={redo} disabled={!canRedo} className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-all" style={{ color: canRedo ? "#555" : "#BDBDBD", opacity: canRedo ? 1 : 0.4 }} title="Refazer">
+                <Redo2 size={16} />
+                <span>Refaz</span>
+              </button>
             </div>
 
             {/* Row 2 */}
-            <div className="flex items-center justify-between mt-0.5">
-              <div className="flex items-center gap-0.5">
-                <button onClick={handleStartQrScanner} disabled={qrLoading} className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
-                  {qrLoading ? <Loader2 size={16} className="animate-spin" /> : <ScanLine size={16} />}
-                  <span>QR</span>
+            <div className="flex items-center justify-center gap-1 mt-0.5">
+              <button onClick={handleStartQrScanner} disabled={qrLoading} className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+                {qrLoading ? <Loader2 size={16} className="animate-spin" /> : <ScanLine size={16} />}
+                <span>QR</span>
+              </button>
+              <button onClick={addChecklist} className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+                <ListChecks size={16} />
+                <span>Lista</span>
+              </button>
+              {onSchedule && (
+                <button
+                  onClick={() => {
+                    const today = new Date().toISOString().slice(0, 10);
+                    setScheduleDate(today);
+                    setScheduleTime("09:00");
+                    setShowScheduleDialog(true);
+                  }}
+                  className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-colors"
+                  style={{ color: theme.textMuted }}
+                  title="Agendar na agenda"
+                >
+                  <CalendarPlus size={16} />
+                  <span>Agendar</span>
                 </button>
-                <button onClick={addChecklist} className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
-                  <ListChecks size={16} />
-                  <span>Lista</span>
-                </button>
-                {onSchedule && (
-                  <button
-                    onClick={() => {
-                      const today = new Date().toISOString().slice(0, 10);
-                      setScheduleDate(today);
-                      setScheduleTime("09:00");
-                      setShowScheduleDialog(true);
-                    }}
-                    className="flex flex-col items-center px-2 py-1 rounded-lg text-[10px] hover:bg-black/5 transition-colors"
-                    style={{ color: theme.textMuted }}
-                    title="Agendar na agenda"
-                  >
-                    <CalendarPlus size={16} />
-                    <span>Agendar</span>
-                  </button>
-                )}
-              </div>
+              )}
               {voiceSupported && (
                 <button
                   onClick={toggleVoice}
