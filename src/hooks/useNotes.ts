@@ -218,6 +218,7 @@ export function useNotes() {
         lockPin: null,
         reminderDate: null,
         reminderTime: null,
+      };
 
       setNotes((prev) => [note, ...prev]);
 
