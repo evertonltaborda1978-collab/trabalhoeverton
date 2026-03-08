@@ -16,6 +16,7 @@ import {
   ListChecks,
   Square,
   CheckSquare,
+  CalendarPlus,
   Trash2,
 } from "lucide-react";
 import {
@@ -107,10 +108,11 @@ interface NoteEditorProps {
     fontSize: string,
     status: "rascunho" | "publicada",
   ) => void;
+  onSchedule?: (title: string, content: string) => void;
 }
 
 // ── Component ──────────────────────────────────────────
-export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEditorProps) {
+export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule }: NoteEditorProps) {
   const [title, setTitle] = useState("");
   const [blocks, setBlocks] = useState<ContentBlock[]>([{ type: "text", content: "" }]);
   const [selectedColor, setSelectedColor] = useState(NOTE_COLORS[0].value);
@@ -718,6 +720,16 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave }: NoteEdit
               >
                 <ListChecks size={16} /> Lista
               </button>
+              {onSchedule && (
+                <button
+                  onClick={() => onSchedule(title, blocksToPlainText(blocks))}
+                  className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors whitespace-nowrap"
+                  style={{ color: theme.textMuted }}
+                  title="Agendar na agenda"
+                >
+                  <CalendarPlus size={16} /> Agendar
+                </button>
+              )}
             </div>
 
             {/* Separator */}
