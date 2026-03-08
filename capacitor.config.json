@@ -1,0 +1,9 @@
+{
+  "appId": "app.lovable.427b2788b6544857bba6202e4f4eb969",
+  "appName": "trabalhoeverton",
+  "webDir": "dist",
+  "server": {
+    "url": "https://427b2788-b654-4857-bba6-202e4f4eb969.lovableproject.com?forceHideBadge=true",
+    "cleartext": true
+  }
+}
