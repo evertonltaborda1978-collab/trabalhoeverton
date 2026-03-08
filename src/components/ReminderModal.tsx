@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Bell, BellOff, Trash2 } from "lucide-react";
+import { Bell, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 
 interface ReminderModalProps {
@@ -21,6 +21,12 @@ export function ReminderModal({ open, onOpenChange, noteTitle, existingDate, exi
 
   const [date, setDate] = useState(existingDate || today);
   const [time, setTime] = useState(existingTime || "09:00");
+
+  useEffect(() => {
+    if (!open) return;
+    setDate(existingDate || today);
+    setTime(existingTime || "09:00");
+  }, [open, existingDate, existingTime, today]);
 
   const handleSave = () => {
     if (!date) return;
