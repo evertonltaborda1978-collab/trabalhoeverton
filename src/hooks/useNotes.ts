@@ -388,5 +388,5 @@ export function useNotes() {
     return diff > 7 * 24 * 60 * 60 * 1000 && notes.length > 0;
   }, [notes]);
 
-  return { notes, addNote, deleteNote, updateNote, loading, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup };
+  return { notes, addNote, deleteNote, updateNote, setNoteReminder, setNoteLock, loading, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup };
 }
