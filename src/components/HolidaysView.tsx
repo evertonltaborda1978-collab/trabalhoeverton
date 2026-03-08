@@ -98,7 +98,8 @@ export function HolidaysView() {
       })
       .catch(() => {
         clearTimeout(timeout);
-        setNationals(FALLBACK_NATIONALS.map(h => ({ ...h, date: h.date.replace("2026", String(year)) })));
+        const fallback: Holiday[] = FALLBACK_NATIONALS.map(h => ({ ...h, date: h.date.replace("2026", String(year)), type: h.type as HolidayType }));
+        setNationals(fallback);
         setFetchedYear(year);
         setApiStatus("fallback");
       });
