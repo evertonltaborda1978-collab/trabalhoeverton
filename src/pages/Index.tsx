@@ -21,7 +21,7 @@ const titles: Record<Tab, string> = {
 
 const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
-  const { notes, addNote, deleteNote, updateNote, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup } = useNotes();
+  const { notes, addNote, deleteNote, updateNote, setNoteReminder, setNoteLock, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup } = useNotes();
   const { appointments, addAppointment, deleteAppointment } = useAppointments();
   const { signOut } = useAuth();
 
@@ -75,6 +75,9 @@ const Index = () => {
             onAdd={addNote}
             onDelete={deleteNote}
             onUpdate={updateNote}
+            onSetReminder={setNoteReminder}
+            onSetLock={setNoteLock}
+            onAddAppointment={addAppointment}
             syncStatus={syncStatus}
             draftCount={draftCount}
             exportBackup={exportBackup}

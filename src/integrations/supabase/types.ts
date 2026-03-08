@@ -56,6 +56,10 @@ export type Database = {
           font_size: string
           id: string
           images: string[]
+          is_locked: boolean
+          lock_pin: string | null
+          reminder_date: string | null
+          reminder_time: string | null
           sincronizado: boolean
           status: string
           title: string
@@ -70,6 +74,10 @@ export type Database = {
           font_size?: string
           id?: string
           images?: string[]
+          is_locked?: boolean
+          lock_pin?: string | null
+          reminder_date?: string | null
+          reminder_time?: string | null
           sincronizado?: boolean
           status?: string
           title?: string
@@ -84,6 +92,10 @@ export type Database = {
           font_size?: string
           id?: string
           images?: string[]
+          is_locked?: boolean
+          lock_pin?: string | null
+          reminder_date?: string | null
+          reminder_time?: string | null
           sincronizado?: boolean
           status?: string
           title?: string

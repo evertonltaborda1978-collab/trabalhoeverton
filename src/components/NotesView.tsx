@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { NoteCard } from "./NoteCard";
 import { NoteEditor } from "./NoteEditor";
+import { ReminderModal } from "./ReminderModal";
+import { LockNoteModal } from "./LockNoteModal";
 import { Note, SyncStatus } from "@/hooks/useNotes";
 import { Search, Cloud, CloudOff, RefreshCw, Download, Upload, Mic, MicOff } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -13,6 +15,9 @@ interface NotesViewProps {
   onAdd: (title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string, status?: "rascunho" | "publicada") => void;
   onDelete: (id: string) => void;
   onUpdate: (id: string, title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string, status?: "rascunho" | "publicada") => void;
+  onSetReminder: (id: string, date: string | null, time: string | null) => void;
+  onSetLock: (id: string, isLocked: boolean, lockPin: string | null) => void;
+  onAddAppointment?: (title: string, date: Date, time: string, description: string) => void;
   syncStatus: SyncStatus;
   draftCount: number;
   exportBackup: () => boolean;
@@ -20,13 +25,21 @@ interface NotesViewProps {
   shouldRemindBackup: () => boolean;
 }
 
-export function NotesView({ notes, onAdd, onDelete, onUpdate, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup }: NotesViewProps) {
+export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onSetLock, onAddAppointment, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup }: NotesViewProps) {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const [showBackupMenu, setShowBackupMenu] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
+
+  // Reminder modal
+  const [reminderNote, setReminderNote] = useState<Note | null>(null);
+  // Lock modal
+  const [lockNote, setLockNote] = useState<Note | null>(null);
+  const [lockMode, setLockMode] = useState<"set" | "unlock" | "manage">("set");
+  // For unlocking to open editor
+  const [pendingUnlockNote, setPendingUnlockNote] = useState<Note | null>(null);
 
   // Voice search
   const handleVoiceResult = useCallback((text: string) => {
@@ -38,10 +51,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, syncStatus, draftC
   useEffect(() => {
     if (shouldRemindBackup()) {
       const timer = setTimeout(() => {
-        toast({
-          title: "📦 Hora do backup!",
-          description: "Faz mais de uma semana desde seu último backup. Que tal exportar suas notas?",
-        });
+        toast({ title: "📦 Hora do backup!", description: "Faz mais de uma semana desde seu último backup. Que tal exportar suas notas?" });
       }, 3000);
       return () => clearTimeout(timer);
     }
@@ -53,30 +63,76 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, syncStatus, draftC
       n.content.toLowerCase().includes(search.toLowerCase())
   );
 
-  const openNew = () => {
-    setEditingNote(null);
-    setDialogOpen(true);
-  };
+  const openNew = () => { setEditingNote(null); setDialogOpen(true); };
 
   const openEdit = (note: Note) => {
+    if (note.isLocked) {
+      setPendingUnlockNote(note);
+      setLockNote(note);
+      setLockMode("unlock");
+      return;
+    }
     setEditingNote(note);
     setDialogOpen(true);
   };
 
-  const handleSave = (
-    title: string,
-    content: string,
-    images: string[],
-    color: string,
-    fontFamily: string,
-    fontSize: string,
-    status: "rascunho" | "publicada"
-  ) => {
+  const handleSave = (title: string, content: string, images: string[], color: string, fontFamily: string, fontSize: string, status: "rascunho" | "publicada") => {
     if (editingNote) {
       onUpdate(editingNote.id, title, content, images, color, fontFamily, fontSize, status);
     } else {
       onAdd(title, content, images, color, fontFamily, fontSize, status);
     }
+  };
+
+  // Bell click
+  const handleBellClick = (note: Note) => setReminderNote(note);
+
+  const handleReminderSave = (date: string, time: string) => {
+    if (!reminderNote) return;
+    onSetReminder(reminderNote.id, date, time);
+    // Also create appointment in agenda
+    if (onAddAppointment) {
+      onAddAppointment(reminderNote.title || "Lembrete", new Date(date + "T00:00:00"), time, `Lembrete da nota: ${reminderNote.title}`);
+    }
+    toast({ title: "🔔 Lembrete agendado!", description: `${date} às ${time}` });
+  };
+
+  const handleReminderRemove = () => {
+    if (!reminderNote) return;
+    onSetReminder(reminderNote.id, null, null);
+    toast({ title: "Lembrete removido" });
+  };
+
+  // Lock click
+  const handleLockClick = (note: Note) => {
+    setLockNote(note);
+    setLockMode(note.isLocked ? "manage" : "set");
+  };
+
+  const handleSetPin = (pin: string) => {
+    if (!lockNote) return;
+    onSetLock(lockNote.id, true, pin);
+    toast({ title: "🔒 Nota protegida!", description: "Senha definida com sucesso" });
+  };
+
+  const handleUnlockAttempt = (pin: string): boolean => {
+    if (!lockNote) return false;
+    if (lockNote.lockPin === pin) {
+      // If unlocking to open editor
+      if (pendingUnlockNote?.id === lockNote.id) {
+        setEditingNote(pendingUnlockNote);
+        setDialogOpen(true);
+        setPendingUnlockNote(null);
+      }
+      return true;
+    }
+    return false;
+  };
+
+  const handleRemoveLock = () => {
+    if (!lockNote) return;
+    onSetLock(lockNote.id, false, null);
+    toast({ title: "🔓 Proteção removida" });
   };
 
   const handleExport = () => {
@@ -109,11 +165,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, syncStatus, draftC
       {/* Sync indicator + draft counter */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowBackupMenu(!showBackupMenu)}
-            className="flex items-center gap-1 transition-opacity hover:opacity-70"
-            title={syncStatus === "synced" ? "Sincronizado" : syncStatus === "syncing" ? "Sincronizando..." : "Sem conexão"}
-          >
+          <button onClick={() => setShowBackupMenu(!showBackupMenu)} className="flex items-center gap-1 transition-opacity hover:opacity-70" title={syncStatus === "synced" ? "Sincronizado" : syncStatus === "syncing" ? "Sincronizando..." : "Sem conexão"}>
             {syncIcon()}
           </button>
           {draftCount > 0 && (
@@ -126,22 +178,11 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, syncStatus, draftC
 
       {/* Backup dropdown */}
       {showBackupMenu && (
-        <div
-          className="mb-3 rounded-xl p-3 flex flex-col gap-2"
-          style={{ background: "#FFF", border: "1px solid #EBEBEB", boxShadow: "0 4px 12px rgba(0,0,0,0.06)" }}
-        >
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
-            style={{ color: "#1A1A2E" }}
-          >
+        <div className="mb-3 rounded-xl p-3 flex flex-col gap-2" style={{ background: "#FFF", border: "1px solid #EBEBEB", boxShadow: "0 4px 12px rgba(0,0,0,0.06)" }}>
+          <button onClick={handleExport} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors" style={{ color: "#1A1A2E" }}>
             <Download size={16} /> Exportar backup (.json)
           </button>
-          <button
-            onClick={() => importRef.current?.click()}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
-            style={{ color: "#1A1A2E" }}
-          >
+          <button onClick={() => importRef.current?.click()} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors" style={{ color: "#1A1A2E" }}>
             <Upload size={16} /> Importar backup
           </button>
           <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImportFile} />
@@ -155,9 +196,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, syncStatus, draftC
             border: searchFocused || isListening ? "1.5px solid #B39DDB" : "1.5px solid #EBEBEB",
             borderRadius: 16,
             background: "#FFFFFF",
-            boxShadow: searchFocused || isListening
-              ? "0 0 0 3px rgba(179,157,219,0.15), 0 2px 8px -2px rgba(0,0,0,0.06)"
-              : "0 2px 8px -2px rgba(0,0,0,0.04)",
+            boxShadow: searchFocused || isListening ? "0 0 0 3px rgba(179,157,219,0.15), 0 2px 8px -2px rgba(0,0,0,0.06)" : "0 2px 8px -2px rgba(0,0,0,0.04)",
           }}
         >
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "#BDBDBD" }} />
@@ -170,15 +209,11 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, syncStatus, draftC
             className="w-full pl-9 pr-10 py-2.5 bg-transparent border-0 outline-none text-sm font-medium"
             style={{ color: "#1A1A2E", borderRadius: 16 }}
           />
-          {/* Voice search button */}
           {voiceSupported && (
             <button
               onClick={toggleVoice}
               className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full transition-all duration-200"
-              style={{
-                color: isListening ? "#E53935" : "#BDBDBD",
-                background: isListening ? "rgba(229,57,53,0.1)" : "transparent",
-              }}
+              style={{ color: isListening ? "#E53935" : "#BDBDBD", background: isListening ? "rgba(229,57,53,0.1)" : "transparent" }}
               title={isListening ? "Parar busca por voz" : "Buscar por voz"}
             >
               {isListening ? (
@@ -195,13 +230,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, syncStatus, draftC
         <button
           onClick={openNew}
           className="shrink-0 flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95"
-          style={{
-            width: 46,
-            height: 46,
-            borderRadius: 14,
-            background: "#1A1A2E",
-            boxShadow: "0 4px 14px -2px rgba(26,26,46,0.35)",
-          }}
+          style={{ width: 46, height: 46, borderRadius: 14, background: "#1A1A2E", boxShadow: "0 4px 14px -2px rgba(26,26,46,0.35)" }}
         >
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
             <path d="M10 4V16M4 10H16" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
@@ -209,17 +238,13 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, syncStatus, draftC
         </button>
       </div>
 
-      {/* Note count */}
       <p className="text-xs font-semibold mb-4" style={{ color: "#BDBDBD", fontSize: 12 }}>
         {filtered.length} {filtered.length === 1 ? "nota" : "notas"}
       </p>
 
       {filtered.length === 0 ? (
         <div className="text-center py-16">
-          <div
-            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl"
-            style={{ background: "#F0EDE8" }}
-          >
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl" style={{ background: "#F0EDE8" }}>
             <span className="text-3xl">📝</span>
           </div>
           <p className="mt-4 text-sm font-semibold" style={{ color: "#BDBDBD" }}>
@@ -232,16 +257,41 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, syncStatus, draftC
       ) : (
         <div className="flex flex-col gap-2.5">
           {filtered.map((note, i) => (
-            <NoteCard key={note.id} note={note} onDelete={onDelete} onClick={openEdit} index={i} searchQuery={search} />
+            <NoteCard
+              key={note.id}
+              note={note}
+              onDelete={onDelete}
+              onClick={openEdit}
+              onBellClick={handleBellClick}
+              onLockClick={handleLockClick}
+              index={i}
+              searchQuery={search}
+            />
           ))}
         </div>
       )}
 
-      <NoteEditor
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        editingNote={editingNote}
-        onSave={handleSave}
+      <NoteEditor open={dialogOpen} onOpenChange={setDialogOpen} editingNote={editingNote} onSave={handleSave} />
+
+      {/* Reminder Modal */}
+      <ReminderModal
+        open={!!reminderNote}
+        onOpenChange={(v) => { if (!v) setReminderNote(null); }}
+        noteTitle={reminderNote?.title || ""}
+        existingDate={reminderNote?.reminderDate}
+        existingTime={reminderNote?.reminderTime}
+        onSave={handleReminderSave}
+        onRemove={handleReminderRemove}
+      />
+
+      {/* Lock Modal */}
+      <LockNoteModal
+        open={!!lockNote}
+        onOpenChange={(v) => { if (!v) { setLockNote(null); setPendingUnlockNote(null); } }}
+        mode={lockMode}
+        onSetPin={handleSetPin}
+        onUnlock={handleUnlockAttempt}
+        onRemoveLock={handleRemoveLock}
       />
     </div>
   );

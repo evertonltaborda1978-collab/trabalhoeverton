@@ -14,6 +14,10 @@ export interface Note {
   fontSize: string;
   status: "rascunho" | "publicada";
   sincronizado: boolean;
+  reminderDate?: string | null;
+  reminderTime?: string | null;
+  isLocked: boolean;
+  lockPin?: string | null;
 }
 
 const COLORS = [
@@ -79,6 +83,10 @@ function mapRow(n: any): Note {
     fontSize: n.font_size || "medium",
     status: n.status || "publicada",
     sincronizado: true,
+    reminderDate: n.reminder_date || null,
+    reminderTime: n.reminder_time || null,
+    isLocked: n.is_locked || false,
+    lockPin: n.lock_pin || null,
   };
 }
 
@@ -206,6 +214,10 @@ export function useNotes() {
         fontSize: fontSize || "medium",
         status,
         sincronizado: false,
+        isLocked: false,
+        lockPin: null,
+        reminderDate: null,
+        reminderTime: null,
       };
 
       setNotes((prev) => [note, ...prev]);
@@ -290,6 +302,24 @@ export function useNotes() {
     []
   );
 
+  // Set/remove reminder
+  const setNoteReminder = useCallback(async (id: string, reminderDate: string | null, reminderTime: string | null) => {
+    setNotes((prev) => prev.map((n) => n.id === id ? { ...n, reminderDate, reminderTime, updatedAt: new Date(), sincronizado: false } : n));
+    try {
+      await (supabase.from("notes") as any).update({ reminder_date: reminderDate, reminder_time: reminderTime, updated_at: new Date().toISOString(), sincronizado: true }).eq("id", id);
+      setNotes((prev) => prev.map((n) => n.id === id ? { ...n, sincronizado: true } : n));
+    } catch { setSyncStatus("offline"); }
+  }, []);
+
+  // Set/remove lock
+  const setNoteLock = useCallback(async (id: string, isLocked: boolean, lockPin: string | null) => {
+    setNotes((prev) => prev.map((n) => n.id === id ? { ...n, isLocked, lockPin, updatedAt: new Date(), sincronizado: false } : n));
+    try {
+      await (supabase.from("notes") as any).update({ is_locked: isLocked, lock_pin: lockPin, updated_at: new Date().toISOString(), sincronizado: true }).eq("id", id);
+      setNotes((prev) => prev.map((n) => n.id === id ? { ...n, sincronizado: true } : n));
+    } catch { setSyncStatus("offline"); }
+  }, []);
+
   const draftCount = notes.filter((n) => n.status === "rascunho").length;
 
   // Export backup
@@ -358,5 +388,5 @@ export function useNotes() {
     return diff > 7 * 24 * 60 * 60 * 1000 && notes.length > 0;
   }, [notes]);
 
-  return { notes, addNote, deleteNote, updateNote, loading, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup };
+  return { notes, addNote, deleteNote, updateNote, setNoteReminder, setNoteLock, loading, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup };
 }
