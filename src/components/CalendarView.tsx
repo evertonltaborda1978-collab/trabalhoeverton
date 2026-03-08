@@ -188,23 +188,23 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete }: Calend
         </div>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); else setDialogOpen(true); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-display">Novo compromisso</DialogTitle>
+            <DialogTitle className="font-display">{editingId ? "Editar compromisso" : "Novo compromisso"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 mt-2">
             <Input placeholder="Título" value={title} onChange={(e) => setTitle(e.target.value)} className="font-semibold" />
             <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
             <Textarea placeholder="Descrição (opcional)" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="resize-none" />
-            {connected && (
+            {connected && !editingId && (
               <p className="text-[11px] font-medium flex items-center gap-1" style={{ color: "#4CAF50" }}>
                 ✓ Será sincronizado com Google Agenda
               </p>
             )}
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setDialogOpen(false)} className="flex-1">Cancelar</Button>
-              <Button onClick={handleAdd} className="flex-1">Agendar</Button>
+              <Button variant="outline" onClick={closeDialog} className="flex-1">Cancelar</Button>
+              <Button onClick={handleSave} className="flex-1">{editingId ? "Salvar" : "Agendar"}</Button>
             </div>
           </div>
         </DialogContent>
