@@ -102,6 +102,7 @@ const Index = () => {
 
       {/* Bottom Navigation */}
       <BottomNav active={tab} onChange={setTab} />
+      <SnoozeAlert alert={activeAlert} onDismiss={dismissAlert} onSnooze={snoozeAlert} />
     </div>
   );
 };
