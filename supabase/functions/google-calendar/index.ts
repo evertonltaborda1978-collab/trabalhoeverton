@@ -15,8 +15,10 @@ Deno.serve(async (req) => {
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
+  const url = new URL(req.url);
+  const action = url.searchParams.get('action');
+
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
-    // Return gracefully - credentials not yet configured
     if (action === 'status') {
       return new Response(JSON.stringify({ connected: false }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -26,9 +28,6 @@ Deno.serve(async (req) => {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-
-  const url = new URL(req.url);
-  const action = url.searchParams.get('action');
 
   // Generate auth URL
   if (action === 'auth_url') {
