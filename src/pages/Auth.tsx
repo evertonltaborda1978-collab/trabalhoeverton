@@ -169,13 +169,24 @@ export default function Auth() {
 
         {/* Toggle */}
         <p className="text-center text-sm text-muted-foreground">
-          {isLogin ? "Não tem conta?" : "Já tem conta?"}{" "}
-          <button
-            onClick={() => setIsLogin(!isLogin)}
-            className="text-primary font-semibold hover:underline"
-          >
-            {isLogin ? "Cadastre-se" : "Entrar"}
-          </button>
+          {forgotPassword ? (
+            <button
+              onClick={() => setForgotPassword(false)}
+              className="text-primary font-semibold hover:underline"
+            >
+              Voltar ao login
+            </button>
+          ) : (
+            <>
+              {isLogin ? "Não tem conta?" : "Já tem conta?"}{" "}
+              <button
+                onClick={() => setIsLogin(!isLogin)}
+                className="text-primary font-semibold hover:underline"
+              >
+                {isLogin ? "Cadastre-se" : "Entrar"}
+              </button>
+            </>
+          )}
         </p>
       </div>
     </div>
