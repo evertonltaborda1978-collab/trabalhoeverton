@@ -3,7 +3,6 @@ import { MoonPhaseWidget } from "@/components/MoonPhaseWidget";
 import { BottomNav } from "@/components/BottomNav";
 import { NotesView } from "@/components/NotesView";
 import { CalendarView } from "@/components/CalendarView";
-import { AudioView } from "@/components/AudioView";
 import { LocationView } from "@/components/LocationView";
 import { DevicesView } from "@/components/DevicesView";
 import { useNotes } from "@/hooks/useNotes";
