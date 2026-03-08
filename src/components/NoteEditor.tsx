@@ -725,13 +725,76 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
               </button>
               {onSchedule && (
                 <button
-                  onClick={() => onSchedule(title, blocksToPlainText(blocks))}
+                  onClick={() => {
+                    const today = new Date().toISOString().slice(0, 10);
+                    setScheduleDate(today);
+                    setScheduleTime("09:00");
+                    setShowScheduleDialog(true);
+                  }}
                   className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-black/5 transition-colors whitespace-nowrap"
                   style={{ color: theme.textMuted }}
                   title="Agendar na agenda"
                 >
                   <CalendarPlus size={16} /> Agendar
                 </button>
+              )}
+
+              {/* Schedule Dialog */}
+              {showScheduleDialog && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)" }}>
+                  <div className="rounded-2xl p-5 w-[90%] max-w-sm space-y-4" style={{ background: "#FFF", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+                    <h3 className="text-base font-bold flex items-center gap-2" style={{ color: "#1A1A2E" }}>
+                      <CalendarPlus size={18} /> Agendar na Agenda
+                    </h3>
+                    <p className="text-xs" style={{ color: "#9E9E9E" }}>
+                      "{title || "Nota sem título"}"
+                    </p>
+                    <div>
+                      <label className="text-xs font-medium block mb-1" style={{ color: "#666" }}>Data</label>
+                      <input
+                        type="date"
+                        value={scheduleDate}
+                        min={new Date().toISOString().slice(0, 10)}
+                        onChange={(e) => setScheduleDate(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl text-sm border outline-none focus:ring-2 focus:ring-blue-200"
+                        style={{ borderColor: "#E0E0E0", color: "#1A1A2E" }}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium block mb-1" style={{ color: "#666" }}>Hora</label>
+                      <input
+                        type="time"
+                        value={scheduleTime}
+                        onChange={(e) => setScheduleTime(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl text-sm border outline-none focus:ring-2 focus:ring-blue-200"
+                        style={{ borderColor: "#E0E0E0", color: "#1A1A2E" }}
+                      />
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        onClick={() => setShowScheduleDialog(false)}
+                        className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                        style={{ background: "#F5F5F5", color: "#666" }}
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (scheduleDate && onSchedule) {
+                            onSchedule(title, blocksToPlainText(blocks));
+                            toast({ title: "📅 Agendado!", description: `${scheduleDate} às ${scheduleTime}` });
+                            setShowScheduleDialog(false);
+                          }
+                        }}
+                        disabled={!scheduleDate}
+                        className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-colors disabled:opacity-40"
+                        style={{ background: "#1A1A2E" }}
+                      >
+                        Agendar
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
 

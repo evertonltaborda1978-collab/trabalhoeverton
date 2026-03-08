@@ -52,11 +52,11 @@ export function WeatherView() {
   const fetchCityName = async (lat: number, lng: number): Promise<string> => {
     try {
       const res = await fetch(
-        `https://geocoding-api.open-meteo.com/v1/reverse?latitude=${lat}&longitude=${lng}&count=1&language=pt`
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=pt`
       );
       const data = await res.json();
-      if (data.results && data.results.length > 0) {
-        return data.results[0].name;
+      if (data.address) {
+        return data.address.city || data.address.town || data.address.village || data.address.municipality || "Localização atual";
       }
     } catch {}
     return "Localização atual";
