@@ -725,6 +725,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
                         autoResize(e.target);
                       }}
                       onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
+                      onPaste={handleMobilePaste}
                       placeholder={idx === 0 && blocks.length === 1 ? "Comece a escrever sua nota..." : ""}
                       className="w-full bg-transparent border-0 outline-none resize-none text-sm"
                       style={{
