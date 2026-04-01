@@ -141,6 +141,7 @@ interface NoteEditorProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editingNote: Note | null;
+  readOnly?: boolean;
   onSave: (
     title: string,
     content: string,
@@ -154,7 +155,7 @@ interface NoteEditorProps {
 }
 
 // ── Component ──────────────────────────────────────────
-export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule }: NoteEditorProps) {
+export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, onSave, onSchedule }: NoteEditorProps) {
   const [title, setTitle] = useState("");
   const [blocks, setBlocks] = useState<ContentBlock[]>([{ type: "text", content: "" }]);
   const [selectedColor, setSelectedColor] = useState(NOTE_COLORS[0].value);
