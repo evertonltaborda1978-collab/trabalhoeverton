@@ -737,11 +737,13 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                       key={`text-${idx}`}
                       value={block.content || ""}
                       onChange={(e) => {
+                        if (readOnly) return;
                         updateTextBlock(idx, e.target.value);
                         autoResize(e.target);
                       }}
                       onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
                       onPaste={handleMobilePaste}
+                      readOnly={readOnly}
                       placeholder={idx === 0 && blocks.length === 1 ? "Comece a escrever sua nota..." : ""}
                       className="w-full bg-transparent border-0 outline-none resize-none text-sm"
                       style={{
