@@ -964,6 +964,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
               </div>
             )}
           </div>
+          )}
 
           {/* ── FOOTER BUTTONS ── */}
           <div
