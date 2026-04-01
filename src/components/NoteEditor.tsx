@@ -138,6 +138,75 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
   const focusedBlockRef = useRef<number>(0);
   const activeFieldRef = useRef<"title" | "content">("content");
 
+  // ── Auto-save draft to localStorage ───────────────────
+  const DRAFT_KEY = "note_editor_draft";
+
+  const saveDraftToLocal = useCallback(() => {
+    if (!open) return;
+    const hasContent = title.trim() || blocks.some(b => (b.type === "text" && b.content?.trim()) || b.type === "image" || b.type === "checklist");
+    if (!hasContent) return;
+    const draft = {
+      noteId: editingNote?.id || null,
+      title,
+      blocks,
+      color: selectedColor,
+      timestamp: Date.now(),
+    };
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {}
+  }, [open, title, blocks, selectedColor, editingNote]);
+
+  const clearDraft = useCallback(() => {
+    try { localStorage.removeItem(DRAFT_KEY); } catch {}
+  }, []);
+
+  // Auto-save to localStorage every 2 seconds
+  useEffect(() => {
+    if (!open) return;
+    const interval = setInterval(saveDraftToLocal, 2000);
+    return () => clearInterval(interval);
+  }, [open, saveDraftToLocal]);
+
+  // Auto-sync to cloud every 10 seconds
+  useEffect(() => {
+    if (!open) return;
+    const interval = setInterval(() => {
+      const hasContent = title.trim() || blocksToPlainText(blocks).trim();
+      if (!hasContent) return;
+      const serialized = serializeBlocks(blocks);
+      const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
+      const status = editingNote?.status || "rascunho";
+      onSave(title, serialized, imageUrls, selectedColor, "default", "medium", status);
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [open, title, blocks, selectedColor, editingNote, onSave]);
+
+  // Save immediately on visibility change (minimize, tab switch) and beforeunload
+  useEffect(() => {
+    if (!open) return;
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        saveDraftToLocal();
+        // Also trigger cloud save
+        const hasContent = title.trim() || blocksToPlainText(blocks).trim();
+        if (hasContent) {
+          const serialized = serializeBlocks(blocks);
+          const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
+          const status = editingNote?.status || "rascunho";
+          onSave(title, serialized, imageUrls, selectedColor, "default", "medium", status);
+        }
+      }
+    };
+    const handleBeforeUnload = () => {
+      saveDraftToLocal();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [open, saveDraftToLocal, title, blocks, selectedColor, editingNote, onSave]);
+
   // Voice dictation
   const handleVoiceResult = useCallback((text: string) => {
     if (activeFieldRef.current === "title") {
