@@ -665,20 +665,24 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
               style={{ color: "#1A1A2E" }}
             />
 
-            <button
-              onClick={() => setShowColorPicker(!showColorPicker)}
-              className="w-7 h-7 rounded-md border-2 border-white/60 shadow-sm shrink-0 transition-transform hover:scale-110"
-              style={{ background: NOTE_COLORS.find((c) => c.value === selectedColor)?.dot || "#FEF9C3" }}
-              title="Cor da nota"
-            />
+            {!readOnly && (
+              <button
+                onClick={() => setShowColorPicker(!showColorPicker)}
+                className="w-7 h-7 rounded-md border-2 border-white/60 shadow-sm shrink-0 transition-transform hover:scale-110"
+                style={{ background: NOTE_COLORS.find((c) => c.value === selectedColor)?.dot || "#FEF9C3" }}
+                title="Cor da nota"
+              />
+            )}
 
-            <button
-              onClick={handleClose}
-              className="p-2 rounded-lg hover:bg-black/10 transition-colors"
-              title="Fechar"
-            >
-              <X size={20} style={{ color: textColor }} />
-            </button>
+            {!readOnly && (
+              <button
+                onClick={handleClose}
+                className="p-2 rounded-lg hover:bg-black/10 transition-colors"
+                title="Fechar"
+              >
+                <X size={20} style={{ color: textColor }} />
+              </button>
+            )}
           </div>
 
           {/* Color picker dropdown */}
