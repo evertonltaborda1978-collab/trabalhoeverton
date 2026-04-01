@@ -635,20 +635,31 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
             className="flex items-center gap-2 px-3 py-2.5 shrink-0"
             style={{ background: theme.headerBg, transition: "background 0.3s ease" }}
           >
-            <button
-              onClick={handleSavePublish}
-              disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
-              className="p-2 rounded-lg hover:bg-black/10 transition-colors disabled:opacity-40"
-              title="Salvar"
-            >
-              <Check size={20} style={{ color: textColor }} />
-            </button>
+            {!readOnly ? (
+              <button
+                onClick={handleSavePublish}
+                disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
+                className="p-2 rounded-lg hover:bg-black/10 transition-colors disabled:opacity-40"
+                title="Salvar"
+              >
+                <Check size={20} style={{ color: textColor }} />
+              </button>
+            ) : (
+              <button
+                onClick={() => onOpenChange(false)}
+                className="p-2 rounded-lg hover:bg-black/10 transition-colors"
+                title="Fechar"
+              >
+                <X size={20} style={{ color: textColor }} />
+              </button>
+            )}
 
             <input
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => !readOnly && setTitle(e.target.value)}
               onFocus={() => { activeFieldRef.current = "title"; }}
               onPaste={handleMobilePaste}
+              readOnly={readOnly}
               placeholder="Título da nota..."
               className="flex-1 bg-white/90 rounded-lg px-3 py-1.5 text-sm font-semibold placeholder:text-gray-400 outline-none border-0 shadow-sm"
               style={{ color: "#1A1A2E" }}
