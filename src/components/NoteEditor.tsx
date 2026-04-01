@@ -141,6 +141,7 @@ interface NoteEditorProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editingNote: Note | null;
+  readOnly?: boolean;
   onSave: (
     title: string,
     content: string,
@@ -154,7 +155,7 @@ interface NoteEditorProps {
 }
 
 // ── Component ──────────────────────────────────────────
-export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule }: NoteEditorProps) {
+export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, onSave, onSchedule }: NoteEditorProps) {
   const [title, setTitle] = useState("");
   const [blocks, setBlocks] = useState<ContentBlock[]>([{ type: "text", content: "" }]);
   const [selectedColor, setSelectedColor] = useState(NOTE_COLORS[0].value);
@@ -634,39 +635,54 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
             className="flex items-center gap-2 px-3 py-2.5 shrink-0"
             style={{ background: theme.headerBg, transition: "background 0.3s ease" }}
           >
-            <button
-              onClick={handleSavePublish}
-              disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
-              className="p-2 rounded-lg hover:bg-black/10 transition-colors disabled:opacity-40"
-              title="Salvar"
-            >
-              <Check size={20} style={{ color: textColor }} />
-            </button>
+            {!readOnly ? (
+              <button
+                onClick={handleSavePublish}
+                disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
+                className="p-2 rounded-lg hover:bg-black/10 transition-colors disabled:opacity-40"
+                title="Salvar"
+              >
+                <Check size={20} style={{ color: textColor }} />
+              </button>
+            ) : (
+              <button
+                onClick={() => onOpenChange(false)}
+                className="p-2 rounded-lg hover:bg-black/10 transition-colors"
+                title="Fechar"
+              >
+                <X size={20} style={{ color: textColor }} />
+              </button>
+            )}
 
             <input
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => !readOnly && setTitle(e.target.value)}
               onFocus={() => { activeFieldRef.current = "title"; }}
               onPaste={handleMobilePaste}
+              readOnly={readOnly}
               placeholder="Título da nota..."
               className="flex-1 bg-white/90 rounded-lg px-3 py-1.5 text-sm font-semibold placeholder:text-gray-400 outline-none border-0 shadow-sm"
               style={{ color: "#1A1A2E" }}
             />
 
-            <button
-              onClick={() => setShowColorPicker(!showColorPicker)}
-              className="w-7 h-7 rounded-md border-2 border-white/60 shadow-sm shrink-0 transition-transform hover:scale-110"
-              style={{ background: NOTE_COLORS.find((c) => c.value === selectedColor)?.dot || "#FEF9C3" }}
-              title="Cor da nota"
-            />
+            {!readOnly && (
+              <button
+                onClick={() => setShowColorPicker(!showColorPicker)}
+                className="w-7 h-7 rounded-md border-2 border-white/60 shadow-sm shrink-0 transition-transform hover:scale-110"
+                style={{ background: NOTE_COLORS.find((c) => c.value === selectedColor)?.dot || "#FEF9C3" }}
+                title="Cor da nota"
+              />
+            )}
 
-            <button
-              onClick={handleClose}
-              className="p-2 rounded-lg hover:bg-black/10 transition-colors"
-              title="Fechar"
-            >
-              <X size={20} style={{ color: textColor }} />
-            </button>
+            {!readOnly && (
+              <button
+                onClick={handleClose}
+                className="p-2 rounded-lg hover:bg-black/10 transition-colors"
+                title="Fechar"
+              >
+                <X size={20} style={{ color: textColor }} />
+              </button>
+            )}
           </div>
 
           {/* Color picker dropdown */}
@@ -721,11 +737,13 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
                       key={`text-${idx}`}
                       value={block.content || ""}
                       onChange={(e) => {
+                        if (readOnly) return;
                         updateTextBlock(idx, e.target.value);
                         autoResize(e.target);
                       }}
                       onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
                       onPaste={handleMobilePaste}
+                      readOnly={readOnly}
                       placeholder={idx === 0 && blocks.length === 1 ? "Comece a escrever sua nota..." : ""}
                       className="w-full bg-transparent border-0 outline-none resize-none text-sm"
                       style={{
@@ -754,9 +772,10 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
                           </button>
                           <input
                             value={item.text}
-                            onChange={(e) => updateChecklistItem(idx, item.id, { text: e.target.value })}
+                            onChange={(e) => !readOnly && updateChecklistItem(idx, item.id, { text: e.target.value })}
                             onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
                             onPaste={handleMobilePaste}
+                            readOnly={readOnly}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
                                 e.preventDefault();
@@ -827,6 +846,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
           </div>
 
           {/* ── TOOLBAR (2 rows for mobile) ── */}
+          {!readOnly && (
           <div
             className="px-3 py-1.5 border-t shrink-0"
             style={{ borderColor: theme.lines, background: theme.toolbarBg, transition: "background 0.3s ease, border-color 0.3s ease" }}
@@ -944,32 +964,46 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
               </div>
             )}
           </div>
+          )}
 
           {/* ── FOOTER BUTTONS ── */}
-          <div
-            className="flex gap-3 px-4 py-1.5 shrink-0 justify-center"
-            style={{
-              background: theme.toolbarBg,
-              borderTop: `1px solid ${theme.lines}`,
-              paddingBottom: "calc(6px + env(safe-area-inset-bottom))",
-            }}
-          >
-            <button
-              onClick={handleSaveDraft}
-              className="px-5 py-1.5 rounded-full text-[13px] font-semibold border transition-all duration-200 hover:bg-black/5"
-              style={{ borderColor: theme.borderAccent, color: theme.textMuted }}
+          {!readOnly ? (
+            <div
+              className="flex gap-3 px-4 py-1.5 shrink-0 justify-center"
+              style={{
+                background: theme.toolbarBg,
+                borderTop: `1px solid ${theme.lines}`,
+                paddingBottom: "calc(6px + env(safe-area-inset-bottom))",
+              }}
             >
-              Rascunho
-            </button>
-            <button
-              onClick={handleSavePublish}
-              disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
-              className="px-5 py-1.5 rounded-full text-[13px] font-semibold text-white shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50"
-              style={{ background: "#2D9E7F" }}
+              <button
+                onClick={handleSaveDraft}
+                className="px-5 py-1.5 rounded-full text-[13px] font-semibold border transition-all duration-200 hover:bg-black/5"
+                style={{ borderColor: theme.borderAccent, color: theme.textMuted }}
+              >
+                Rascunho
+              </button>
+              <button
+                onClick={handleSavePublish}
+                disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
+                className="px-5 py-1.5 rounded-full text-[13px] font-semibold text-white shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50"
+                style={{ background: "#2D9E7F" }}
+              >
+                {editingNote ? "Salvar" : "Criar nota"}
+              </button>
+            </div>
+          ) : (
+            <div
+              className="flex gap-3 px-4 py-2.5 shrink-0 justify-center"
+              style={{
+                background: theme.toolbarBg,
+                borderTop: `1px solid ${theme.lines}`,
+                paddingBottom: "calc(6px + env(safe-area-inset-bottom))",
+              }}
             >
-              {editingNote ? "Salvar" : "Criar nota"}
-            </button>
-          </div>
+              <span className="text-xs font-semibold" style={{ color: theme.textMuted }}>👁️ Modo visualização</span>
+            </div>
+          )}
         </div>
 
         {/* ── OCR MODAL ── */}
