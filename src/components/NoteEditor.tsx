@@ -540,7 +540,6 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
 
   // Auto-save on close
   const handleClose = () => {
-    // Stop voice if active
     if (isListening) toggleVoice();
     
     const hasContent = title.trim() || blocksToPlainText(blocks).trim();
@@ -554,6 +553,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
         toast({ title: "Salvo localmente", description: "Sincronizando quando houver conexão..." });
       }
     }
+    clearDraft();
     onOpenChange(false);
   };
 
