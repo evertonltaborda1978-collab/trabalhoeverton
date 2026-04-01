@@ -967,30 +967,43 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
           )}
 
           {/* ── FOOTER BUTTONS ── */}
-          <div
-            className="flex gap-3 px-4 py-1.5 shrink-0 justify-center"
-            style={{
-              background: theme.toolbarBg,
-              borderTop: `1px solid ${theme.lines}`,
-              paddingBottom: "calc(6px + env(safe-area-inset-bottom))",
-            }}
-          >
-            <button
-              onClick={handleSaveDraft}
-              className="px-5 py-1.5 rounded-full text-[13px] font-semibold border transition-all duration-200 hover:bg-black/5"
-              style={{ borderColor: theme.borderAccent, color: theme.textMuted }}
+          {!readOnly ? (
+            <div
+              className="flex gap-3 px-4 py-1.5 shrink-0 justify-center"
+              style={{
+                background: theme.toolbarBg,
+                borderTop: `1px solid ${theme.lines}`,
+                paddingBottom: "calc(6px + env(safe-area-inset-bottom))",
+              }}
             >
-              Rascunho
-            </button>
-            <button
-              onClick={handleSavePublish}
-              disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
-              className="px-5 py-1.5 rounded-full text-[13px] font-semibold text-white shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50"
-              style={{ background: "#2D9E7F" }}
+              <button
+                onClick={handleSaveDraft}
+                className="px-5 py-1.5 rounded-full text-[13px] font-semibold border transition-all duration-200 hover:bg-black/5"
+                style={{ borderColor: theme.borderAccent, color: theme.textMuted }}
+              >
+                Rascunho
+              </button>
+              <button
+                onClick={handleSavePublish}
+                disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
+                className="px-5 py-1.5 rounded-full text-[13px] font-semibold text-white shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50"
+                style={{ background: "#2D9E7F" }}
+              >
+                {editingNote ? "Salvar" : "Criar nota"}
+              </button>
+            </div>
+          ) : (
+            <div
+              className="flex gap-3 px-4 py-2.5 shrink-0 justify-center"
+              style={{
+                background: theme.toolbarBg,
+                borderTop: `1px solid ${theme.lines}`,
+                paddingBottom: "calc(6px + env(safe-area-inset-bottom))",
+              }}
             >
-              {editingNote ? "Salvar" : "Criar nota"}
-            </button>
-          </div>
+              <span className="text-xs font-semibold" style={{ color: theme.textMuted }}>👁️ Modo visualização</span>
+            </div>
+          )}
         </div>
 
         {/* ── OCR MODAL ── */}
