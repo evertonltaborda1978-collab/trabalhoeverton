@@ -772,9 +772,10 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                           </button>
                           <input
                             value={item.text}
-                            onChange={(e) => updateChecklistItem(idx, item.id, { text: e.target.value })}
+                            onChange={(e) => !readOnly && updateChecklistItem(idx, item.id, { text: e.target.value })}
                             onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
                             onPaste={handleMobilePaste}
+                            readOnly={readOnly}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
                                 e.preventDefault();
