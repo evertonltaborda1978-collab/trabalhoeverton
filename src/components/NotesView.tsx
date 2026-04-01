@@ -33,6 +33,10 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
   const [showBackupMenu, setShowBackupMenu] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
 
+  // Action menu (edit vs view)
+  const [actionMenuNote, setActionMenuNote] = useState<Note | null>(null);
+  const [editorReadOnly, setEditorReadOnly] = useState(false);
+
   // Reminder modal
   const [reminderNote, setReminderNote] = useState<Note | null>(null);
   // Lock modal
