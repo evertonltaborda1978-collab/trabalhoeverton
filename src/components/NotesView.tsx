@@ -78,12 +78,36 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
   const openNew = () => { setEditingNote(null); setDialogOpen(true); };
 
   const openEdit = (note: Note) => {
+    // Show action menu instead of directly opening
+    setActionMenuNote(note);
+  };
+
+  const handleActionEdit = () => {
+    if (!actionMenuNote) return;
+    const note = actionMenuNote;
+    setActionMenuNote(null);
     if (note.isLocked) {
       setPendingUnlockNote(note);
       setLockNote(note);
       setLockMode("unlock");
       return;
     }
+    setEditorReadOnly(false);
+    setEditingNote(note);
+    setDialogOpen(true);
+  };
+
+  const handleActionView = () => {
+    if (!actionMenuNote) return;
+    const note = actionMenuNote;
+    setActionMenuNote(null);
+    if (note.isLocked) {
+      setPendingUnlockNote(note);
+      setLockNote(note);
+      setLockMode("unlock");
+      return;
+    }
+    setEditorReadOnly(true);
     setEditingNote(note);
     setDialogOpen(true);
   };
