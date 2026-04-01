@@ -225,21 +225,54 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
 
   const { isListening, isSupported: voiceSupported, toggle: toggleVoice } = useSpeechRecognition(handleVoiceResult);
 
-  // ── Sync on open ─────────────────────────────────────
+  // ── Sync on open (with draft recovery) ────────────────
   const lastNoteId = useRef<string | null>(null);
   if (open) {
     const noteId = editingNote?.id ?? "__new__";
     if (lastNoteId.current !== noteId) {
       lastNoteId.current = noteId;
-      if (editingNote) {
-        setTitle(editingNote.title);
-        const parsed = deserializeBlocks(editingNote.content);
-        setBlocks(parsed);
-        setSelectedColor(editingNote.color);
+      let recovered = false;
+      // Try to recover draft from localStorage
+      if (!editingNote) {
+        try {
+          const raw = localStorage.getItem(DRAFT_KEY);
+          if (raw) {
+            const draft = JSON.parse(raw);
+            // Only recover if draft is for a new note (no noteId) and less than 1 hour old
+            if (!draft.noteId && Date.now() - draft.timestamp < 3600000) {
+              setTitle(draft.title || "");
+              setBlocks(draft.blocks || [{ type: "text", content: "" }]);
+              setSelectedColor(draft.color || NOTE_COLORS[0].value);
+              recovered = true;
+            }
+          }
+        } catch {}
       } else {
-        setTitle("");
-        setBlocks([{ type: "text", content: "" }]);
-        setSelectedColor(NOTE_COLORS[0].value);
+        // For existing notes, check if there's a more recent draft
+        try {
+          const raw = localStorage.getItem(DRAFT_KEY);
+          if (raw) {
+            const draft = JSON.parse(raw);
+            if (draft.noteId === editingNote.id && Date.now() - draft.timestamp < 3600000) {
+              setTitle(draft.title || "");
+              setBlocks(draft.blocks || deserializeBlocks(editingNote.content));
+              setSelectedColor(draft.color || editingNote.color);
+              recovered = true;
+            }
+          }
+        } catch {}
+      }
+      if (!recovered) {
+        if (editingNote) {
+          setTitle(editingNote.title);
+          const parsed = deserializeBlocks(editingNote.content);
+          setBlocks(parsed);
+          setSelectedColor(editingNote.color);
+        } else {
+          setTitle("");
+          setBlocks([{ type: "text", content: "" }]);
+          setSelectedColor(NOTE_COLORS[0].value);
+        }
       }
       setHistory([]);
       setHistoryIdx(-1);
