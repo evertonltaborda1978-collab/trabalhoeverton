@@ -138,6 +138,75 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
   const focusedBlockRef = useRef<number>(0);
   const activeFieldRef = useRef<"title" | "content">("content");
 
+  // ── Auto-save draft to localStorage ───────────────────
+  const DRAFT_KEY = "note_editor_draft";
+
+  const saveDraftToLocal = useCallback(() => {
+    if (!open) return;
+    const hasContent = title.trim() || blocks.some(b => (b.type === "text" && b.content?.trim()) || b.type === "image" || b.type === "checklist");
+    if (!hasContent) return;
+    const draft = {
+      noteId: editingNote?.id || null,
+      title,
+      blocks,
+      color: selectedColor,
+      timestamp: Date.now(),
+    };
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {}
+  }, [open, title, blocks, selectedColor, editingNote]);
+
+  const clearDraft = useCallback(() => {
+    try { localStorage.removeItem(DRAFT_KEY); } catch {}
+  }, []);
+
+  // Auto-save to localStorage every 2 seconds
+  useEffect(() => {
+    if (!open) return;
+    const interval = setInterval(saveDraftToLocal, 2000);
+    return () => clearInterval(interval);
+  }, [open, saveDraftToLocal]);
+
+  // Auto-sync to cloud every 10 seconds
+  useEffect(() => {
+    if (!open) return;
+    const interval = setInterval(() => {
+      const hasContent = title.trim() || blocksToPlainText(blocks).trim();
+      if (!hasContent) return;
+      const serialized = serializeBlocks(blocks);
+      const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
+      const status = editingNote?.status || "rascunho";
+      onSave(title, serialized, imageUrls, selectedColor, "default", "medium", status);
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [open, title, blocks, selectedColor, editingNote, onSave]);
+
+  // Save immediately on visibility change (minimize, tab switch) and beforeunload
+  useEffect(() => {
+    if (!open) return;
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        saveDraftToLocal();
+        // Also trigger cloud save
+        const hasContent = title.trim() || blocksToPlainText(blocks).trim();
+        if (hasContent) {
+          const serialized = serializeBlocks(blocks);
+          const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
+          const status = editingNote?.status || "rascunho";
+          onSave(title, serialized, imageUrls, selectedColor, "default", "medium", status);
+        }
+      }
+    };
+    const handleBeforeUnload = () => {
+      saveDraftToLocal();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [open, saveDraftToLocal, title, blocks, selectedColor, editingNote, onSave]);
+
   // Voice dictation
   const handleVoiceResult = useCallback((text: string) => {
     if (activeFieldRef.current === "title") {
@@ -156,21 +225,54 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
 
   const { isListening, isSupported: voiceSupported, toggle: toggleVoice } = useSpeechRecognition(handleVoiceResult);
 
-  // ── Sync on open ─────────────────────────────────────
+  // ── Sync on open (with draft recovery) ────────────────
   const lastNoteId = useRef<string | null>(null);
   if (open) {
     const noteId = editingNote?.id ?? "__new__";
     if (lastNoteId.current !== noteId) {
       lastNoteId.current = noteId;
-      if (editingNote) {
-        setTitle(editingNote.title);
-        const parsed = deserializeBlocks(editingNote.content);
-        setBlocks(parsed);
-        setSelectedColor(editingNote.color);
+      let recovered = false;
+      // Try to recover draft from localStorage
+      if (!editingNote) {
+        try {
+          const raw = localStorage.getItem(DRAFT_KEY);
+          if (raw) {
+            const draft = JSON.parse(raw);
+            // Only recover if draft is for a new note (no noteId) and less than 1 hour old
+            if (!draft.noteId && Date.now() - draft.timestamp < 3600000) {
+              setTitle(draft.title || "");
+              setBlocks(draft.blocks || [{ type: "text", content: "" }]);
+              setSelectedColor(draft.color || NOTE_COLORS[0].value);
+              recovered = true;
+            }
+          }
+        } catch {}
       } else {
-        setTitle("");
-        setBlocks([{ type: "text", content: "" }]);
-        setSelectedColor(NOTE_COLORS[0].value);
+        // For existing notes, check if there's a more recent draft
+        try {
+          const raw = localStorage.getItem(DRAFT_KEY);
+          if (raw) {
+            const draft = JSON.parse(raw);
+            if (draft.noteId === editingNote.id && Date.now() - draft.timestamp < 3600000) {
+              setTitle(draft.title || "");
+              setBlocks(draft.blocks || deserializeBlocks(editingNote.content));
+              setSelectedColor(draft.color || editingNote.color);
+              recovered = true;
+            }
+          }
+        } catch {}
+      }
+      if (!recovered) {
+        if (editingNote) {
+          setTitle(editingNote.title);
+          const parsed = deserializeBlocks(editingNote.content);
+          setBlocks(parsed);
+          setSelectedColor(editingNote.color);
+        } else {
+          setTitle("");
+          setBlocks([{ type: "text", content: "" }]);
+          setSelectedColor(NOTE_COLORS[0].value);
+        }
       }
       setHistory([]);
       setHistoryIdx(-1);
@@ -424,6 +526,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
     const serialized = serializeBlocks(blocks);
     const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
     onSave(title, serialized, imageUrls, selectedColor, "default", "medium", status);
+    clearDraft();
     onOpenChange(false);
     if (status === "rascunho") {
       toast({ title: "Rascunho salvo ✓" });
@@ -437,7 +540,6 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
 
   // Auto-save on close
   const handleClose = () => {
-    // Stop voice if active
     if (isListening) toggleVoice();
     
     const hasContent = title.trim() || blocksToPlainText(blocks).trim();
@@ -451,6 +553,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
         toast({ title: "Salvo localmente", description: "Sincronizando quando houver conexão..." });
       }
     }
+    clearDraft();
     onOpenChange(false);
   };
 
