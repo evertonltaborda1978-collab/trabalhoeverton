@@ -846,6 +846,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
           </div>
 
           {/* ── TOOLBAR (2 rows for mobile) ── */}
+          {!readOnly && (
           <div
             className="px-3 py-1.5 border-t shrink-0"
             style={{ borderColor: theme.lines, background: theme.toolbarBg, transition: "background 0.3s ease, border-color 0.3s ease" }}
