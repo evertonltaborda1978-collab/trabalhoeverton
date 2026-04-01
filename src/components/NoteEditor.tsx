@@ -756,6 +756,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
                             value={item.text}
                             onChange={(e) => updateChecklistItem(idx, item.id, { text: e.target.value })}
                             onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
+                            onPaste={handleMobilePaste}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
                                 e.preventDefault();
