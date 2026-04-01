@@ -4,7 +4,7 @@ import { NoteEditor } from "./NoteEditor";
 import { ReminderModal } from "./ReminderModal";
 import { LockNoteModal } from "./LockNoteModal";
 import { Note, SyncStatus } from "@/hooks/useNotes";
-import { Search, Cloud, CloudOff, RefreshCw, Download, Upload, Mic, MicOff } from "lucide-react";
+import { Search, Cloud, CloudOff, RefreshCw, Download, Upload, Mic, MicOff, Pencil, Eye } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 
