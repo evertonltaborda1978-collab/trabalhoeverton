@@ -70,6 +70,48 @@ const NOTE_COLORS = [
 export function getFontClass(_f: string) { return "font-body"; }
 export function getSizeClass(_f: string) { return "text-sm"; }
 
+// Detect mobile browser
+const isMobileBrowser = () => /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+// Sanitize pasted text on mobile — strip HTML, invisible chars, incompatible line breaks
+function handleMobilePaste(e: React.ClipboardEvent<HTMLInputElement | HTMLTextAreaElement>) {
+  if (!isMobileBrowser()) return; // Don't interfere on desktop
+  const html = e.clipboardData.getData("text/html");
+  const plain = e.clipboardData.getData("text/plain");
+  // Only intercept if there's HTML or suspicious content
+  if (!html && !plain) return;
+  e.preventDefault();
+  // Clean: strip HTML tags, normalize whitespace, remove zero-width chars
+  let cleaned = (html ? html.replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n").replace(/<[^>]*>/g, "") : plain)
+    .replace(/[\u200B\u200C\u200D\uFEFF\u00A0]/g, " ") // zero-width & nbsp
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/\t/g, "  ")
+    .replace(/ {3,}/g, "  ")
+    .trim();
+  // Decode HTML entities
+  const textarea = document.createElement("textarea");
+  textarea.innerHTML = cleaned;
+  cleaned = textarea.value;
+  // Insert at cursor position
+  const target = e.currentTarget;
+  const start = target.selectionStart ?? target.value.length;
+  const end = target.selectionEnd ?? start;
+  const before = target.value.substring(0, start);
+  const after = target.value.substring(end);
+  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+    target instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
+    "value"
+  )?.set;
+  if (nativeInputValueSetter) {
+    nativeInputValueSetter.call(target, before + cleaned + after);
+    target.dispatchEvent(new Event("input", { bubbles: true }));
+    // Set cursor position after pasted text
+    const newPos = start + cleaned.length;
+    target.setSelectionRange(newPos, newPos);
+  }
+}
+
 function serializeBlocks(blocks: ContentBlock[]): string {
   return JSON.stringify(blocks);
 }
@@ -605,6 +647,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               onFocus={() => { activeFieldRef.current = "title"; }}
+              onPaste={handleMobilePaste}
               placeholder="Título da nota..."
               className="flex-1 bg-white/90 rounded-lg px-3 py-1.5 text-sm font-semibold placeholder:text-gray-400 outline-none border-0 shadow-sm"
               style={{ color: "#1A1A2E" }}
@@ -682,6 +725,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
                         autoResize(e.target);
                       }}
                       onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
+                      onPaste={handleMobilePaste}
                       placeholder={idx === 0 && blocks.length === 1 ? "Comece a escrever sua nota..." : ""}
                       className="w-full bg-transparent border-0 outline-none resize-none text-sm"
                       style={{
@@ -712,6 +756,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
                             value={item.text}
                             onChange={(e) => updateChecklistItem(idx, item.id, { text: e.target.value })}
                             onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
+                            onPaste={handleMobilePaste}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
                                 e.preventDefault();
