@@ -75,7 +75,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
       n.content.toLowerCase().includes(search.toLowerCase())
   );
 
-  const openNew = () => { setEditingNote(null); setDialogOpen(true); };
+  const openNew = () => { setEditingNote(null); setEditorReadOnly(false); setDialogOpen(true); };
 
   const openEdit = (note: Note) => {
     // Show action menu instead of directly opening
