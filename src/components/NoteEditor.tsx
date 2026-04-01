@@ -526,6 +526,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
     const serialized = serializeBlocks(blocks);
     const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
     onSave(title, serialized, imageUrls, selectedColor, "default", "medium", status);
+    clearDraft();
     onOpenChange(false);
     if (status === "rascunho") {
       toast({ title: "Rascunho salvo ✓" });
