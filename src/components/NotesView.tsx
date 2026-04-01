@@ -311,11 +311,56 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         editingNote={editingNote}
+        readOnly={editorReadOnly}
         onSave={handleSave}
         onSchedule={onAddAppointment ? (noteTitle, noteContent, date, time) => {
           onAddAppointment(noteTitle || "Nota sem título", new Date(date + "T00:00:00"), time, noteContent);
         } : undefined}
       />
+
+      {/* Action Menu (Edit vs View) */}
+      {actionMenuNote && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.4)" }}
+          onClick={() => setActionMenuNote(null)}
+        >
+          <div
+            className="rounded-2xl p-5 w-[85%] max-w-xs space-y-3"
+            style={{ background: "#FFF", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-bold text-center line-clamp-1" style={{ color: "#1A1A2E" }}>
+              {actionMenuNote.title || "Nota sem título"}
+            </h3>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleActionEdit}
+                className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-semibold transition-all hover:bg-gray-50"
+                style={{ color: "#1A1A2E", border: "1px solid #EBEBEB" }}
+              >
+                <Pencil size={18} style={{ color: "#2D9E7F" }} />
+                Editar nota
+              </button>
+              <button
+                onClick={handleActionView}
+                className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-semibold transition-all hover:bg-gray-50"
+                style={{ color: "#1A1A2E", border: "1px solid #EBEBEB" }}
+              >
+                <Eye size={18} style={{ color: "#5C6BC0" }} />
+                Apenas visualizar
+              </button>
+            </div>
+            <button
+              onClick={() => setActionMenuNote(null)}
+              className="w-full text-center text-xs font-medium py-2 rounded-lg hover:bg-gray-50 transition-colors"
+              style={{ color: "#9E9E9E" }}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Reminder Modal */}
       <ReminderModal
