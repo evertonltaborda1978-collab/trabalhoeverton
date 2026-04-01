@@ -647,6 +647,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, onSave, onSchedule
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               onFocus={() => { activeFieldRef.current = "title"; }}
+              onPaste={handleMobilePaste}
               placeholder="Título da nota..."
               className="flex-1 bg-white/90 rounded-lg px-3 py-1.5 text-sm font-semibold placeholder:text-gray-400 outline-none border-0 shadow-sm"
               style={{ color: "#1A1A2E" }}
