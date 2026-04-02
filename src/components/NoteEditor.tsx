@@ -1043,33 +1043,62 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
           {/* ── FOOTER BUTTONS ── */}
           {!readOnly ? (
-            <div
-              className="flex gap-3 px-4 py-1.5 shrink-0 justify-center"
-              style={{
-                background: theme.toolbarBg,
-                borderTop: `1px solid ${theme.lines}`,
-                paddingBottom: "calc(6px + env(safe-area-inset-bottom))",
-              }}
-            >
-              <button
-                onClick={handleSaveDraft}
-                className="px-5 py-1.5 rounded-full text-[13px] font-semibold border transition-all duration-200 hover:bg-black/5"
-                style={{ borderColor: theme.borderAccent, color: theme.textMuted }}
+            editingNote ? (
+              /* Edit mode for existing note: Save + Cancel */
+              <div
+                className="flex gap-3 px-4 py-1.5 shrink-0 justify-center"
+                style={{
+                  background: theme.toolbarBg,
+                  borderTop: `1px solid ${theme.lines}`,
+                  paddingBottom: "calc(6px + env(safe-area-inset-bottom))",
+                }}
               >
-                Rascunho
-              </button>
-              <button
-                onClick={handleSavePublish}
-                disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
-                className="px-5 py-1.5 rounded-full text-[13px] font-semibold text-white shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50"
-                style={{ background: "#2D9E7F" }}
+                <button
+                  onClick={cancelEdit}
+                  className="px-5 py-1.5 rounded-full text-[13px] font-semibold border transition-all duration-200 hover:bg-black/5"
+                  style={{ borderColor: theme.borderAccent, color: theme.textMuted }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSaveAndBackToView}
+                  disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
+                  className="px-5 py-1.5 rounded-full text-[13px] font-semibold text-white shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50"
+                  style={{ background: "#2D9E7F" }}
+                >
+                  Salvar
+                </button>
+              </div>
+            ) : (
+              /* New note: Draft + Create */
+              <div
+                className="flex gap-3 px-4 py-1.5 shrink-0 justify-center"
+                style={{
+                  background: theme.toolbarBg,
+                  borderTop: `1px solid ${theme.lines}`,
+                  paddingBottom: "calc(6px + env(safe-area-inset-bottom))",
+                }}
               >
-                {editingNote ? "Salvar" : "Criar nota"}
-              </button>
-            </div>
+                <button
+                  onClick={handleSaveDraft}
+                  className="px-5 py-1.5 rounded-full text-[13px] font-semibold border transition-all duration-200 hover:bg-black/5"
+                  style={{ borderColor: theme.borderAccent, color: theme.textMuted }}
+                >
+                  Rascunho
+                </button>
+                <button
+                  onClick={() => doSaveAndClose("publicada")}
+                  disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
+                  className="px-5 py-1.5 rounded-full text-[13px] font-semibold text-white shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50"
+                  style={{ background: "#2D9E7F" }}
+                >
+                  Criar nota
+                </button>
+              </div>
+            )
           ) : (
             <div
-              className="flex gap-3 px-4 py-2.5 shrink-0 justify-center"
+              className="flex gap-3 px-4 py-2.5 shrink-0 justify-center items-center"
               style={{
                 background: theme.toolbarBg,
                 borderTop: `1px solid ${theme.lines}`,
@@ -1077,6 +1106,67 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
               }}
             >
               <span className="text-xs font-semibold" style={{ color: theme.textMuted }}>👁️ Modo visualização</span>
+              {editingNote && (
+                <button
+                  onClick={enterEditMode}
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[13px] font-semibold text-white shadow-sm hover:shadow-md transition-all duration-200"
+                  style={{ background: "#2D9E7F" }}
+                >
+                  <Pencil size={13} /> Editar
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* ── UNSAVED CHANGES PROMPT ── */}
+          {showUnsavedPrompt && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)" }}>
+              <div className="rounded-2xl p-5 w-[90%] max-w-xs space-y-4" style={{ background: "#FFF", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+                <h3 className="text-base font-bold text-center" style={{ color: "#1A1A2E" }}>
+                  Alterações não salvas
+                </h3>
+                <p className="text-sm text-center" style={{ color: "#666" }}>
+                  Deseja salvar as alterações antes de sair?
+                </p>
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={() => {
+                      setShowUnsavedPrompt(false);
+                      const serialized = serializeBlocks(blocks);
+                      const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
+                      onSave(title, serialized, imageUrls, selectedColor, "default", "medium", editingNote?.status === "rascunho" ? "rascunho" : "publicada");
+                      clearDraft();
+                      snapshotRef.current = null;
+                      onOpenChange(false);
+                      toast({ title: "Nota salva ✓" });
+                    }}
+                    className="w-full px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-colors"
+                    style={{ background: "#2D9E7F" }}
+                  >
+                    Salvar e sair
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowUnsavedPrompt(false);
+                      cancelEdit();
+                      clearDraft();
+                      snapshotRef.current = null;
+                      onOpenChange(false);
+                    }}
+                    className="w-full px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                    style={{ background: "#F5F5F5", color: "#E53935" }}
+                  >
+                    Descartar alterações
+                  </button>
+                  <button
+                    onClick={() => setShowUnsavedPrompt(false)}
+                    className="w-full text-center text-xs font-medium py-2 rounded-lg hover:bg-gray-50 transition-colors"
+                    style={{ color: "#9E9E9E" }}
+                  >
+                    Continuar editando
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
