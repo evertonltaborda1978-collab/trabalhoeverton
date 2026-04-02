@@ -170,6 +170,10 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("09:00");
+  const [showUnsavedPrompt, setShowUnsavedPrompt] = useState(false);
+
+  // Snapshot of content when entering edit mode (for cancel)
+  const snapshotRef = useRef<{ title: string; blocks: ContentBlock[]; color: string } | null>(null);
 
   // Undo/redo
   const [history, setHistory] = useState<ContentBlock[][]>([]);
