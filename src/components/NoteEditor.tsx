@@ -695,29 +695,27 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
           }}
         >
 
+          {/* ── EDIT MODE INDICATOR BAR ── */}
+          {!readOnly && editingNote && (
+            <div className="flex items-center justify-center gap-2 px-3 py-1.5 shrink-0" style={{ background: "#2D9E7F", transition: "background 0.3s ease" }}>
+              <Pencil size={13} style={{ color: "#FFF" }} />
+              <span className="text-[12px] font-bold text-white">Editando...</span>
+            </div>
+          )}
+
           {/* ── HEADER ── */}
           <div
             className="flex items-center gap-2 px-3 py-2.5 shrink-0"
             style={{ background: theme.headerBg, transition: "background 0.3s ease" }}
           >
-            {!readOnly ? (
-              <button
-                onClick={handleSavePublish}
-                disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
-                className="p-2 rounded-lg hover:bg-black/10 transition-colors disabled:opacity-40"
-                title="Salvar"
-              >
-                <Check size={20} style={{ color: textColor }} />
-              </button>
-            ) : (
-              <button
-                onClick={() => onOpenChange(false)}
-                className="p-2 rounded-lg hover:bg-black/10 transition-colors"
-                title="Fechar"
-              >
-                <X size={20} style={{ color: textColor }} />
-              </button>
-            )}
+            {/* Close / Back button */}
+            <button
+              onClick={handleClose}
+              className="p-2 rounded-lg hover:bg-black/10 transition-colors"
+              title="Fechar"
+            >
+              <X size={20} style={{ color: textColor }} />
+            </button>
 
             <input
               value={title}
@@ -739,7 +737,19 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
               />
             )}
 
-            {!readOnly && (
+            {/* Pencil icon to enter edit mode (only in view mode for existing notes) */}
+            {readOnly && editingNote && (
+              <button
+                onClick={enterEditMode}
+                className="p-2 rounded-lg hover:bg-black/10 transition-all"
+                title="Editar nota"
+                style={{ color: textColor }}
+              >
+                <Pencil size={20} />
+              </button>
+            )}
+
+            {!readOnly && editingNote && (
               <button
                 onClick={handleClose}
                 className="p-2 rounded-lg hover:bg-black/10 transition-colors"
@@ -773,7 +783,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
           {/* ── Sub-header ── */}
           <div className="flex items-center justify-between px-4 py-1.5 text-[11px] shrink-0" style={{ color: theme.textMuted, transition: "color 0.3s ease" }}>
             <span className="font-medium">
-              {editingNote ? "Editando" : "Nova nota"}
+              {readOnly ? "👁️ Visualização" : (editingNote ? "✏️ Editando" : "Nova nota")}
               {isListening && (
                 <span className="ml-2 text-red-500 font-semibold animate-pulse">
                   🎤 {activeFieldRef.current === "title" ? "Ditando no título" : "Ditando no conteúdo"}
