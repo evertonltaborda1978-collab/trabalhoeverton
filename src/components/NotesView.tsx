@@ -33,9 +33,8 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
   const [showBackupMenu, setShowBackupMenu] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
 
-  // Action menu (edit vs view)
-  const [actionMenuNote, setActionMenuNote] = useState<Note | null>(null);
-  const [editorReadOnly, setEditorReadOnly] = useState(false);
+  // Editor always opens in read-only mode; user toggles to edit via pencil icon
+  const [editorReadOnly, setEditorReadOnly] = useState(true);
 
   // Reminder modal
   const [reminderNote, setReminderNote] = useState<Note | null>(null);
@@ -78,35 +77,14 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
   const openNew = () => { setEditingNote(null); setEditorReadOnly(false); setDialogOpen(true); };
 
   const openEdit = (note: Note) => {
-    // Show action menu instead of directly opening
-    setActionMenuNote(note);
-  };
-
-  const handleActionEdit = () => {
-    if (!actionMenuNote) return;
-    const note = actionMenuNote;
-    setActionMenuNote(null);
+    // If locked, unlock first
     if (note.isLocked) {
       setPendingUnlockNote(note);
       setLockNote(note);
       setLockMode("unlock");
       return;
     }
-    setEditorReadOnly(false);
-    setEditingNote(note);
-    setDialogOpen(true);
-  };
-
-  const handleActionView = () => {
-    if (!actionMenuNote) return;
-    const note = actionMenuNote;
-    setActionMenuNote(null);
-    if (note.isLocked) {
-      setPendingUnlockNote(note);
-      setLockNote(note);
-      setLockMode("unlock");
-      return;
-    }
+    // Always open in read-only mode
     setEditorReadOnly(true);
     setEditingNote(note);
     setDialogOpen(true);
