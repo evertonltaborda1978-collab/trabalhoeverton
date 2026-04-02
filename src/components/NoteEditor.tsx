@@ -866,22 +866,26 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                               opacity: item.checked ? 0.7 : 1,
                             }}
                           />
-                          <button
-                            onClick={() => removeChecklistItem(idx, item.id)}
-                            className="shrink-0 opacity-0 group-hover/check:opacity-100 transition-opacity p-1 rounded hover:bg-black/5"
-                            style={{ color: "#BDBDBD" }}
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          {!readOnly && (
+                            <button
+                              onClick={() => removeChecklistItem(idx, item.id)}
+                              className="shrink-0 opacity-0 group-hover/check:opacity-100 transition-opacity p-1 rounded hover:bg-black/5"
+                              style={{ color: "#BDBDBD" }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
                         </div>
                       ))}
-                      <button
-                        onClick={() => addChecklistItemAfter(idx)}
-                        className="flex items-center gap-1 text-xs ml-7 py-1 hover:opacity-80 transition-opacity"
-                        style={{ color: theme.textMuted }}
-                      >
-                        + Adicionar item
-                      </button>
+                      {!readOnly && (
+                        <button
+                          onClick={() => addChecklistItemAfter(idx)}
+                          className="flex items-center gap-1 text-xs ml-7 py-1 hover:opacity-80 transition-opacity"
+                          style={{ color: theme.textMuted }}
+                        >
+                          + Adicionar item
+                        </button>
+                      )}
                     </div>
                   );
                 }
