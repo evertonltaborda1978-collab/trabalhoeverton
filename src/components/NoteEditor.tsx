@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Note } from "@/hooks/useNotes";
 import {
   Camera,
@@ -18,6 +18,7 @@ import {
   CheckSquare,
   CalendarPlus,
   Trash2,
+  Pencil,
 } from "lucide-react";
 import {
   Dialog,
@@ -142,6 +143,7 @@ interface NoteEditorProps {
   onOpenChange: (open: boolean) => void;
   editingNote: Note | null;
   readOnly?: boolean;
+  onSetReadOnly?: (readOnly: boolean) => void;
   onSave: (
     title: string,
     content: string,
@@ -155,7 +157,7 @@ interface NoteEditorProps {
 }
 
 // ── Component ──────────────────────────────────────────
-export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, onSave, onSchedule }: NoteEditorProps) {
+export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, onSetReadOnly, onSave, onSchedule }: NoteEditorProps) {
   const [title, setTitle] = useState("");
   const [blocks, setBlocks] = useState<ContentBlock[]>([{ type: "text", content: "" }]);
   const [selectedColor, setSelectedColor] = useState(NOTE_COLORS[0].value);
