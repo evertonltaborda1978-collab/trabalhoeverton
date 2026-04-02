@@ -569,6 +569,31 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     setShowQrScanner(false);
   };
 
+  // ── Edit mode helpers ─────────────────────────────────
+  const enterEditMode = useCallback(() => {
+    snapshotRef.current = { title, blocks: JSON.parse(JSON.stringify(blocks)), color: selectedColor };
+    onSetReadOnly?.(false);
+  }, [title, blocks, selectedColor, onSetReadOnly]);
+
+  const hasUnsavedChanges = useCallback(() => {
+    if (!snapshotRef.current) return false;
+    return (
+      title !== snapshotRef.current.title ||
+      selectedColor !== snapshotRef.current.color ||
+      JSON.stringify(blocks) !== JSON.stringify(snapshotRef.current.blocks)
+    );
+  }, [title, blocks, selectedColor]);
+
+  const cancelEdit = useCallback(() => {
+    if (snapshotRef.current) {
+      setTitle(snapshotRef.current.title);
+      setBlocks(JSON.parse(JSON.stringify(snapshotRef.current.blocks)));
+      setSelectedColor(snapshotRef.current.color);
+      snapshotRef.current = null;
+    }
+    onSetReadOnly?.(true);
+  }, [onSetReadOnly]);
+
   // ── Save handlers ────────────────────────────────────
   const doSave = (status: "rascunho" | "publicada") => {
     if (status === "publicada" && !title.trim() && !blocksToPlainText(blocks).trim()) return;
@@ -576,6 +601,22 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
     onSave(title, serialized, imageUrls, selectedColor, "default", "medium", status);
     clearDraft();
+    snapshotRef.current = null;
+    onSetReadOnly?.(true);
+    if (status === "rascunho") {
+      toast({ title: "Rascunho salvo ✓" });
+    } else {
+      toast({ title: editingNote ? "Nota salva ✓" : "Nota criada ✓" });
+    }
+  };
+
+  const doSaveAndClose = (status: "rascunho" | "publicada") => {
+    if (status === "publicada" && !title.trim() && !blocksToPlainText(blocks).trim()) return;
+    const serialized = serializeBlocks(blocks);
+    const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
+    onSave(title, serialized, imageUrls, selectedColor, "default", "medium", status);
+    clearDraft();
+    snapshotRef.current = null;
     onOpenChange(false);
     if (status === "rascunho") {
       toast({ title: "Rascunho salvo ✓" });
@@ -584,15 +625,32 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     }
   };
 
-  const handleSaveDraft = () => doSave("rascunho");
-  const handleSavePublish = () => doSave("publicada");
+  const handleSaveDraft = () => doSaveAndClose("rascunho");
+  const handleSavePublish = () => {
+    if (editingNote && readOnly) {
+      // In view mode, save just returns to view
+      doSave("publicada");
+    } else {
+      doSaveAndClose("publicada");
+    }
+  };
+  
+  const handleSaveAndBackToView = () => {
+    doSave(editingNote?.status === "rascunho" ? "rascunho" : "publicada");
+  };
 
-  // Auto-save on close
+  // Close handler with unsaved changes check
   const handleClose = () => {
     if (isListening) toggleVoice();
     
+    if (!readOnly && editingNote && hasUnsavedChanges()) {
+      setShowUnsavedPrompt(true);
+      return;
+    }
+    
+    // In read-only or new note, just close
     const hasContent = title.trim() || blocksToPlainText(blocks).trim();
-    if (hasContent) {
+    if (hasContent && !readOnly) {
       const serialized = serializeBlocks(blocks);
       const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
       const status = editingNote?.status || "rascunho";
@@ -603,6 +661,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
       }
     }
     clearDraft();
+    snapshotRef.current = null;
     onOpenChange(false);
   };
 
