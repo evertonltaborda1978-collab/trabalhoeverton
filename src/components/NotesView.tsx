@@ -306,11 +306,12 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
 
       <NoteEditor
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={(v) => { setDialogOpen(v); if (!v) setSharedData(null); }}
         editingNote={editingNote}
         readOnly={editorReadOnly}
         onSetReadOnly={setEditorReadOnly}
         onSave={handleSave}
+        initialSharedData={sharedData}
         onSchedule={onAddAppointment ? (noteTitle, noteContent, date, time) => {
           onAddAppointment(noteTitle || "Nota sem título", new Date(date + "T00:00:00"), time, noteContent);
         } : undefined}
