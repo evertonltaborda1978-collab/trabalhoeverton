@@ -1000,7 +1000,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
             style={{ borderColor: theme.lines, background: theme.toolbarBg, transition: "background 0.3s ease, border-color 0.3s ease" }}
           >
             <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageSelect} />
-            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelect} />
+            <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageSelect} />
             <input ref={ocrCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleOcrImage} />
             <input ref={ocrFileRef} type="file" accept="image/*" className="hidden" onChange={handleOcrImage} />
 
