@@ -68,6 +68,25 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Detect shared content from other apps (via Share Target API)
+  const [sharedData, setSharedData] = useState<{ title: string; content: string } | null>(null);
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("shared_note_data");
+      if (raw) {
+        sessionStorage.removeItem("shared_note_data");
+        const data = JSON.parse(raw);
+        if (data.title || data.content) {
+          setSharedData(data);
+          // Open editor with pre-filled content
+          setEditingNote(null);
+          setEditorReadOnly(false);
+          setDialogOpen(true);
+        }
+      }
+    } catch {}
+  }, []);
+
   const filtered = notes.filter(
     (n) =>
       n.title.toLowerCase().includes(search.toLowerCase()) ||
