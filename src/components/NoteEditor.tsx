@@ -19,6 +19,7 @@ import {
   CalendarPlus,
   Trash2,
   Pencil,
+  Share2,
 } from "lucide-react";
 import {
   Dialog,
@@ -735,6 +736,37 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                 style={{ background: NOTE_COLORS.find((c) => c.value === selectedColor)?.dot || "#FEF9C3" }}
                 title="Cor da nota"
               />
+            )}
+
+            {/* Share button (visible in view mode for existing notes) */}
+            {readOnly && editingNote && (
+              <button
+                onClick={async () => {
+                  const plainText = blocksToPlainText(blocks);
+                  const shareText = `${title}\n\n${plainText}`.trim();
+                  if (navigator.share) {
+                    try {
+                      await navigator.share({ title: title || "Nota", text: shareText });
+                    } catch (err: any) {
+                      if (err?.name !== "AbortError") {
+                        toast({ title: "Erro ao compartilhar", description: "Não foi possível compartilhar a nota." });
+                      }
+                    }
+                  } else {
+                    try {
+                      await navigator.clipboard.writeText(shareText);
+                      toast({ title: "Copiado!", description: "Texto da nota copiado para a área de transferência." });
+                    } catch {
+                      toast({ title: "Erro", description: "Não foi possível copiar o texto." });
+                    }
+                  }
+                }}
+                className="p-2 rounded-lg hover:bg-black/10 transition-all"
+                title="Compartilhar nota"
+                style={{ color: textColor }}
+              >
+                <Share2 size={20} />
+              </button>
             )}
 
             {/* Pencil icon to enter edit mode (only in view mode for existing notes) */}
