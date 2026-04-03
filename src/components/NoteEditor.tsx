@@ -319,6 +319,11 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
           const parsed = deserializeBlocks(editingNote.content);
           setBlocks(parsed);
           setSelectedColor(editingNote.color);
+        } else if (initialSharedData && (initialSharedData.title || initialSharedData.content)) {
+          // Pre-fill from shared content received from another app
+          setTitle(initialSharedData.title || "");
+          setBlocks([{ type: "text", content: initialSharedData.content || "" }]);
+          setSelectedColor(NOTE_COLORS[0].value);
         } else {
           setTitle("");
           setBlocks([{ type: "text", content: "" }]);
