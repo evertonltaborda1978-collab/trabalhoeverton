@@ -19,6 +19,7 @@ import {
   CalendarPlus,
   Trash2,
   Pencil,
+  Share2,
 } from "lucide-react";
 import {
   Dialog,
