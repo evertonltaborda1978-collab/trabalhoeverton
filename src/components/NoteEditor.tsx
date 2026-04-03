@@ -388,8 +388,34 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     }, 500);
   };
 
-  const insertImageAtBlock = (file: File) => {
-    const url = URL.createObjectURL(file);
+  // Compress image before inserting (max 1200px, quality 0.7)
+  const compressImage = (file: File, maxSize = 1200, quality = 0.7): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          let w = img.width;
+          let h = img.height;
+          if (w > maxSize || h > maxSize) {
+            if (w > h) { h = Math.round((h * maxSize) / w); w = maxSize; }
+            else { w = Math.round((w * maxSize) / h); h = maxSize; }
+          }
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          ctx?.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        };
+        img.src = ev.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const insertImageAtBlock = async (file: File) => {
+    const url = await compressImage(file);
     const idx = focusedBlockRef.current;
     setBlocks((prev) => {
       const next = [...prev];
@@ -397,6 +423,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
       pushHistory(next);
       return next;
     });
+    toast({ title: "📷 Imagem adicionada", description: "Imagem comprimida e inserida na nota." });
   };
 
   const removeImageBlock = (index: number) => {
@@ -417,9 +444,13 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     });
   };
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) insertImageAtBlock(file);
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    // Support multiple images
+    for (let i = 0; i < files.length; i++) {
+      await insertImageAtBlock(files[i]);
+    }
     e.target.value = "";
   };
 
