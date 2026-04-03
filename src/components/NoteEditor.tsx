@@ -145,6 +145,7 @@ interface NoteEditorProps {
   editingNote: Note | null;
   readOnly?: boolean;
   onSetReadOnly?: (readOnly: boolean) => void;
+  initialSharedData?: { title: string; content: string } | null;
   onSave: (
     title: string,
     content: string,
@@ -158,7 +159,7 @@ interface NoteEditorProps {
 }
 
 // ── Component ──────────────────────────────────────────
-export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, onSetReadOnly, onSave, onSchedule }: NoteEditorProps) {
+export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, onSetReadOnly, initialSharedData, onSave, onSchedule }: NoteEditorProps) {
   const [title, setTitle] = useState("");
   const [blocks, setBlocks] = useState<ContentBlock[]>([{ type: "text", content: "" }]);
   const [selectedColor, setSelectedColor] = useState(NOTE_COLORS[0].value);
@@ -318,6 +319,11 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
           const parsed = deserializeBlocks(editingNote.content);
           setBlocks(parsed);
           setSelectedColor(editingNote.color);
+        } else if (initialSharedData && (initialSharedData.title || initialSharedData.content)) {
+          // Pre-fill from shared content received from another app
+          setTitle(initialSharedData.title || "");
+          setBlocks([{ type: "text", content: initialSharedData.content || "" }]);
+          setSelectedColor(NOTE_COLORS[0].value);
         } else {
           setTitle("");
           setBlocks([{ type: "text", content: "" }]);
