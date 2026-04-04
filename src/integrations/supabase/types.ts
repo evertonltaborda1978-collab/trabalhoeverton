@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           created_at: string
           date: string
+          deleted_at: string | null
           description: string
           id: string
           time: string
@@ -28,6 +29,7 @@ export type Database = {
         Insert: {
           created_at?: string
           date: string
+          deleted_at?: string | null
           description?: string
           id?: string
           time?: string
@@ -38,6 +40,7 @@ export type Database = {
         Update: {
           created_at?: string
           date?: string
+          deleted_at?: string | null
           description?: string
           id?: string
           time?: string
@@ -106,6 +109,7 @@ export type Database = {
           color: string
           content: string
           created_at: string
+          deleted_at: string | null
           font_family: string
           font_size: string
           id: string
@@ -124,6 +128,7 @@ export type Database = {
           color?: string
           content?: string
           created_at?: string
+          deleted_at?: string | null
           font_family?: string
           font_size?: string
           id?: string
@@ -142,6 +147,7 @@ export type Database = {
           color?: string
           content?: string
           created_at?: string
+          deleted_at?: string | null
           font_family?: string
           font_size?: string
           id?: string
