@@ -38,7 +38,7 @@ interface NotesViewProps {
   onEmptyTrash: () => void;
 }
 
-export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onSetLock, onAddAppointment, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup }: NotesViewProps) {
+export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onSetLock, onAddAppointment, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, trashedNotes, onRestoreNote, onPermanentDeleteNote, onEmptyTrash }: NotesViewProps) {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
