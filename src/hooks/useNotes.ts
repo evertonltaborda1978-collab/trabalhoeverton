@@ -89,6 +89,7 @@ function mapRow(n: any): Note {
     reminderTime: n.reminder_time || null,
     isLocked: n.is_locked || false,
     lockPin: n.lock_pin || null,
+    deletedAt: n.deleted_at ? new Date(n.deleted_at) : null,
   };
 }
 
