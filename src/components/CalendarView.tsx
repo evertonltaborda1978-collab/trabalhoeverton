@@ -29,13 +29,16 @@ interface CalendarViewProps {
   onEmptyAppointmentTrash?: () => void;
 }
 
-export function CalendarView({ appointments, onAdd, onUpdate, onDelete }: CalendarViewProps) {
+export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedAppointments = [], onRestoreAppointment, onPermanentDeleteAppointment, onEmptyAppointmentTrash }: CalendarViewProps) {
   const [selected, setSelected] = useState<Date>(new Date());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [time, setTime] = useState("09:00");
   const [description, setDescription] = useState("");
+  const [showTrash, setShowTrash] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmDeleteTitle, setConfirmDeleteTitle] = useState("");
 
   const { connected, loading: gcLoading, googleEvents, syncing, connect, disconnect, fetchEvents, pushEvent } = useGoogleCalendar();
 
