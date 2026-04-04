@@ -19,6 +19,7 @@ export interface Note {
   reminderTime?: string | null;
   isLocked: boolean;
   lockPin?: string | null;
+  deletedAt?: Date | null;
 }
 
 const COLORS = [
