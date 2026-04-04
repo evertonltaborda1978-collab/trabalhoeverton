@@ -44,6 +44,9 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const [showBackupMenu, setShowBackupMenu] = useState(false);
+  const [showTrash, setShowTrash] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmDeleteTitle, setConfirmDeleteTitle] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
 
   // Editor always opens in read-only mode; user toggles to edit via pencil icon
