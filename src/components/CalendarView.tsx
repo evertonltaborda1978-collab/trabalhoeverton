@@ -10,26 +10,35 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
+import { TrashView } from "./TrashView";
 
 interface CalendarViewProps {
   appointments: Appointment[];
   onAdd: (title: string, date: Date, time: string, description: string) => void;
   onUpdate: (id: string, title: string, date: Date, time: string, description: string) => void;
   onDelete: (id: string) => void;
+  trashedAppointments?: Appointment[];
+  onRestoreAppointment?: (id: string) => void;
+  onPermanentDeleteAppointment?: (id: string) => void;
+  onEmptyAppointmentTrash?: () => void;
 }
 
-export function CalendarView({ appointments, onAdd, onUpdate, onDelete }: CalendarViewProps) {
+export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedAppointments = [], onRestoreAppointment, onPermanentDeleteAppointment, onEmptyAppointmentTrash }: CalendarViewProps) {
   const [selected, setSelected] = useState<Date>(new Date());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [time, setTime] = useState("09:00");
   const [description, setDescription] = useState("");
+  const [showTrash, setShowTrash] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmDeleteTitle, setConfirmDeleteTitle] = useState("");
 
   const { connected, loading: gcLoading, googleEvents, syncing, connect, disconnect, fetchEvents, pushEvent } = useGoogleCalendar();
 
@@ -83,6 +92,33 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete }: Calend
     setDescription("");
   };
 
+  const handleDeleteWithConfirm = (id: string) => {
+    const apt = appointments.find((a) => a.id === id);
+    setConfirmDeleteTitle(apt?.title || "Compromisso");
+    setConfirmDeleteId(id);
+  };
+
+  const confirmDelete = () => {
+    if (confirmDeleteId) {
+      onDelete(confirmDeleteId);
+      toast({ title: "✅ Compromisso movido para a lixeira" });
+      setConfirmDeleteId(null);
+    }
+  };
+
+  if (showTrash) {
+    return (
+      <TrashView
+        type="appointments"
+        trashedAppointments={trashedAppointments}
+        onRestoreAppointment={onRestoreAppointment}
+        onPermanentDeleteAppointment={onPermanentDeleteAppointment}
+        onEmptyAppointmentTrash={onEmptyAppointmentTrash}
+        onBack={() => setShowTrash(false)}
+      />
+    );
+  }
+
   return (
     <div className="animate-fade-in">
       {/* Google Calendar connection */}
@@ -112,7 +148,24 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete }: Calend
             </button>
           )
         )}
-        {gcLoading && <div className="h-8" />}
+        <div className="flex items-center gap-2">
+          {gcLoading && <div className="h-8" />}
+          <button
+            onClick={() => setShowTrash(true)}
+            className="relative p-2 rounded-lg transition-colors hover:bg-black/5"
+            title="Lixeira"
+          >
+            <Trash2 size={18} style={{ color: "#999" }} />
+            {trashedAppointments.length > 0 && (
+              <span
+                className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-white text-[10px] font-bold"
+                style={{ background: "#E53935" }}
+              >
+                {trashedAppointments.length}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
       <div className="glass-card rounded-2xl p-4 mb-4">
@@ -145,7 +198,6 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete }: Calend
         </div>
       ) : (
         <div className="space-y-2">
-          {/* Local appointments */}
           {dayAppointments.map((apt) => (
             <div key={apt.id} className="group flex items-start gap-3 p-3 rounded-xl glass-card animate-fade-in">
               <div className="flex items-center gap-1.5 text-primary mt-0.5">
@@ -161,13 +213,12 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete }: Calend
               <button onClick={() => openEdit(apt)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary">
                 <Pencil size={14} />
               </button>
-              <button onClick={() => onDelete(apt.id)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
+              <button onClick={() => handleDeleteWithConfirm(apt.id)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
                 <Trash2 size={14} />
               </button>
             </div>
           ))}
 
-          {/* Google events */}
           {dayGoogleEvents.map((evt) => (
             <div key={evt.id} className="flex items-start gap-3 p-3 rounded-xl animate-fade-in" style={{ background: "#E3F2FD", border: "1px solid #90CAF9" }}>
               <div className="flex items-center gap-1.5 mt-0.5" style={{ color: "#1565C0" }}>
@@ -188,6 +239,7 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete }: Calend
         </div>
       )}
 
+      {/* New/Edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); else setDialogOpen(true); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -206,6 +258,29 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete }: Calend
               <Button variant="outline" onClick={closeDialog} className="flex-1">Cancelar</Button>
               <Button onClick={handleSave} className="flex-1">{editingId ? "Salvar" : "Agendar"}</Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={!!confirmDeleteId} onOpenChange={(v) => { if (!v) setConfirmDeleteId(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-display">
+              🗑 Mover para a lixeira?
+            </DialogTitle>
+            <DialogDescription>
+              O compromisso pode ser recuperado em até 30 dias.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm font-semibold px-1" style={{ color: "#1A1A2E" }}>
+            "{confirmDeleteTitle}"
+          </p>
+          <div className="flex gap-2 mt-1">
+            <Button variant="outline" onClick={() => setConfirmDeleteId(null)} className="flex-1">Cancelar</Button>
+            <Button variant="destructive" onClick={confirmDelete} className="flex-1 gap-1">
+              <Trash2 size={14} /> Mover para lixeira
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

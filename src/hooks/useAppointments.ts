@@ -9,6 +9,7 @@ export interface Appointment {
   date: Date;
   time: string;
   description: string;
+  deletedAt?: Date | null;
 }
 
 export function useAppointments() {
@@ -26,12 +27,13 @@ export function useAppointments() {
 
     if (data) {
       setAppointments(
-        data.map((a) => ({
+        data.map((a: any) => ({
           id: a.id,
           title: a.title,
           date: new Date(a.date + "T00:00:00"),
           time: a.time,
           description: a.description,
+          deletedAt: a.deleted_at ? new Date(a.deleted_at) : null,
         }))
       );
     }
@@ -81,10 +83,12 @@ export function useAppointments() {
   );
 
   const deleteAppointment = useCallback(async (id: string) => {
-    await supabase.from("appointments").delete().eq("id", id);
-    setAppointments((prev) => prev.filter((a) => a.id !== id));
+    const now = new Date();
+    setAppointments((prev) => prev.map((a) => a.id === id ? { ...a, deletedAt: now } : a));
+    try {
+      await (supabase.from("appointments") as any).update({ deleted_at: now.toISOString() }).eq("id", id);
+    } catch {}
     snoozedRef.current.delete(id);
-
     const key = "appointments_fired_ids";
     try {
       const fired = JSON.parse(sessionStorage.getItem(key) || "[]") as string[];
@@ -93,6 +97,37 @@ export function useAppointments() {
       sessionStorage.removeItem(key);
     }
   }, []);
+
+  const restoreAppointment = useCallback(async (id: string) => {
+    setAppointments((prev) => prev.map((a) => a.id === id ? { ...a, deletedAt: null } : a));
+    try {
+      await (supabase.from("appointments") as any).update({ deleted_at: null }).eq("id", id);
+    } catch {}
+  }, []);
+
+  const permanentDeleteAppointment = useCallback(async (id: string) => {
+    setAppointments((prev) => prev.filter((a) => a.id !== id));
+    try {
+      await supabase.from("appointments").delete().eq("id", id);
+    } catch {}
+  }, []);
+
+  const emptyAppointmentTrash = useCallback(async () => {
+    const trashIds = appointments.filter((a) => a.deletedAt).map((a) => a.id);
+    setAppointments((prev) => prev.filter((a) => !a.deletedAt));
+    for (const id of trashIds) {
+      try { await supabase.from("appointments").delete().eq("id", id); } catch {}
+    }
+  }, [appointments]);
+
+  // Auto-delete appointments older than 30 days in trash
+  useEffect(() => {
+    const now = Date.now();
+    const expired = appointments.filter((a) => a.deletedAt && now - a.deletedAt.getTime() > 30 * 24 * 60 * 60 * 1000);
+    if (expired.length > 0) {
+      expired.forEach((a) => permanentDeleteAppointment(a.id));
+    }
+  }, [appointments, permanentDeleteAppointment]);
 
   const dismissAlert = useCallback((id: string) => {
     setActiveAlert(null);
@@ -157,5 +192,8 @@ export function useAppointments() {
     return () => clearInterval(interval);
   }, [appointments, activeAlert]);
 
-  return { appointments, addAppointment, updateAppointment, deleteAppointment, activeAlert, dismissAlert, snoozeAlert };
+  const activeAppointments = appointments.filter((a) => !a.deletedAt);
+  const trashedAppointments = appointments.filter((a) => !!a.deletedAt);
+
+  return { appointments: activeAppointments, trashedAppointments, addAppointment, updateAppointment, deleteAppointment, restoreAppointment, permanentDeleteAppointment, emptyAppointmentTrash, activeAlert, dismissAlert, snoozeAlert };
 }

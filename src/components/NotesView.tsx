@@ -3,10 +3,19 @@ import { NoteCard } from "./NoteCard";
 import { NoteEditor } from "./NoteEditor";
 import { ReminderModal } from "./ReminderModal";
 import { LockNoteModal } from "./LockNoteModal";
+import { TrashView } from "./TrashView";
 import { Note, SyncStatus } from "@/hooks/useNotes";
-import { Search, Cloud, CloudOff, RefreshCw, Download, Upload, Mic, MicOff } from "lucide-react";
+import { Search, Cloud, CloudOff, RefreshCw, Download, Upload, Mic, MicOff, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 export { getFontClass, getSizeClass } from "./NoteEditor";
 
@@ -23,14 +32,21 @@ interface NotesViewProps {
   exportBackup: () => boolean;
   importBackup: (file: File) => Promise<number>;
   shouldRemindBackup: () => boolean;
+  trashedNotes: Note[];
+  onRestoreNote: (id: string) => void;
+  onPermanentDeleteNote: (id: string) => void;
+  onEmptyTrash: () => void;
 }
 
-export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onSetLock, onAddAppointment, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup }: NotesViewProps) {
+export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onSetLock, onAddAppointment, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, trashedNotes, onRestoreNote, onPermanentDeleteNote, onEmptyTrash }: NotesViewProps) {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const [showBackupMenu, setShowBackupMenu] = useState(false);
+  const [showTrash, setShowTrash] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmDeleteTitle, setConfirmDeleteTitle] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
 
   // Editor always opens in read-only mode; user toggles to edit via pencil icon
@@ -193,9 +209,37 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
     return <CloudOff size={16} style={{ color: "#BDBDBD" }} />;
   };
 
+  // Handle delete with confirmation
+  const handleDeleteWithConfirm = (id: string) => {
+    const note = notes.find((n) => n.id === id);
+    setConfirmDeleteTitle(note?.title || "Sem título");
+    setConfirmDeleteId(id);
+  };
+
+  const confirmDelete = () => {
+    if (confirmDeleteId) {
+      onDelete(confirmDeleteId);
+      toast({ title: "✅ Nota movida para a lixeira" });
+      setConfirmDeleteId(null);
+    }
+  };
+
+  if (showTrash) {
+    return (
+      <TrashView
+        type="notes"
+        trashedNotes={trashedNotes}
+        onRestoreNote={onRestoreNote}
+        onPermanentDeleteNote={onPermanentDeleteNote}
+        onEmptyNoteTrash={onEmptyTrash}
+        onBack={() => setShowTrash(false)}
+      />
+    );
+  }
+
   return (
     <div className="animate-fade-in">
-      {/* Sync indicator + draft counter */}
+      {/* Sync indicator + draft counter + trash */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <button onClick={() => setShowBackupMenu(!showBackupMenu)} className="flex items-center gap-1 transition-opacity hover:opacity-70" title={syncStatus === "synced" ? "Sincronizado" : syncStatus === "syncing" ? "Sincronizando..." : "Sem conexão"}>
@@ -207,6 +251,21 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
             </span>
           )}
         </div>
+        <button
+          onClick={() => setShowTrash(true)}
+          className="relative p-2 rounded-lg transition-colors hover:bg-black/5"
+          title="Lixeira"
+        >
+          <Trash2 size={18} style={{ color: "#999" }} />
+          {trashedNotes.length > 0 && (
+            <span
+              className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-white text-[10px] font-bold"
+              style={{ background: "#E53935" }}
+            >
+              {trashedNotes.length}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Backup dropdown */}
@@ -293,7 +352,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
             <NoteCard
               key={note.id}
               note={note}
-              onDelete={onDelete}
+              onDelete={handleDeleteWithConfirm}
               onClick={openEdit}
               onBellClick={handleBellClick}
               onLockClick={handleLockClick}
@@ -317,7 +376,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
         } : undefined}
       />
 
-
       {/* Reminder Modal */}
       <ReminderModal
         open={!!reminderNote}
@@ -338,6 +396,29 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
         onUnlock={handleUnlockAttempt}
         onRemoveLock={handleRemoveLock}
       />
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={!!confirmDeleteId} onOpenChange={(v) => { if (!v) setConfirmDeleteId(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-display">
+              🗑 Mover para a lixeira?
+            </DialogTitle>
+            <DialogDescription>
+              A nota pode ser recuperada em até 30 dias.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm font-semibold px-1" style={{ color: "#1A1A2E" }}>
+            "{confirmDeleteTitle}"
+          </p>
+          <div className="flex gap-2 mt-1">
+            <Button variant="outline" onClick={() => setConfirmDeleteId(null)} className="flex-1">Cancelar</Button>
+            <Button variant="destructive" onClick={confirmDelete} className="flex-1 gap-1">
+              <Trash2 size={14} /> Mover para lixeira
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

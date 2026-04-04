@@ -24,8 +24,8 @@ const titles: Record<Tab, string> = {
 
 const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
-  const { notes, addNote, deleteNote, updateNote, setNoteReminder, setNoteLock, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert } = useNotes();
-  const { appointments, addAppointment, updateAppointment, deleteAppointment, activeAlert, dismissAlert, snoozeAlert } = useAppointments();
+  const { notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, setNoteLock, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes } = useNotes();
+  const { appointments, trashedAppointments, addAppointment, updateAppointment, deleteAppointment, restoreAppointment, permanentDeleteAppointment, emptyAppointmentTrash, activeAlert, dismissAlert, snoozeAlert } = useAppointments();
   const { signOut } = useAuth();
 
   // When deleting an appointment, also clear matching note reminders
@@ -101,6 +101,10 @@ const Index = () => {
             exportBackup={exportBackup}
             importBackup={importBackup}
             shouldRemindBackup={shouldRemindBackup}
+            trashedNotes={trashedNotes}
+            onRestoreNote={restoreNote}
+            onPermanentDeleteNote={permanentDeleteNote}
+            onEmptyTrash={emptyTrash}
           />
         )}
         {tab === "calendar" && (
@@ -109,6 +113,10 @@ const Index = () => {
             onAdd={addAppointment}
             onUpdate={(id, title, date, time, desc) => updateAppointment(id, title, date, time, desc)}
             onDelete={handleDeleteAppointment}
+            trashedAppointments={trashedAppointments}
+            onRestoreAppointment={restoreAppointment}
+            onPermanentDeleteAppointment={permanentDeleteAppointment}
+            onEmptyAppointmentTrash={emptyAppointmentTrash}
           />
         )}
         {tab === "weather" && <WeatherView />}
