@@ -113,6 +113,10 @@ const Index = () => {
             onAdd={addAppointment}
             onUpdate={(id, title, date, time, desc) => updateAppointment(id, title, date, time, desc)}
             onDelete={handleDeleteAppointment}
+            trashedAppointments={trashedAppointments}
+            onRestoreAppointment={restoreAppointment}
+            onPermanentDeleteAppointment={permanentDeleteAppointment}
+            onEmptyAppointmentTrash={emptyAppointmentTrash}
           />
         )}
         {tab === "weather" && <WeatherView />}
