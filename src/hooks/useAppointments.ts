@@ -9,6 +9,7 @@ export interface Appointment {
   date: Date;
   time: string;
   description: string;
+  deletedAt?: Date | null;
 }
 
 export function useAppointments() {
