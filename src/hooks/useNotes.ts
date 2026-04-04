@@ -257,12 +257,48 @@ export function useNotes() {
     [user]
   );
 
+  // Soft delete — move to trash
   const deleteNote = useCallback(async (id: string) => {
+    const now = new Date();
+    setNotes((prev) => prev.map((n) => n.id === id ? { ...n, deletedAt: now, sincronizado: false } : n));
+    try {
+      await (supabase.from("notes") as any).update({ deleted_at: now.toISOString() }).eq("id", id);
+    } catch {}
+  }, []);
+
+  // Restore from trash
+  const restoreNote = useCallback(async (id: string) => {
+    setNotes((prev) => prev.map((n) => n.id === id ? { ...n, deletedAt: null, sincronizado: false } : n));
+    try {
+      await (supabase.from("notes") as any).update({ deleted_at: null }).eq("id", id);
+    } catch {}
+  }, []);
+
+  // Permanent delete
+  const permanentDeleteNote = useCallback(async (id: string) => {
     setNotes((prev) => prev.filter((n) => n.id !== id));
     try {
       await supabase.from("notes").delete().eq("id", id);
     } catch {}
   }, []);
+
+  // Empty trash
+  const emptyTrash = useCallback(async () => {
+    const trashIds = notes.filter((n) => n.deletedAt).map((n) => n.id);
+    setNotes((prev) => prev.filter((n) => !n.deletedAt));
+    for (const id of trashIds) {
+      try { await supabase.from("notes").delete().eq("id", id); } catch {}
+    }
+  }, [notes]);
+
+  // Auto-delete notes older than 30 days in trash
+  useEffect(() => {
+    const now = Date.now();
+    const expired = notes.filter((n) => n.deletedAt && now - n.deletedAt.getTime() > 30 * 24 * 60 * 60 * 1000);
+    if (expired.length > 0) {
+      expired.forEach((n) => permanentDeleteNote(n.id));
+    }
+  }, [notes, permanentDeleteNote]);
 
   const updateNote = useCallback(
     async (id: string, title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string, status?: "rascunho" | "publicada") => {
