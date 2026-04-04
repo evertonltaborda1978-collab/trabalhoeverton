@@ -27,12 +27,13 @@ export function useAppointments() {
 
     if (data) {
       setAppointments(
-        data.map((a) => ({
+        data.map((a: any) => ({
           id: a.id,
           title: a.title,
           date: new Date(a.date + "T00:00:00"),
           time: a.time,
           description: a.description,
+          deletedAt: a.deleted_at ? new Date(a.deleted_at) : null,
         }))
       );
     }
