@@ -209,9 +209,37 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
     return <CloudOff size={16} style={{ color: "#BDBDBD" }} />;
   };
 
+  // Handle delete with confirmation
+  const handleDeleteWithConfirm = (id: string) => {
+    const note = notes.find((n) => n.id === id);
+    setConfirmDeleteTitle(note?.title || "Sem título");
+    setConfirmDeleteId(id);
+  };
+
+  const confirmDelete = () => {
+    if (confirmDeleteId) {
+      onDelete(confirmDeleteId);
+      toast({ title: "✅ Nota movida para a lixeira" });
+      setConfirmDeleteId(null);
+    }
+  };
+
+  if (showTrash) {
+    return (
+      <TrashView
+        type="notes"
+        trashedNotes={trashedNotes}
+        onRestoreNote={onRestoreNote}
+        onPermanentDeleteNote={onPermanentDeleteNote}
+        onEmptyNoteTrash={onEmptyTrash}
+        onBack={() => setShowTrash(false)}
+      />
+    );
+  }
+
   return (
     <div className="animate-fade-in">
-      {/* Sync indicator + draft counter */}
+      {/* Sync indicator + draft counter + trash */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <button onClick={() => setShowBackupMenu(!showBackupMenu)} className="flex items-center gap-1 transition-opacity hover:opacity-70" title={syncStatus === "synced" ? "Sincronizado" : syncStatus === "syncing" ? "Sincronizando..." : "Sem conexão"}>
@@ -223,6 +251,21 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
             </span>
           )}
         </div>
+        <button
+          onClick={() => setShowTrash(true)}
+          className="relative p-2 rounded-lg transition-colors hover:bg-black/5"
+          title="Lixeira"
+        >
+          <Trash2 size={18} style={{ color: "#999" }} />
+          {trashedNotes.length > 0 && (
+            <span
+              className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-white text-[10px] font-bold"
+              style={{ background: "#E53935" }}
+            >
+              {trashedNotes.length}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Backup dropdown */}
