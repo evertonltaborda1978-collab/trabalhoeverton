@@ -359,12 +359,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
               index={i}
               searchQuery={search}
             />
-              onClick={openEdit}
-              onBellClick={handleBellClick}
-              onLockClick={handleLockClick}
-              index={i}
-              searchQuery={search}
-            />
           ))}
         </div>
       )}
@@ -381,7 +375,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
           onAddAppointment(noteTitle || "Nota sem título", new Date(date + "T00:00:00"), time, noteContent);
         } : undefined}
       />
-
 
       {/* Reminder Modal */}
       <ReminderModal
@@ -403,6 +396,29 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
         onUnlock={handleUnlockAttempt}
         onRemoveLock={handleRemoveLock}
       />
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={!!confirmDeleteId} onOpenChange={(v) => { if (!v) setConfirmDeleteId(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-display">
+              🗑 Mover para a lixeira?
+            </DialogTitle>
+            <DialogDescription>
+              A nota pode ser recuperada em até 30 dias.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm font-semibold px-1" style={{ color: "#1A1A2E" }}>
+            "{confirmDeleteTitle}"
+          </p>
+          <div className="flex gap-2 mt-1">
+            <Button variant="outline" onClick={() => setConfirmDeleteId(null)} className="flex-1">Cancelar</Button>
+            <Button variant="destructive" onClick={confirmDelete} className="flex-1 gap-1">
+              <Trash2 size={14} /> Mover para lixeira
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

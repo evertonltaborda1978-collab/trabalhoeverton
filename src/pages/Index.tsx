@@ -101,6 +101,10 @@ const Index = () => {
             exportBackup={exportBackup}
             importBackup={importBackup}
             shouldRemindBackup={shouldRemindBackup}
+            trashedNotes={trashedNotes}
+            onRestoreNote={restoreNote}
+            onPermanentDeleteNote={permanentDeleteNote}
+            onEmptyTrash={emptyTrash}
           />
         )}
         {tab === "calendar" && (
