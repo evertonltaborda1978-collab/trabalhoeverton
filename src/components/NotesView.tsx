@@ -3,10 +3,19 @@ import { NoteCard } from "./NoteCard";
 import { NoteEditor } from "./NoteEditor";
 import { ReminderModal } from "./ReminderModal";
 import { LockNoteModal } from "./LockNoteModal";
+import { TrashView } from "./TrashView";
 import { Note, SyncStatus } from "@/hooks/useNotes";
-import { Search, Cloud, CloudOff, RefreshCw, Download, Upload, Mic, MicOff } from "lucide-react";
+import { Search, Cloud, CloudOff, RefreshCw, Download, Upload, Mic, MicOff, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 export { getFontClass, getSizeClass } from "./NoteEditor";
 
@@ -23,6 +32,10 @@ interface NotesViewProps {
   exportBackup: () => boolean;
   importBackup: (file: File) => Promise<number>;
   shouldRemindBackup: () => boolean;
+  trashedNotes: Note[];
+  onRestoreNote: (id: string) => void;
+  onPermanentDeleteNote: (id: string) => void;
+  onEmptyTrash: () => void;
 }
 
 export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onSetLock, onAddAppointment, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup }: NotesViewProps) {
