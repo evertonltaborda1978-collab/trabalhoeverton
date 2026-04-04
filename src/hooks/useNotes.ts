@@ -483,5 +483,5 @@ export function useNotes() {
     return () => clearInterval(interval);
   }, [notes, reminderAlert]);
 
-  return { notes, addNote, deleteNote, updateNote, setNoteReminder, setNoteLock, loading, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert };
+  return { notes: activeNotes, trashedNotes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, setNoteLock, loading, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert };
 }
