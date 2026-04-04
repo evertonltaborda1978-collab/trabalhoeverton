@@ -192,5 +192,8 @@ export function useAppointments() {
     return () => clearInterval(interval);
   }, [appointments, activeAlert]);
 
-  return { appointments, addAppointment, updateAppointment, deleteAppointment, activeAlert, dismissAlert, snoozeAlert };
+  const activeAppointments = appointments.filter((a) => !a.deletedAt);
+  const trashedAppointments = appointments.filter((a) => !!a.deletedAt);
+
+  return { appointments: activeAppointments, trashedAppointments, addAppointment, updateAppointment, deleteAppointment, restoreAppointment, permanentDeleteAppointment, emptyAppointmentTrash, activeAlert, dismissAlert, snoozeAlert };
 }
