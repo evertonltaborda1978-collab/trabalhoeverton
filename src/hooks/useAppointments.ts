@@ -83,10 +83,12 @@ export function useAppointments() {
   );
 
   const deleteAppointment = useCallback(async (id: string) => {
-    await supabase.from("appointments").delete().eq("id", id);
-    setAppointments((prev) => prev.filter((a) => a.id !== id));
+    const now = new Date();
+    setAppointments((prev) => prev.map((a) => a.id === id ? { ...a, deletedAt: now } : a));
+    try {
+      await (supabase.from("appointments") as any).update({ deleted_at: now.toISOString() }).eq("id", id);
+    } catch {}
     snoozedRef.current.delete(id);
-
     const key = "appointments_fired_ids";
     try {
       const fired = JSON.parse(sessionStorage.getItem(key) || "[]") as string[];
@@ -95,6 +97,37 @@ export function useAppointments() {
       sessionStorage.removeItem(key);
     }
   }, []);
+
+  const restoreAppointment = useCallback(async (id: string) => {
+    setAppointments((prev) => prev.map((a) => a.id === id ? { ...a, deletedAt: null } : a));
+    try {
+      await (supabase.from("appointments") as any).update({ deleted_at: null }).eq("id", id);
+    } catch {}
+  }, []);
+
+  const permanentDeleteAppointment = useCallback(async (id: string) => {
+    setAppointments((prev) => prev.filter((a) => a.id !== id));
+    try {
+      await supabase.from("appointments").delete().eq("id", id);
+    } catch {}
+  }, []);
+
+  const emptyAppointmentTrash = useCallback(async () => {
+    const trashIds = appointments.filter((a) => a.deletedAt).map((a) => a.id);
+    setAppointments((prev) => prev.filter((a) => !a.deletedAt));
+    for (const id of trashIds) {
+      try { await supabase.from("appointments").delete().eq("id", id); } catch {}
+    }
+  }, [appointments]);
+
+  // Auto-delete appointments older than 30 days in trash
+  useEffect(() => {
+    const now = Date.now();
+    const expired = appointments.filter((a) => a.deletedAt && now - a.deletedAt.getTime() > 30 * 24 * 60 * 60 * 1000);
+    if (expired.length > 0) {
+      expired.forEach((a) => permanentDeleteAppointment(a.id));
+    }
+  }, [appointments, permanentDeleteAppointment]);
 
   const dismissAlert = useCallback((id: string) => {
     setActiveAlert(null);
