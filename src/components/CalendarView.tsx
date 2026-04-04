@@ -10,17 +10,23 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
+import { TrashView } from "./TrashView";
 
 interface CalendarViewProps {
   appointments: Appointment[];
   onAdd: (title: string, date: Date, time: string, description: string) => void;
   onUpdate: (id: string, title: string, date: Date, time: string, description: string) => void;
   onDelete: (id: string) => void;
+  trashedAppointments?: Appointment[];
+  onRestoreAppointment?: (id: string) => void;
+  onPermanentDeleteAppointment?: (id: string) => void;
+  onEmptyAppointmentTrash?: () => void;
 }
 
 export function CalendarView({ appointments, onAdd, onUpdate, onDelete }: CalendarViewProps) {
