@@ -359,7 +359,9 @@ export function useNotes() {
     } catch { setSyncStatus("offline"); }
   }, []);
 
-  const draftCount = notes.filter((n) => n.status === "rascunho").length;
+  const draftCount = notes.filter((n) => n.status === "rascunho" && !n.deletedAt).length;
+  const activeNotes = notes.filter((n) => !n.deletedAt);
+  const trashedNotes = notes.filter((n) => !!n.deletedAt);
 
   // Export backup
   const exportBackup = useCallback(() => {
