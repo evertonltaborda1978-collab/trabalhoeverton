@@ -352,7 +352,13 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
             <NoteCard
               key={note.id}
               note={note}
-              onDelete={onDelete}
+              onDelete={handleDeleteWithConfirm}
+              onClick={openEdit}
+              onBellClick={handleBellClick}
+              onLockClick={handleLockClick}
+              index={i}
+              searchQuery={search}
+            />
               onClick={openEdit}
               onBellClick={handleBellClick}
               onLockClick={handleLockClick}
