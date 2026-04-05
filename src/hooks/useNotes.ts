@@ -52,6 +52,7 @@ function loadLocal(userId: string): Note[] {
       ...n,
       createdAt: new Date(n.createdAt),
       updatedAt: new Date(n.updatedAt),
+      deletedAt: n.deletedAt ? new Date(n.deletedAt) : null,
     }));
   } catch {
     return [];
