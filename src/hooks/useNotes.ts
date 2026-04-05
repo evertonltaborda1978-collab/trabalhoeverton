@@ -294,7 +294,11 @@ export function useNotes() {
   // Auto-delete notes older than 30 days in trash
   useEffect(() => {
     const now = Date.now();
-    const expired = notes.filter((n) => n.deletedAt && now - n.deletedAt.getTime() > 30 * 24 * 60 * 60 * 1000);
+    const expired = notes.filter((n) => {
+      if (!n.deletedAt) return false;
+      const deletedTime = n.deletedAt instanceof Date ? n.deletedAt.getTime() : new Date(n.deletedAt).getTime();
+      return !isNaN(deletedTime) && now - deletedTime > 30 * 24 * 60 * 60 * 1000;
+    });
     if (expired.length > 0) {
       expired.forEach((n) => permanentDeleteNote(n.id));
     }
