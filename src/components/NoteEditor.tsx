@@ -902,49 +902,99 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                 }
 
                 if (block.type === "checklist" && block.items) {
+                  const total = block.items.length;
+                  const checked = block.items.filter((i) => i.checked).length;
+                  const progress = total > 0 ? Math.round((checked / total) * 100) : 0;
                   return (
-                    <div key={`checklist-${idx}`} className="my-2 space-y-1">
-                      {block.items.map((item) => (
-                        <div key={item.id} className="flex items-center gap-2 group/check">
-                          <button
-                            onClick={() => updateChecklistItem(idx, item.id, { checked: !item.checked })}
-                            className="shrink-0 transition-colors"
-                            style={{ color: item.checked ? "#4CAF50" : (isDark ? "#888" : "#BDBDBD") }}
-                          >
-                            {item.checked ? <CheckSquare size={18} /> : <Square size={18} />}
-                          </button>
-                          <input
-                            value={item.text}
-                            onChange={(e) => !readOnly && updateChecklistItem(idx, item.id, { text: e.target.value })}
-                            onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
-                            onPaste={handleMobilePaste}
-                            readOnly={readOnly}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                addChecklistItemAfter(idx);
-                              }
-                            }}
-                            placeholder="Item da lista..."
-                            className="flex-1 bg-transparent border-0 outline-none text-sm"
-                            style={{
-                              lineHeight: "28px",
-                              color: item.checked ? "#999" : textColor,
-                              textDecoration: item.checked ? "line-through" : "none",
-                              opacity: item.checked ? 0.7 : 1,
-                            }}
-                          />
-                          {!readOnly && (
-                            <button
-                              onClick={() => removeChecklistItem(idx, item.id)}
-                              className="shrink-0 opacity-0 group-hover/check:opacity-100 transition-opacity p-1 rounded hover:bg-black/5"
-                              style={{ color: "#BDBDBD" }}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          )}
+                    <div key={`checklist-${idx}`} className="my-2">
+                      {/* Progress bar */}
+                      {total > 0 && (
+                        <div className="flex items-center gap-2 mb-2 px-1">
+                          <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: isDark ? "#444" : "#E0E0E0" }}>
+                            <div
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{ width: `${progress}%`, background: progress === 100 ? "#4CAF50" : "#2D9E7F" }}
+                            />
+                          </div>
+                          <span className="text-[10px] font-bold shrink-0" style={{ color: progress === 100 ? "#4CAF50" : theme.textMuted }}>
+                            {checked}/{total} {progress === 100 && "✓"}
+                          </span>
                         </div>
-                      ))}
+                      )}
+                      <div className="space-y-0.5">
+                        {block.items.map((item, itemIdx) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center gap-2 group/check rounded-lg px-1 py-0.5 transition-colors"
+                            style={{ background: item.checked ? (isDark ? "rgba(76,175,80,0.1)" : "rgba(76,175,80,0.05)") : "transparent" }}
+                            draggable={!readOnly}
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData("checklist-drag", JSON.stringify({ blockIdx: idx, itemIdx }));
+                              e.dataTransfer.effectAllowed = "move";
+                            }}
+                            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData("checklist-drag"));
+                                if (data.blockIdx === idx && data.itemIdx !== itemIdx) {
+                                  setBlocks((prev) => {
+                                    const next = [...prev];
+                                    const items = [...(next[idx].items || [])];
+                                    const [moved] = items.splice(data.itemIdx, 1);
+                                    items.splice(itemIdx, 0, moved);
+                                    next[idx] = { ...next[idx], items };
+                                    pushHistory(next);
+                                    return next;
+                                  });
+                                }
+                              } catch {}
+                            }}
+                          >
+                            {/* Drag handle */}
+                            {!readOnly && (
+                              <span className="cursor-grab opacity-0 group-hover/check:opacity-40 transition-opacity text-xs select-none" style={{ color: theme.textMuted }}>⠿</span>
+                            )}
+                            <button
+                              onClick={() => updateChecklistItem(idx, item.id, { checked: !item.checked })}
+                              className="shrink-0 transition-all duration-200"
+                              style={{ color: item.checked ? "#4CAF50" : (isDark ? "#888" : "#BDBDBD") }}
+                            >
+                              {item.checked ? <CheckSquare size={18} /> : <Square size={18} />}
+                            </button>
+                            <input
+                              value={item.text}
+                              onChange={(e) => !readOnly && updateChecklistItem(idx, item.id, { text: e.target.value })}
+                              onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
+                              onPaste={handleMobilePaste}
+                              readOnly={readOnly}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  addChecklistItemAfter(idx);
+                                }
+                              }}
+                              placeholder="Item da lista..."
+                              className="flex-1 bg-transparent border-0 outline-none text-sm"
+                              style={{
+                                lineHeight: "28px",
+                                color: item.checked ? "#999" : textColor,
+                                textDecoration: item.checked ? "line-through" : "none",
+                                opacity: item.checked ? 0.7 : 1,
+                              }}
+                            />
+                            {!readOnly && (
+                              <button
+                                onClick={() => removeChecklistItem(idx, item.id)}
+                                className="shrink-0 opacity-0 group-hover/check:opacity-100 transition-opacity p-1 rounded hover:bg-black/5"
+                                style={{ color: "#BDBDBD" }}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                       {!readOnly && (
                         <button
                           onClick={() => addChecklistItemAfter(idx)}
