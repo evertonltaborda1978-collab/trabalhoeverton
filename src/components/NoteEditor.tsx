@@ -674,7 +674,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   };
   
   const handleSaveAndBackToView = () => {
-    doSave(editingNote?.status === "rascunho" ? "rascunho" : "publicada");
+    doSave("publicada");
   };
 
   // Close handler with unsaved changes check
