@@ -6,13 +6,14 @@ import { CalendarView } from "@/components/CalendarView";
 import { LocationView } from "@/components/LocationView";
 import { WeatherView } from "@/components/WeatherView";
 import { DevicesView } from "@/components/DevicesView";
+import { FuelCalculatorView } from "@/components/FuelCalculatorView";
 import { SnoozeAlert } from "@/components/SnoozeAlert";
 import { useNotes } from "@/hooks/useNotes";
 import { useAppointments } from "@/hooks/useAppointments";
 import { useAuth } from "@/contexts/AuthContext";
 import { LogOut } from "lucide-react";
 
-type Tab = "notes" | "calendar" | "weather" | "location" | "devices";
+type Tab = "notes" | "calendar" | "weather" | "location" | "devices" | "fuel";
 
 const titles: Record<Tab, string> = {
   notes: "Minhas Notas",
@@ -20,6 +21,7 @@ const titles: Record<Tab, string> = {
   weather: "Tempo",
   location: "Localização",
   devices: "Segurança",
+  fuel: "Combustível",
 };
 
 const Index = () => {
@@ -120,6 +122,7 @@ const Index = () => {
           />
         )}
         {tab === "weather" && <WeatherView />}
+        {tab === "fuel" && <FuelCalculatorView />}
         {tab === "location" && <LocationView />}
         {tab === "devices" && <DevicesView />}
       </main>
