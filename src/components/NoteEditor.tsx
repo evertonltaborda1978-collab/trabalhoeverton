@@ -746,13 +746,13 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
             className="flex items-center gap-2 px-3 py-2.5 shrink-0"
             style={{ background: theme.headerBg, transition: "background 0.3s ease" }}
           >
-            {/* Close / Back button */}
+            {/* ← Voltar (left close) */}
             <button
               onClick={handleClose}
               className="p-2 rounded-lg hover:bg-black/10 transition-colors"
-              title="Fechar"
+              title="Voltar"
             >
-              <X size={20} style={{ color: textColor }} />
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={textColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
             </button>
 
             <input
@@ -818,15 +818,14 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
               </button>
             )}
 
-            {!readOnly && editingNote && (
-              <button
-                onClick={handleClose}
-                className="p-2 rounded-lg hover:bg-black/10 transition-colors"
-                title="Fechar"
-              >
-                <X size={20} style={{ color: textColor }} />
-              </button>
-            )}
+            {/* ✕ Fechar (right close) */}
+            <button
+              onClick={handleClose}
+              className="p-2 rounded-lg hover:bg-black/10 transition-colors"
+              title="Fechar"
+            >
+              <X size={20} style={{ color: textColor }} />
+            </button>
           </div>
 
           {/* Color picker dropdown */}
