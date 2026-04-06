@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { Appointment } from "@/hooks/useAppointments";
 import { GoogleEvent, useGoogleCalendar } from "@/hooks/useGoogleCalendar";
-import { format, isSameDay } from "date-fns";
+import { format, isSameDay, startOfWeek, endOfWeek, eachDayOfInterval, startOfMonth, endOfMonth, addMonths, subMonths, isToday, isSameMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, Trash2, Clock, RefreshCw, Unplug, Pencil } from "lucide-react";
+import { Plus, Trash2, Clock, RefreshCw, Unplug, Pencil, ChevronLeft, ChevronRight, CalendarDays, CalendarRange, LayoutList } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +17,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { TrashView } from "./TrashView";
+import { cn } from "@/lib/utils";
+
+type ViewMode = "day" | "week" | "month";
 
 interface CalendarViewProps {
   appointments: Appointment[];
@@ -31,6 +34,7 @@ interface CalendarViewProps {
 
 export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedAppointments = [], onRestoreAppointment, onPermanentDeleteAppointment, onEmptyAppointmentTrash }: CalendarViewProps) {
   const [selected, setSelected] = useState<Date>(new Date());
+  const [viewMode, setViewMode] = useState<ViewMode>("day");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -39,6 +43,7 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
   const [showTrash, setShowTrash] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteTitle, setConfirmDeleteTitle] = useState("");
+  const [monthNav, setMonthNav] = useState(new Date());
 
   const { connected, loading: gcLoading, googleEvents, syncing, connect, disconnect, fetchEvents, pushEvent } = useGoogleCalendar();
 
@@ -52,16 +57,37 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
     ...googleEvents.map((e) => { try { return new Date(e.date + "T00:00:00"); } catch { return null; } }).filter(Boolean) as Date[],
   ];
 
+  // Week days
+  const weekDays = useMemo(() => {
+    const start = startOfWeek(selected, { locale: ptBR });
+    const end = endOfWeek(selected, { locale: ptBR });
+    return eachDayOfInterval({ start, end });
+  }, [selected]);
+
+  // Month days grid
+  const monthDays = useMemo(() => {
+    const start = startOfMonth(monthNav);
+    const end = endOfMonth(monthNav);
+    const firstWeekStart = startOfWeek(start, { locale: ptBR });
+    const lastWeekEnd = endOfWeek(end, { locale: ptBR });
+    return eachDayOfInterval({ start: firstWeekStart, end: lastWeekEnd });
+  }, [monthNav]);
+
+  const getAppointmentsForDay = (day: Date) => {
+    const local = appointments.filter((a) => isSameDay(a.date, day));
+    const google = googleEvents.filter((e) => {
+      try { return isSameDay(new Date(e.date + "T00:00:00"), day); } catch { return false; }
+    });
+    return { local, google };
+  };
+
   const handleSave = async () => {
     if (!title.trim()) return;
-
     if (editingId) {
       onUpdate(editingId, title, selected, time, description);
       toast({ title: "✅ Compromisso atualizado!" });
     } else {
       onAdd(title, selected, time, description);
-
-      // Also push to Google Calendar if connected
       if (connected) {
         const dateStr = format(selected, "yyyy-MM-dd");
         const ok = await pushEvent(title, dateStr, time, description);
@@ -71,8 +97,16 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
         }
       }
     }
-
     closeDialog();
+  };
+
+  const openNew = (day?: Date) => {
+    if (day) setSelected(day);
+    setEditingId(null);
+    setTitle("");
+    setTime("09:00");
+    setDescription("");
+    setDialogOpen(true);
   };
 
   const openEdit = (apt: Appointment) => {
@@ -118,6 +152,218 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
       />
     );
   }
+
+  const renderAppointmentItem = (apt: Appointment, compact = false) => (
+    <div key={apt.id} className={cn("group flex items-start gap-2 rounded-xl glass-card animate-fade-in", compact ? "p-2" : "p-3")}>
+      <div className="flex items-center gap-1 text-primary mt-0.5 shrink-0">
+        <Clock size={compact ? 12 : 14} />
+        <span className={cn("font-semibold", compact ? "text-[10px]" : "text-xs")}>{apt.time}</span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className={cn("font-semibold text-foreground truncate", compact ? "text-xs" : "text-sm")}>{apt.title}</p>
+        {!compact && apt.description && (
+          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{apt.description}</p>
+        )}
+      </div>
+      {!compact && (
+        <>
+          <button onClick={() => openEdit(apt)} className="p-1 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors">
+            <Pencil size={14} />
+          </button>
+          <button onClick={() => handleDeleteWithConfirm(apt.id)} className="p-1 rounded-md hover:bg-destructive/10 text-destructive transition-colors">
+            <Trash2 size={14} />
+          </button>
+        </>
+      )}
+    </div>
+  );
+
+  const renderGoogleEvent = (evt: GoogleEvent, compact = false) => (
+    <div key={evt.id} className={cn("flex items-start gap-2 rounded-xl animate-fade-in", compact ? "p-2" : "p-3")} style={{ background: "#E3F2FD", border: "1px solid #90CAF9" }}>
+      <div className="flex items-center gap-1 mt-0.5 shrink-0" style={{ color: "#1565C0" }}>
+        <Clock size={compact ? 12 : 14} />
+        <span className={cn("font-semibold", compact ? "text-[10px]" : "text-xs")}>{evt.time}</span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1">
+          <p className={cn("font-semibold truncate", compact ? "text-xs" : "text-sm")} style={{ color: "#1A1A2E" }}>{evt.title}</p>
+          {!compact && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0" style={{ background: "#BBDEFB", color: "#1565C0" }}>Google</span>}
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── WEEK VIEW ──
+  const renderWeekView = () => (
+    <div className="space-y-1">
+      {/* Week navigation */}
+      <div className="flex items-center justify-between mb-3">
+        <button onClick={() => setSelected(new Date(selected.getTime() - 7 * 86400000))} className="p-2 rounded-lg hover:bg-black/5 transition-colors">
+          <ChevronLeft size={18} style={{ color: "#666" }} />
+        </button>
+        <span className="text-sm font-bold" style={{ color: "#1A1A2E" }}>
+          {format(weekDays[0], "d MMM", { locale: ptBR })} — {format(weekDays[6], "d MMM yyyy", { locale: ptBR })}
+        </span>
+        <button onClick={() => setSelected(new Date(selected.getTime() + 7 * 86400000))} className="p-2 rounded-lg hover:bg-black/5 transition-colors">
+          <ChevronRight size={18} style={{ color: "#666" }} />
+        </button>
+      </div>
+
+      {weekDays.map((day) => {
+        const { local, google } = getAppointmentsForDay(day);
+        const hasItems = local.length > 0 || google.length > 0;
+        const isSelected = isSameDay(day, selected);
+        const today = isToday(day);
+
+        return (
+          <div
+            key={day.toISOString()}
+            className={cn(
+              "rounded-xl transition-all cursor-pointer",
+              isSelected ? "ring-2 ring-primary/30" : "",
+              today ? "bg-primary/5" : ""
+            )}
+            style={{ border: isSelected ? "1.5px solid #B39DDB" : "1.5px solid #F0F0F0", background: isSelected ? "#F3E5F5" : undefined }}
+            onClick={() => setSelected(day)}
+          >
+            <div className="flex items-center justify-between px-3 py-2">
+              <div className="flex items-center gap-2">
+                <span className={cn(
+                  "w-8 h-8 flex items-center justify-center rounded-full text-sm font-bold",
+                  today ? "bg-primary text-white" : ""
+                )} style={!today ? { color: "#1A1A2E" } : undefined}>
+                  {format(day, "d")}
+                </span>
+                <span className="text-xs font-semibold capitalize" style={{ color: "#999" }}>
+                  {format(day, "EEEE", { locale: ptBR })}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {hasItems && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "#E8F5E9", color: "#2E7D32" }}>
+                    {local.length + google.length}
+                  </span>
+                )}
+                <button
+                  onClick={(e) => { e.stopPropagation(); openNew(day); }}
+                  className="p-1 rounded-md hover:bg-black/10 transition-colors"
+                  title="Adicionar compromisso"
+                >
+                  <Plus size={14} style={{ color: "#999" }} />
+                </button>
+              </div>
+            </div>
+            {hasItems && (
+              <div className="px-3 pb-2 space-y-1">
+                {local.map((apt) => renderAppointmentItem(apt, true))}
+                {google.map((evt) => renderGoogleEvent(evt, true))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  // ── MONTH VIEW ──
+  const renderMonthView = () => {
+    const weekDayNames = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+    return (
+      <div>
+        {/* Month navigation */}
+        <div className="flex items-center justify-between mb-3">
+          <button onClick={() => setMonthNav(subMonths(monthNav, 1))} className="p-2 rounded-lg hover:bg-black/5 transition-colors">
+            <ChevronLeft size={18} style={{ color: "#666" }} />
+          </button>
+          <span className="text-sm font-bold capitalize" style={{ color: "#1A1A2E" }}>
+            {format(monthNav, "MMMM yyyy", { locale: ptBR })}
+          </span>
+          <button onClick={() => setMonthNav(addMonths(monthNav, 1))} className="p-2 rounded-lg hover:bg-black/5 transition-colors">
+            <ChevronRight size={18} style={{ color: "#666" }} />
+          </button>
+        </div>
+
+        {/* Weekday headers */}
+        <div className="grid grid-cols-7 mb-1">
+          {weekDayNames.map((d) => (
+            <div key={d} className="text-center text-[10px] font-bold uppercase py-1" style={{ color: "#999" }}>{d}</div>
+          ))}
+        </div>
+
+        {/* Days grid */}
+        <div className="grid grid-cols-7 gap-0.5">
+          {monthDays.map((day) => {
+            const { local, google } = getAppointmentsForDay(day);
+            const totalItems = local.length + google.length;
+            const inMonth = isSameMonth(day, monthNav);
+            const today = isToday(day);
+            const isSelected = isSameDay(day, selected);
+
+            return (
+              <button
+                key={day.toISOString()}
+                onClick={() => { setSelected(day); setViewMode("day"); }}
+                className={cn(
+                  "relative flex flex-col items-center py-1.5 rounded-lg transition-all min-h-[44px]",
+                  !inMonth && "opacity-30",
+                  isSelected && "ring-2 ring-primary",
+                )}
+                style={{
+                  background: today ? "#E8F5E9" : isSelected ? "#F3E5F5" : undefined,
+                }}
+              >
+                <span className={cn(
+                  "text-xs font-semibold",
+                  today ? "text-green-700" : ""
+                )} style={!today ? { color: inMonth ? "#1A1A2E" : "#CCC" } : undefined}>
+                  {format(day, "d")}
+                </span>
+                {totalItems > 0 && (
+                  <div className="flex gap-0.5 mt-0.5">
+                    {totalItems <= 3 ? (
+                      Array.from({ length: totalItems }).map((_, i) => (
+                        <div key={i} className="w-1.5 h-1.5 rounded-full" style={{ background: i < local.length ? "#7C3AED" : "#1565C0" }} />
+                      ))
+                    ) : (
+                      <>
+                        <div className="w-1.5 h-1.5 rounded-full" style={{ background: "#7C3AED" }} />
+                        <span className="text-[8px] font-bold" style={{ color: "#7C3AED" }}>+{totalItems - 1}</span>
+                      </>
+                    )}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Selected day detail */}
+        <div className="mt-4 pt-3" style={{ borderTop: "1px solid #EBEBEB" }}>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-bold" style={{ color: "#1A1A2E" }}>
+              {format(selected, "d 'de' MMMM, EEEE", { locale: ptBR })}
+            </h3>
+            <button onClick={() => openNew(selected)} className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-xl transition-colors hover:bg-black/5" style={{ color: "#7C3AED" }}>
+              <Plus size={14} /> Adicionar
+            </button>
+          </div>
+          {(() => {
+            const { local, google } = getAppointmentsForDay(selected);
+            if (local.length === 0 && google.length === 0) {
+              return <p className="text-xs text-center py-4" style={{ color: "#999" }}>Nenhum compromisso neste dia</p>;
+            }
+            return (
+              <div className="space-y-1.5">
+                {local.map((apt) => renderAppointmentItem(apt))}
+                {google.map((evt) => renderGoogleEvent(evt))}
+              </div>
+            );
+          })()}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="animate-fade-in">
@@ -168,76 +414,75 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
         </div>
       </div>
 
-      <div className="glass-card rounded-2xl p-4 mb-4">
-        <Calendar
-          mode="single"
-          selected={selected}
-          onSelect={(d) => d && setSelected(d)}
-          locale={ptBR}
-          modifiers={{ hasAppointment: daysWithAppointments }}
-          modifiersClassNames={{ hasAppointment: "bg-primary/15 font-bold text-primary" }}
-          className="w-full"
-        />
+      {/* View mode tabs */}
+      <div className="flex gap-1 mb-3 p-1 rounded-xl" style={{ background: "#F5F5F5" }}>
+        {([
+          { mode: "day" as ViewMode, icon: LayoutList, label: "Dia" },
+          { mode: "week" as ViewMode, icon: CalendarRange, label: "Semana" },
+          { mode: "month" as ViewMode, icon: CalendarDays, label: "Mês" },
+        ]).map(({ mode, icon: Icon, label }) => (
+          <button
+            key={mode}
+            onClick={() => { setViewMode(mode); if (mode === "month") setMonthNav(selected); }}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all",
+              viewMode === mode
+                ? "bg-white shadow-sm"
+                : "hover:bg-white/50"
+            )}
+            style={{ color: viewMode === mode ? "#1A1A2E" : "#999" }}
+          >
+            <Icon size={14} />
+            {label}
+          </button>
+        ))}
       </div>
 
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-display font-semibold text-sm text-foreground">
-          {format(selected, "d 'de' MMMM", { locale: ptBR })}
-        </h3>
-        <Button size="sm" onClick={() => setDialogOpen(true)} className="rounded-xl gap-1.5 text-xs">
-          <Plus size={14} /> Compromisso
-        </Button>
-      </div>
-
-      {dayAppointments.length === 0 && dayGoogleEvents.length === 0 ? (
-        <div className="text-center py-10 text-muted-foreground">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-secondary mb-3">
-            <span className="text-2xl">📅</span>
+      {/* ── DAY VIEW ── */}
+      {viewMode === "day" && (
+        <>
+          <div className="glass-card rounded-2xl p-4 mb-4">
+            <Calendar
+              mode="single"
+              selected={selected}
+              onSelect={(d) => d && setSelected(d)}
+              locale={ptBR}
+              modifiers={{ hasAppointment: daysWithAppointments }}
+              modifiersClassNames={{ hasAppointment: "bg-primary/15 font-bold text-primary" }}
+              className="w-full pointer-events-auto"
+            />
           </div>
-          <p className="text-sm">Nenhum compromisso</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {dayAppointments.map((apt) => (
-            <div key={apt.id} className="group flex items-start gap-3 p-3 rounded-xl glass-card animate-fade-in">
-              <div className="flex items-center gap-1.5 text-primary mt-0.5">
-                <Clock size={14} />
-                <span className="text-xs font-semibold">{apt.time}</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground truncate">{apt.title}</p>
-                {apt.description && (
-                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{apt.description}</p>
-                )}
-              </div>
-              <button onClick={() => openEdit(apt)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary">
-                <Pencil size={14} />
-              </button>
-              <button onClick={() => handleDeleteWithConfirm(apt.id)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
 
-          {dayGoogleEvents.map((evt) => (
-            <div key={evt.id} className="flex items-start gap-3 p-3 rounded-xl animate-fade-in" style={{ background: "#E3F2FD", border: "1px solid #90CAF9" }}>
-              <div className="flex items-center gap-1.5 mt-0.5" style={{ color: "#1565C0" }}>
-                <Clock size={14} />
-                <span className="text-xs font-semibold">{evt.time}</span>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-display font-semibold text-sm text-foreground">
+              {format(selected, "d 'de' MMMM", { locale: ptBR })}
+            </h3>
+            <Button size="sm" onClick={() => openNew()} className="rounded-xl gap-1.5 text-xs">
+              <Plus size={14} /> Compromisso
+            </Button>
+          </div>
+
+          {dayAppointments.length === 0 && dayGoogleEvents.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-secondary mb-3">
+                <span className="text-2xl">📅</span>
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <p className="text-sm font-semibold truncate" style={{ color: "#1A1A2E" }}>{evt.title}</p>
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: "#BBDEFB", color: "#1565C0" }}>Google</span>
-                </div>
-                {evt.description && (
-                  <p className="text-xs mt-0.5 line-clamp-1" style={{ color: "#666" }}>{evt.description}</p>
-                )}
-              </div>
+              <p className="text-sm">Nenhum compromisso</p>
             </div>
-          ))}
-        </div>
+          ) : (
+            <div className="space-y-2">
+              {dayAppointments.map((apt) => renderAppointmentItem(apt))}
+              {dayGoogleEvents.map((evt) => renderGoogleEvent(evt))}
+            </div>
+          )}
+        </>
       )}
+
+      {/* ── WEEK VIEW ── */}
+      {viewMode === "week" && renderWeekView()}
+
+      {/* ── MONTH VIEW ── */}
+      {viewMode === "month" && renderMonthView()}
 
       {/* New/Edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); else setDialogOpen(true); }}>
@@ -247,6 +492,10 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
           </DialogHeader>
           <div className="space-y-3 mt-2">
             <Input placeholder="Título" value={title} onChange={(e) => setTitle(e.target.value)} className="font-semibold" />
+            <div className="flex items-center gap-2 text-xs font-medium" style={{ color: "#666" }}>
+              <CalendarDays size={14} />
+              <span>{format(selected, "d 'de' MMMM, yyyy", { locale: ptBR })}</span>
+            </div>
             <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
             <Textarea placeholder="Descrição (opcional)" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="resize-none" />
             {connected && !editingId && (
