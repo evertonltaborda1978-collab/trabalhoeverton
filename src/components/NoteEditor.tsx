@@ -888,10 +888,11 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                       onPaste={handleMobilePaste}
                       readOnly={readOnly}
                       placeholder={idx === 0 && blocks.length === 1 ? "Comece a escrever sua nota..." : ""}
-                      className="w-full bg-transparent border-0 outline-none resize-none text-sm"
+                      className="w-full bg-transparent border-0 outline-none resize-none text-base"
                       style={{
-                        lineHeight: "28px",
-                        minHeight: "28px",
+                        lineHeight: "32px",
+                        minHeight: "32px",
+                        fontSize: "16px",
                         overflow: "hidden",
                         color: textColor,
                         "--placeholder-color": placeholderColor,
