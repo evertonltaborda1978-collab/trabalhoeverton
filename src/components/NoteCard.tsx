@@ -125,10 +125,11 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, in
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(note.id); }}
-            className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-black/5"
-            style={{ color: "#999" }}
+            className="p-1.5 rounded-md transition-all hover:bg-red-50"
+            style={{ color: "#E53935" }}
+            title="Excluir nota"
           >
-            <Trash2 size={14} />
+            <Trash2 size={16} />
           </button>
           <ChevronRight
             size={16}

@@ -762,8 +762,8 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
               onPaste={handleMobilePaste}
               readOnly={readOnly}
               placeholder="Título da nota..."
-              className="flex-1 bg-white/90 rounded-lg px-3 py-1.5 text-sm font-semibold placeholder:text-gray-400 outline-none border-0 shadow-sm"
-              style={{ color: "#1A1A2E" }}
+              className="flex-1 bg-white/90 rounded-lg px-3 py-2.5 text-base font-semibold placeholder:text-gray-400 outline-none border-0 shadow-sm"
+              style={{ color: "#1A1A2E", fontSize: "17px" }}
             />
 
             {!readOnly && (
@@ -867,7 +867,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
           <div
             className="flex-1 overflow-y-auto px-4 min-h-0"
             style={{
-              background: `repeating-linear-gradient(to bottom, transparent, transparent 27px, ${theme.lines} 28px)`,
+              background: `repeating-linear-gradient(to bottom, transparent, transparent 31px, ${theme.lines} 32px)`,
               backgroundPosition: "0 0",
               transition: "background 0.3s ease",
             }}
@@ -888,10 +888,11 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                       onPaste={handleMobilePaste}
                       readOnly={readOnly}
                       placeholder={idx === 0 && blocks.length === 1 ? "Comece a escrever sua nota..." : ""}
-                      className="w-full bg-transparent border-0 outline-none resize-none text-sm"
+                      className="w-full bg-transparent border-0 outline-none resize-none text-base"
                       style={{
-                        lineHeight: "28px",
-                        minHeight: "28px",
+                        lineHeight: "32px",
+                        minHeight: "32px",
+                        fontSize: "16px",
                         overflow: "hidden",
                         color: textColor,
                         "--placeholder-color": placeholderColor,

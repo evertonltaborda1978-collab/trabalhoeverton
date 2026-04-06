@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Cloud, CloudRain, CloudSnow, Sun, CloudLightning, Wind, Droplets, Thermometer, Search, MapPin, Loader2, CloudFog, CloudSun } from "lucide-react";
+import { Cloud, CloudRain, CloudSnow, Sun, CloudLightning, Wind, Droplets, Thermometer, Search, MapPin, Loader2, CloudFog, CloudSun, X, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { HolidaysView } from "./HolidaysView";
@@ -12,6 +12,14 @@ interface WeatherData {
   weatherCode: number;
   cityName: string;
   isDay: boolean;
+  lat: number;
+  lng: number;
+}
+
+interface FavoriteCity {
+  name: string;
+  lat: number;
+  lng: number;
 }
 
 const weatherDescriptions: Record<number, { label: string; icon: typeof Sun }> = {
@@ -42,12 +50,26 @@ function getWeatherInfo(code: number) {
   return weatherDescriptions[code] || { label: "Indefinido", icon: Cloud };
 }
 
+function loadFavorites(): FavoriteCity[] {
+  try {
+    const raw = localStorage.getItem("weather_favorite_cities");
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [];
+}
+
+function saveFavorites(cities: FavoriteCity[]) {
+  localStorage.setItem("weather_favorite_cities", JSON.stringify(cities));
+}
+
 export function WeatherView() {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(false);
   const [searchCity, setSearchCity] = useState("");
   const [searching, setSearching] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
+  const [favorites, setFavorites] = useState<FavoriteCity[]>(loadFavorites);
+  const [searchResults, setSearchResults] = useState<{ name: string; lat: number; lng: number; country: string; admin1?: string }[]>([]);
 
   const fetchCityName = async (lat: number, lng: number): Promise<string> => {
     try {
@@ -79,6 +101,8 @@ export function WeatherView() {
         weatherCode: current.weather_code,
         cityName,
         isDay: current.is_day === 1,
+        lat: latitude,
+        lng: longitude,
       });
       localStorage.setItem("weather_last_city", JSON.stringify({ lat: latitude, lng: longitude, city: cityName }));
     } catch {
@@ -109,17 +133,30 @@ export function WeatherView() {
   }, [fetchWeather]);
 
   const searchByCity = async () => {
-    if (!searchCity.trim()) return;
+    const q = searchCity.trim();
+    if (!q) return;
     setSearching(true);
+    setSearchResults([]);
     try {
       const res = await fetch(
-        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(searchCity)}&count=1&language=pt`
+        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=pt`
       );
       const data = await res.json();
       if (data.results && data.results.length > 0) {
-        const place = data.results[0];
-        await fetchWeather(place.latitude, place.longitude, place.name);
-        setSearchCity("");
+        if (data.results.length === 1) {
+          const place = data.results[0];
+          await fetchWeather(place.latitude, place.longitude, place.name);
+          setSearchCity("");
+          setSearchResults([]);
+        } else {
+          setSearchResults(data.results.map((r: any) => ({
+            name: r.name,
+            lat: r.latitude,
+            lng: r.longitude,
+            country: r.country || "",
+            admin1: r.admin1,
+          })));
+        }
       } else {
         toast({ title: "Cidade não encontrada", variant: "destructive" });
       }
@@ -128,6 +165,35 @@ export function WeatherView() {
     } finally {
       setSearching(false);
     }
+  };
+
+  const selectSearchResult = async (result: { name: string; lat: number; lng: number }) => {
+    setSearchResults([]);
+    setSearchCity("");
+    await fetchWeather(result.lat, result.lng, result.name);
+  };
+
+  const isFavorite = (cityName: string) => favorites.some((f) => f.name === cityName);
+
+  const toggleFavorite = () => {
+    if (!weather) return;
+    const exists = favorites.findIndex((f) => f.name === weather.cityName);
+    let next: FavoriteCity[];
+    if (exists >= 0) {
+      next = favorites.filter((_, i) => i !== exists);
+      toast({ title: "⭐ Cidade removida dos favoritos" });
+    } else {
+      next = [...favorites, { name: weather.cityName, lat: weather.lat, lng: weather.lng }];
+      toast({ title: "⭐ Cidade adicionada aos favoritos!" });
+    }
+    setFavorites(next);
+    saveFavorites(next);
+  };
+
+  const removeFavorite = (name: string) => {
+    const next = favorites.filter((f) => f.name !== name);
+    setFavorites(next);
+    saveFavorites(next);
   };
 
   const info = weather ? getWeatherInfo(weather.weatherCode) : null;
@@ -158,22 +224,66 @@ export function WeatherView() {
         </Button>
       </div>
 
-      {/* Use my location button */}
-      <button
-        onClick={() => {
-          if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-              (pos) => fetchWeather(pos.coords.latitude, pos.coords.longitude),
-              () => toast({ title: "Não foi possível obter localização" }),
-              { enableHighAccuracy: true, timeout: 10000 }
-            );
-          }
-        }}
-        className="flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl transition-colors hover:bg-black/5"
-        style={{ color: "#1565C0" }}
-      >
-        <MapPin size={14} /> Usar minha localização atual
-      </button>
+      {/* Search results dropdown */}
+      {searchResults.length > 0 && (
+        <div className="rounded-xl overflow-hidden" style={{ background: "#FFF", border: "1px solid #EBEBEB", boxShadow: "0 4px 16px rgba(0,0,0,0.08)" }}>
+          {searchResults.map((r, i) => (
+            <button
+              key={`${r.name}-${r.lat}-${i}`}
+              onClick={() => selectSearchResult(r)}
+              className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+              style={{ borderBottom: i < searchResults.length - 1 ? "1px solid #F0F0F0" : "none" }}
+            >
+              <MapPin size={14} style={{ color: "#1565C0" }} />
+              <div className="flex-1 min-w-0">
+                <span className="text-sm font-semibold" style={{ color: "#1A1A2E" }}>{r.name}</span>
+                {(r.admin1 || r.country) && (
+                  <span className="text-xs ml-1" style={{ color: "#999" }}>
+                    {[r.admin1, r.country].filter(Boolean).join(", ")}
+                  </span>
+                )}
+              </div>
+            </button>
+          ))}
+          <button
+            onClick={() => setSearchResults([])}
+            className="w-full px-4 py-2 text-xs font-medium text-center hover:bg-gray-50"
+            style={{ color: "#999", borderTop: "1px solid #F0F0F0" }}
+          >
+            Fechar resultados
+          </button>
+        </div>
+      )}
+
+      {/* Use my location + favorite toggle */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => {
+            if (navigator.geolocation) {
+              navigator.geolocation.getCurrentPosition(
+                (pos) => fetchWeather(pos.coords.latitude, pos.coords.longitude),
+                () => toast({ title: "Não foi possível obter localização" }),
+                { enableHighAccuracy: true, timeout: 10000 }
+              );
+            }
+          }}
+          className="flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl transition-colors hover:bg-black/5"
+          style={{ color: "#1565C0" }}
+        >
+          <MapPin size={14} /> Usar minha localização atual
+        </button>
+        {weather && (
+          <button
+            onClick={toggleFavorite}
+            className="flex items-center gap-1 text-xs font-semibold px-3 py-2 rounded-xl transition-colors hover:bg-black/5"
+            style={{ color: isFavorite(weather.cityName) ? "#F9A825" : "#999" }}
+            title={isFavorite(weather.cityName) ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+          >
+            <Star size={14} fill={isFavorite(weather.cityName) ? "#F9A825" : "none"} />
+            {isFavorite(weather.cityName) ? "Favoritada" : "Favoritar"}
+          </button>
+        )}
+      </div>
 
       {/* Main weather card */}
       {loading ? (
@@ -226,6 +336,43 @@ export function WeatherView() {
           <CloudSun size={40} className="mx-auto mb-3" style={{ color: "#BDBDBD" }} />
           <p className="text-sm font-semibold" style={{ color: "#9E9E9E" }}>{geoError || "Buscando clima..."}</p>
           <p className="text-xs mt-1" style={{ color: "#BDBDBD" }}>Busque uma cidade acima para ver o clima</p>
+        </div>
+      )}
+
+      {/* Favorite cities */}
+      {favorites.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Star size={14} style={{ color: "#F9A825" }} fill="#F9A825" />
+            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: "#999" }}>Cidades Favoritas</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {favorites.map((fav) => (
+              <div
+                key={fav.name}
+                className="flex items-center gap-1.5 rounded-xl px-3 py-2 cursor-pointer transition-all hover:shadow-md"
+                style={{
+                  background: weather?.cityName === fav.name ? "#E3F2FD" : "#FFF",
+                  border: weather?.cityName === fav.name ? "1.5px solid #90CAF9" : "1.5px solid #EBEBEB",
+                }}
+              >
+                <button
+                  onClick={() => fetchWeather(fav.lat, fav.lng, fav.name)}
+                  className="text-xs font-semibold"
+                  style={{ color: "#1A1A2E" }}
+                >
+                  {fav.name}
+                </button>
+                <button
+                  onClick={() => removeFavorite(fav.name)}
+                  className="p-0.5 rounded-full hover:bg-black/10 transition-colors"
+                  title="Remover"
+                >
+                  <X size={12} style={{ color: "#999" }} />
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
