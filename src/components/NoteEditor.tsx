@@ -867,7 +867,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
           <div
             className="flex-1 overflow-y-auto px-4 min-h-0"
             style={{
-              background: `repeating-linear-gradient(to bottom, transparent, transparent 27px, ${theme.lines} 28px)`,
+              background: `repeating-linear-gradient(to bottom, transparent, transparent 31px, ${theme.lines} 32px)`,
               backgroundPosition: "0 0",
               transition: "background 0.3s ease",
             }}
