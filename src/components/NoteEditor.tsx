@@ -750,125 +750,133 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
             </div>
           )}
 
-          {/* ── HEADER ── */}
+          {/* ── HEADER (2 linhas em mobile p/ garantir todos os botões visíveis) ── */}
           <div
-            className="flex items-center gap-1 px-2 py-2.5 shrink-0"
-            style={{ background: theme.headerBg, transition: "background 0.3s ease", paddingTop: "calc(10px + env(safe-area-inset-top))" }}
+            className="shrink-0"
+            style={{ background: theme.headerBg, transition: "background 0.3s ease", paddingTop: "calc(8px + env(safe-area-inset-top))" }}
           >
-            {/* ← Voltar (left close) */}
-            <button
-              onClick={handleClose}
-              className="p-2 rounded-lg hover:bg-black/10 transition-colors shrink-0"
-              title="Voltar"
-              aria-label="Voltar"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={textColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
-            </button>
-
-            <input
-              value={title}
-              onChange={(e) => !readOnly && setTitle(e.target.value)}
-              onFocus={() => { activeFieldRef.current = "title"; }}
-              onPaste={handleMobilePaste}
-              readOnly={readOnly}
-              placeholder="Título da nota..."
-              className="flex-1 min-w-0 bg-white/90 rounded-lg px-3 py-2.5 text-base font-semibold placeholder:text-gray-400 outline-none border-0 shadow-sm"
-              style={{ color: "#1A1A2E", fontSize: "17px" }}
-            />
-
-            {/* Cor da nota — sempre visível em modo edição */}
-            {!readOnly && (
+            {/* Linha 1: voltar + título + fechar */}
+            <div className="flex items-center gap-1 px-2 pb-1.5">
               <button
-                onClick={() => setShowColorPicker(!showColorPicker)}
-                className="w-9 h-9 rounded-md border-2 border-white/60 shadow-sm shrink-0 transition-transform hover:scale-110"
-                style={{ background: NOTE_COLORS.find((c) => c.value === selectedColor)?.dot || "#FEF9C3" }}
-                title="Cor da nota"
-                aria-label="Cor da nota"
+                onClick={handleClose}
+                className="p-2 rounded-lg hover:bg-black/10 transition-colors shrink-0"
+                title="Voltar"
+                aria-label="Voltar"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={textColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+              </button>
+
+              <input
+                value={title}
+                onChange={(e) => !readOnly && setTitle(e.target.value)}
+                onFocus={() => { activeFieldRef.current = "title"; }}
+                onPaste={handleMobilePaste}
+                readOnly={readOnly}
+                placeholder="Título da nota..."
+                className="flex-1 min-w-0 bg-white/90 rounded-lg px-3 py-2 text-base font-semibold placeholder:text-gray-400 outline-none border-0 shadow-sm"
+                style={{ color: "#1A1A2E", fontSize: "16px" }}
               />
-            )}
 
-            {/* Copiar — sempre visível */}
-            <button
-              onClick={handleCopy}
-              className="p-2 rounded-lg hover:bg-black/10 transition-colors shrink-0"
-              title="Copiar nota"
-              aria-label="Copiar nota"
-              style={{ color: textColor }}
-            >
-              {copied ? <Check size={20} className="text-green-700" /> : <Copy size={20} />}
-            </button>
-
-            {/* Compartilhar — em modo visualização */}
-            {readOnly && editingNote && (
               <button
-                onClick={async () => {
-                  const plainText = blocksToPlainText(blocks);
-                  const shareText = `${title}\n\n${plainText}`.trim();
-                  if (navigator.share) {
-                    try {
-                      await navigator.share({ title: title || "Nota", text: shareText });
-                    } catch (err: any) {
-                      if (err?.name !== "AbortError") {
-                        toast({ title: "Erro ao compartilhar", description: "Não foi possível compartilhar a nota." });
+                onClick={handleClose}
+                className="p-2 rounded-lg hover:bg-black/10 transition-colors shrink-0"
+                title="Fechar"
+                aria-label="Fechar"
+              >
+                <X size={22} style={{ color: textColor }} />
+              </button>
+            </div>
+
+            {/* Linha 2: ações (cor, cadeado/copiar/compartilhar/editar) */}
+            <div className="flex items-center gap-1 px-2 pb-1.5 overflow-x-auto no-scrollbar" style={{ WebkitOverflowScrolling: "touch" }}>
+              {/* Cor da nota — sempre visível em modo edição */}
+              {!readOnly && (
+                <button
+                  onClick={() => setShowColorPicker(!showColorPicker)}
+                  className="rounded-md border-2 border-white/60 shadow-sm shrink-0 transition-transform hover:scale-110 flex items-center justify-center"
+                  style={{ background: NOTE_COLORS.find((c) => c.value === selectedColor)?.dot || "#FEF9C3", width: 36, height: 36 }}
+                  title="Cor da nota"
+                  aria-label="Cor da nota"
+                />
+              )}
+
+              {/* Copiar — sempre visível */}
+              <button
+                onClick={handleCopy}
+                className="p-2 rounded-lg hover:bg-black/10 transition-colors shrink-0 flex items-center justify-center"
+                title="Copiar nota"
+                aria-label="Copiar nota"
+                style={{ color: textColor, minWidth: 36, minHeight: 36 }}
+              >
+                {copied ? <Check size={18} className="text-green-700" /> : <Copy size={18} />}
+              </button>
+
+              {/* Compartilhar — em modo visualização */}
+              {readOnly && editingNote && (
+                <button
+                  onClick={async () => {
+                    const plainText = blocksToPlainText(blocks);
+                    const shareText = `${title}\n\n${plainText}`.trim();
+                    if (navigator.share) {
+                      try {
+                        await navigator.share({ title: title || "Nota", text: shareText });
+                      } catch (err: any) {
+                        if (err?.name !== "AbortError") {
+                          toast({ title: "Erro ao compartilhar", description: "Não foi possível compartilhar a nota." });
+                        }
+                      }
+                    } else {
+                      try {
+                        await navigator.clipboard.writeText(shareText);
+                        toast({ title: "Copiado!", description: "Texto copiado para a área de transferência." });
+                      } catch {
+                        toast({ title: "Erro", description: "Não foi possível copiar o texto." });
                       }
                     }
-                  } else {
-                    try {
-                      await navigator.clipboard.writeText(shareText);
-                      toast({ title: "Copiado!", description: "Texto da nota copiado para a área de transferência." });
-                    } catch {
-                      toast({ title: "Erro", description: "Não foi possível copiar o texto." });
-                    }
-                  }
-                }}
-                className="p-2 rounded-lg hover:bg-black/10 transition-all shrink-0"
-                title="Compartilhar nota"
-                aria-label="Compartilhar nota"
-                style={{ color: textColor }}
-              >
-                <Share2 size={20} />
-              </button>
-            )}
+                  }}
+                  className="p-2 rounded-lg hover:bg-black/10 transition-all shrink-0 flex items-center justify-center"
+                  title="Compartilhar nota"
+                  aria-label="Compartilhar nota"
+                  style={{ color: textColor, minWidth: 36, minHeight: 36 }}
+                >
+                  <Share2 size={18} />
+                </button>
+              )}
 
-            {/* Editar — em modo visualização */}
-            {readOnly && editingNote && (
-              <button
-                onClick={enterEditMode}
-                className="p-2 rounded-lg hover:bg-black/10 transition-all shrink-0"
-                title="Editar nota"
-                aria-label="Editar nota"
-                style={{ color: textColor }}
-              >
-                <Pencil size={20} />
-              </button>
-            )}
-
-            {/* ✕ Fechar — sempre visível */}
-            <button
-              onClick={handleClose}
-              className="p-2 rounded-lg hover:bg-black/10 transition-colors shrink-0"
-              title="Fechar"
-              aria-label="Fechar"
-            >
-              <X size={20} style={{ color: textColor }} />
-            </button>
+              {/* Editar — em modo visualização */}
+              {readOnly && editingNote && (
+                <button
+                  onClick={enterEditMode}
+                  className="px-3 py-2 rounded-lg hover:bg-black/10 transition-all shrink-0 flex items-center gap-1 font-semibold"
+                  title="Editar nota"
+                  aria-label="Editar nota"
+                  style={{ color: textColor, fontSize: 13 }}
+                >
+                  <Pencil size={16} /> Editar
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Color picker dropdown */}
           {showColorPicker && (
-            <div className="flex gap-2 px-4 py-2 justify-center shrink-0" style={{ background: theme.headerBg, transition: "background 0.3s ease" }}>
+            <div
+              className="flex gap-2 px-3 py-3 overflow-x-auto no-scrollbar shrink-0"
+              style={{ background: theme.headerBg, transition: "background 0.3s ease", WebkitOverflowScrolling: "touch" }}
+            >
               {NOTE_COLORS.map((c) => (
                 <button
                   key={c.value}
                   onClick={() => { setSelectedColor(c.value); setShowColorPicker(false); }}
                   className={cn(
-                    "w-9 h-9 rounded-full border-2 transition-all duration-200 shrink-0",
+                    "rounded-full border-2 transition-all duration-200 shrink-0",
                     selectedColor === c.value
                       ? "border-gray-800 scale-110 shadow-md"
                       : "border-white/60 hover:scale-105"
                   )}
-                  style={{ background: c.dot }}
+                  style={{ background: c.dot, width: 44, height: 44, minWidth: 44, minHeight: 44 }}
                   title={c.label}
+                  aria-label={c.label}
                 />
               ))}
             </div>
@@ -1037,19 +1045,29 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
                 if (block.type === "image" && block.url) {
                   return (
-                    <div key={`img-${idx}`} className="relative group/img my-2" style={{ maxWidth: "100%" }}>
+                    <div key={`img-${idx}`} className="relative group/img my-2" style={{ width: "40%", maxWidth: "40%" }}>
                       <img
                         src={block.url}
                         alt=""
-                        className="shadow-md"
-                        style={{ maxWidth: "calc(100% - 24px)", maxHeight: "250px", objectFit: "contain", borderRadius: "8px", margin: "0 12px" }}
+                        style={{
+                          width: "100%",
+                          height: "auto",
+                          objectFit: "contain",
+                          borderRadius: 8,
+                          boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                          display: "block",
+                        }}
                       />
-                      <button
-                        onClick={() => removeImageBlock(idx)}
-                        className="absolute top-2 right-2 p-1 rounded-full bg-black/50 text-white opacity-0 group-hover/img:opacity-100 transition-opacity duration-200 hover:bg-black/70"
-                      >
-                        <X size={14} />
-                      </button>
+                      {!readOnly && (
+                        <button
+                          onClick={() => removeImageBlock(idx)}
+                          className="absolute -top-2 -right-2 rounded-full text-white transition-all hover:bg-black/80 active:scale-95"
+                          style={{ background: "rgba(0,0,0,0.7)", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 6px rgba(0,0,0,0.2)" }}
+                          aria-label="Remover imagem"
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
                     </div>
                   );
                 }
@@ -1080,33 +1098,33 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
             <input ref={ocrCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleOcrImage} />
             <input ref={ocrFileRef} type="file" accept="image/*" className="hidden" onChange={handleOcrImage} />
 
-            {/* Row 1 */}
-            <div className="flex items-center justify-center gap-0.5 flex-wrap">
-              <button onClick={() => cameraInputRef.current?.click()} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+            {/* Row 1 — scroll horizontal para evitar corte em telas 360px */}
+            <div className="flex items-center gap-0.5 overflow-x-auto no-scrollbar" style={{ WebkitOverflowScrolling: "touch" }}>
+              <button onClick={() => cameraInputRef.current?.click()} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors shrink-0" style={{ color: theme.textMuted }}>
                 <Camera size={13} /> Câmera
               </button>
-              <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+              <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors shrink-0" style={{ color: theme.textMuted }}>
                 <ImagePlus size={13} /> Galeria
               </button>
-              <button onClick={handleCopy} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+              <button onClick={handleCopy} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors shrink-0" style={{ color: theme.textMuted }}>
                 {copied ? <Check size={13} className="text-green-600" /> : <Copy size={13} />} Copiar
               </button>
-              <button onClick={() => setShowOcrModal(true)} disabled={ocrLoading} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+              <button onClick={() => setShowOcrModal(true)} disabled={ocrLoading} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors shrink-0" style={{ color: theme.textMuted }}>
                 {ocrLoading ? <Loader2 size={13} className="animate-spin" /> : <ScanSearch size={13} />} OCR
               </button>
-              <button onClick={handleStartQrScanner} disabled={qrLoading} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+              <button onClick={handleStartQrScanner} disabled={qrLoading} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors shrink-0" style={{ color: theme.textMuted }}>
                 {qrLoading ? <Loader2 size={13} className="animate-spin" /> : <ScanLine size={13} />} QR
               </button>
             </div>
-            {/* Row 2 */}
-            <div className="flex items-center justify-center gap-0.5 flex-wrap mt-0.5">
-              <button onClick={addChecklist} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors" style={{ color: theme.textMuted }}>
+            {/* Row 2 — scroll horizontal */}
+            <div className="flex items-center gap-0.5 overflow-x-auto no-scrollbar mt-0.5" style={{ WebkitOverflowScrolling: "touch" }}>
+              <button onClick={addChecklist} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors shrink-0" style={{ color: theme.textMuted }}>
                 <ListChecks size={13} /> Lista
               </button>
               {onSchedule && (
                 <button
                   onClick={() => { setScheduleDate(new Date().toISOString().slice(0, 10)); setScheduleTime("09:00"); setShowScheduleDialog(true); }}
-                  className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors"
+                  className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors shrink-0"
                   style={{ color: theme.textMuted }}
                 >
                   <CalendarPlus size={13} /> Agendar
@@ -1115,17 +1133,17 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
               {voiceSupported && (
                 <button
                   onClick={toggleVoice}
-                  className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium transition-all"
+                  className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium transition-all shrink-0"
                   style={{ color: isListening ? "#E53935" : theme.textMuted, background: isListening ? "rgba(229,57,53,0.1)" : "transparent" }}
                 >
                   {isListening ? <MicOff size={13} /> : <Mic size={13} />} Voz
                 </button>
               )}
-              <div className="w-px h-3.5 mx-0.5" style={{ background: theme.lines }} />
-              <button onClick={undo} disabled={!canUndo} className="p-1 rounded-md hover:bg-black/5 transition-all" style={{ color: canUndo ? "#555" : "#BDBDBD", opacity: canUndo ? 1 : 0.4 }}>
+              <div className="w-px h-3.5 mx-0.5 shrink-0" style={{ background: theme.lines }} />
+              <button onClick={undo} disabled={!canUndo} className="p-1 rounded-md hover:bg-black/5 transition-all shrink-0" style={{ color: canUndo ? "#555" : "#BDBDBD", opacity: canUndo ? 1 : 0.4 }}>
                 <Undo2 size={13} />
               </button>
-              <button onClick={redo} disabled={!canRedo} className="p-1 rounded-md hover:bg-black/5 transition-all" style={{ color: canRedo ? "#555" : "#BDBDBD", opacity: canRedo ? 1 : 0.4 }}>
+              <button onClick={redo} disabled={!canRedo} className="p-1 rounded-md hover:bg-black/5 transition-all shrink-0" style={{ color: canRedo ? "#555" : "#BDBDBD", opacity: canRedo ? 1 : 0.4 }}>
                 <Redo2 size={13} />
               </button>
             </div>
