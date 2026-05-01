@@ -752,14 +752,15 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
           {/* ── HEADER ── */}
           <div
-            className="flex items-center gap-2 px-3 py-2.5 shrink-0"
-            style={{ background: theme.headerBg, transition: "background 0.3s ease" }}
+            className="flex items-center gap-1 px-2 py-2.5 shrink-0"
+            style={{ background: theme.headerBg, transition: "background 0.3s ease", paddingTop: "calc(10px + env(safe-area-inset-top))" }}
           >
             {/* ← Voltar (left close) */}
             <button
               onClick={handleClose}
-              className="p-2 rounded-lg hover:bg-black/10 transition-colors"
+              className="p-2 rounded-lg hover:bg-black/10 transition-colors shrink-0"
               title="Voltar"
+              aria-label="Voltar"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={textColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
             </button>
@@ -771,20 +772,33 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
               onPaste={handleMobilePaste}
               readOnly={readOnly}
               placeholder="Título da nota..."
-              className="flex-1 bg-white/90 rounded-lg px-3 py-2.5 text-base font-semibold placeholder:text-gray-400 outline-none border-0 shadow-sm"
+              className="flex-1 min-w-0 bg-white/90 rounded-lg px-3 py-2.5 text-base font-semibold placeholder:text-gray-400 outline-none border-0 shadow-sm"
               style={{ color: "#1A1A2E", fontSize: "17px" }}
             />
 
+            {/* Cor da nota — sempre visível em modo edição */}
             {!readOnly && (
               <button
                 onClick={() => setShowColorPicker(!showColorPicker)}
-                className="w-7 h-7 rounded-md border-2 border-white/60 shadow-sm shrink-0 transition-transform hover:scale-110"
+                className="w-9 h-9 rounded-md border-2 border-white/60 shadow-sm shrink-0 transition-transform hover:scale-110"
                 style={{ background: NOTE_COLORS.find((c) => c.value === selectedColor)?.dot || "#FEF9C3" }}
                 title="Cor da nota"
+                aria-label="Cor da nota"
               />
             )}
 
-            {/* Share button (visible in view mode for existing notes) */}
+            {/* Copiar — sempre visível */}
+            <button
+              onClick={handleCopy}
+              className="p-2 rounded-lg hover:bg-black/10 transition-colors shrink-0"
+              title="Copiar nota"
+              aria-label="Copiar nota"
+              style={{ color: textColor }}
+            >
+              {copied ? <Check size={20} className="text-green-700" /> : <Copy size={20} />}
+            </button>
+
+            {/* Compartilhar — em modo visualização */}
             {readOnly && editingNote && (
               <button
                 onClick={async () => {
@@ -807,31 +821,34 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                     }
                   }
                 }}
-                className="p-2 rounded-lg hover:bg-black/10 transition-all"
+                className="p-2 rounded-lg hover:bg-black/10 transition-all shrink-0"
                 title="Compartilhar nota"
+                aria-label="Compartilhar nota"
                 style={{ color: textColor }}
               >
                 <Share2 size={20} />
               </button>
             )}
 
-            {/* Pencil icon to enter edit mode (only in view mode for existing notes) */}
+            {/* Editar — em modo visualização */}
             {readOnly && editingNote && (
               <button
                 onClick={enterEditMode}
-                className="p-2 rounded-lg hover:bg-black/10 transition-all"
+                className="p-2 rounded-lg hover:bg-black/10 transition-all shrink-0"
                 title="Editar nota"
+                aria-label="Editar nota"
                 style={{ color: textColor }}
               >
                 <Pencil size={20} />
               </button>
             )}
 
-            {/* ✕ Fechar (right close) */}
+            {/* ✕ Fechar — sempre visível */}
             <button
               onClick={handleClose}
-              className="p-2 rounded-lg hover:bg-black/10 transition-colors"
+              className="p-2 rounded-lg hover:bg-black/10 transition-colors shrink-0"
               title="Fechar"
+              aria-label="Fechar"
             >
               <X size={20} style={{ color: textColor }} />
             </button>
