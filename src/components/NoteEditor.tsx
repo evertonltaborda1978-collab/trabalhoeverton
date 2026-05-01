@@ -26,7 +26,7 @@ import {
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
+// VisuallyHidden replaced with sr-only span for compatibility
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -721,7 +721,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
         style={{ height: "100dvh" }}
         aria-describedby={undefined}
       >
-        <VisuallyHidden><DialogTitle>Editor de Nota</DialogTitle></VisuallyHidden>
+        <DialogTitle className="sr-only">Editor de Nota</DialogTitle>
         {/* ── NOTEPAD CONTAINER ── */}
         <div
           className="flex flex-col"
