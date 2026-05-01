@@ -856,19 +856,23 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
           {/* Color picker dropdown */}
           {showColorPicker && (
-            <div className="flex gap-2 px-4 py-2 justify-center shrink-0" style={{ background: theme.headerBg, transition: "background 0.3s ease" }}>
+            <div
+              className="flex gap-2 px-3 py-3 overflow-x-auto no-scrollbar shrink-0"
+              style={{ background: theme.headerBg, transition: "background 0.3s ease", WebkitOverflowScrolling: "touch" }}
+            >
               {NOTE_COLORS.map((c) => (
                 <button
                   key={c.value}
                   onClick={() => { setSelectedColor(c.value); setShowColorPicker(false); }}
                   className={cn(
-                    "w-9 h-9 rounded-full border-2 transition-all duration-200 shrink-0",
+                    "rounded-full border-2 transition-all duration-200 shrink-0",
                     selectedColor === c.value
                       ? "border-gray-800 scale-110 shadow-md"
                       : "border-white/60 hover:scale-105"
                   )}
-                  style={{ background: c.dot }}
+                  style={{ background: c.dot, width: 44, height: 44, minWidth: 44, minHeight: 44 }}
                   title={c.label}
+                  aria-label={c.label}
                 />
               ))}
             </div>
