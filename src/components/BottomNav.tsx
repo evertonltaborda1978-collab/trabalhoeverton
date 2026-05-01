@@ -26,7 +26,7 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
         WebkitBackdropFilter: "blur(12px)",
         borderTop: "1px solid #F0F0F0",
         boxShadow: "0 -4px 16px rgba(0,0,0,0.04)",
-        paddingBottom: "env(safe-area-inset-bottom)",
+        paddingBottom: "calc(env(safe-area-inset-bottom) + 80px)",
       }}
     >
       <div className="flex items-center justify-around max-w-lg mx-auto">
