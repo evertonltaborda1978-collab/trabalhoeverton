@@ -13,22 +13,28 @@ const COLOR_MAP: Record<string, { bg: string; bar: string }> = {
   "bg-blue-100": { bg: "#E3F2FD", bar: "#90CAF9" },
 };
 
+function stripImagePlaceholders(text: string): string {
+  return text.replace(/\[imagem-?\d*\]/gi, "").replace(/\s{2,}/g, " ").trim();
+}
+
 function getPlainContent(content: string): string {
   try {
     const parsed = JSON.parse(content);
     if (Array.isArray(parsed)) {
-      return parsed
-        .filter((b: any) => b.type === "text" || b.type === "checklist")
-        .map((b: any) => {
-          if (b.type === "checklist" && Array.isArray(b.items)) {
-            return b.items.map((item: any) => item.text || "").join(" ");
-          }
-          return b.content || "";
-        })
-        .join(" ");
+      return stripImagePlaceholders(
+        parsed
+          .filter((b: any) => b.type === "text" || b.type === "checklist")
+          .map((b: any) => {
+            if (b.type === "checklist" && Array.isArray(b.items)) {
+              return b.items.map((item: any) => item.text || "").join(" ");
+            }
+            return b.content || "";
+          })
+          .join(" ")
+      );
     }
   } catch {}
-  return content;
+  return stripImagePlaceholders(content);
 }
 
 interface NoteCardProps {
@@ -46,7 +52,7 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, in
   const isDraft = note.status === "rascunho";
   const hasReminder = !!note.reminderDate;
   const plainContent = getPlainContent(note.content);
-  const preview = note.isLocked ? "🔒 Nota protegida" : (plainContent.length > 80 ? plainContent.slice(0, 80) + "…" : plainContent);
+  const preview = note.isLocked ? "🔒 Nota protegida" : (plainContent.length > 140 ? plainContent.slice(0, 140) + "…" : plainContent);
 
   return (
     <div
@@ -68,8 +74,8 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, in
             <HighlightText
               text={note.title || "Sem título"}
               highlight={searchQuery}
-              className="font-bold text-[15px] leading-tight line-clamp-1"
-              style={{ color: "#1A1A2E" }}
+              className="font-bold text-[15px] leading-snug line-clamp-2 break-words"
+              style={{ color: "#1A1A2E", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
             />
             {isDraft && (
               <span
@@ -87,8 +93,8 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, in
             <HighlightText
               text={preview}
               highlight={note.isLocked ? "" : searchQuery}
-              className="text-[12px] mt-0.5 line-clamp-1"
-              style={{ color: "#777" }}
+              className="text-[12px] mt-0.5 break-words"
+              style={{ color: "#777", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
             />
           )}
           <div className="flex items-center gap-1 mt-1">
