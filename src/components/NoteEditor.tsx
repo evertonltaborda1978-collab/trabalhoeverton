@@ -118,13 +118,22 @@ function serializeBlocks(blocks: ContentBlock[]): string {
   return JSON.stringify(blocks);
 }
 
+function stripImagePlaceholders(s: string): string {
+  return (s || "").replace(/\[imagem-?\d*\]/gi, "").replace(/\n{3,}/g, "\n\n");
+}
+
 function deserializeBlocks(raw: string): ContentBlock[] {
   if (!raw) return [{ type: "text", content: "" }];
   try {
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed)) {
+      return parsed.map((b: any) => {
+        if (b.type === "text") return { ...b, content: stripImagePlaceholders(b.content || "") };
+        return b;
+      });
+    }
   } catch { /* legacy plain text */ }
-  return [{ type: "text", content: raw }];
+  return [{ type: "text", content: stripImagePlaceholders(raw) }];
 }
 
 function blocksToPlainText(blocks: ContentBlock[]): string {
