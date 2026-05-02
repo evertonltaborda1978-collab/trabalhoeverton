@@ -1,8 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { MapPin, Navigation, AlertTriangle, Share2, Copy, Loader2, MapPinOff } from "lucide-react";
+import { MapPin, Navigation, AlertTriangle, Share2, Copy, Loader2, MapPinOff, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
+import { UpdateIndicator } from "./local/UpdateIndicator";
+import { AlertModal } from "./local/AlertModal";
+import { ShareLocationModal } from "./local/ShareLocationModal";
 
+const INTERVAL_NORMAL = 600;
+const INTERVAL_EMERGENCY = 30;
 
 interface Position {
   lat: number;
