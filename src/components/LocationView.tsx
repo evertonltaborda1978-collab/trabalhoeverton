@@ -1,8 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { MapPin, Navigation, AlertTriangle, Share2, Copy, Loader2, MapPinOff } from "lucide-react";
+import { MapPin, Navigation, AlertTriangle, Share2, Copy, Loader2, MapPinOff, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
+import { UpdateIndicator } from "./local/UpdateIndicator";
+import { AlertModal } from "./local/AlertModal";
+import { ShareLocationModal } from "./local/ShareLocationModal";
 
+const INTERVAL_NORMAL = 600;
+const INTERVAL_EMERGENCY = 30;
 
 interface Position {
   lat: number;
@@ -18,18 +23,24 @@ export function LocationView() {
   const [error, setError] = useState<string | null>(null);
   const [emergencyMode, setEmergencyMode] = useState(false);
   const [locationHistory, setLocationHistory] = useState<Position[]>([]);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [lastUpdateAt, setLastUpdateAt] = useState<number | null>(null);
+  const [now, setNow] = useState(Date.now());
+  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const watchIdRef = useRef<number | null>(null);
+  const intervalRef = useRef<number | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
 
-  const startTracking = useCallback(() => {
-    if (!navigator.geolocation) {
-      setError("Geolocalização não suportada neste navegador");
-      return;
-    }
+  // Tick a cada 1s para atualizar contadores
+  useEffect(() => {
+    if (!tracking) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [tracking]);
 
-    setLoading(true);
-    setError(null);
-
+  const fetchPosition = useCallback(() => {
+    setIsUpdating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const newPos: Position = {
@@ -40,6 +51,8 @@ export function LocationView() {
         };
         setPosition(newPos);
         setLocationHistory((prev) => [...prev.slice(-49), newPos]);
+        setLastUpdateAt(Date.now());
+        setIsUpdating(false);
         setLoading(false);
         setTracking(true);
       },
@@ -49,56 +62,88 @@ export function LocationView() {
             ? "Permissão de localização negada. Ative nas configurações do navegador."
             : "Não foi possível obter sua localização."
         );
+        setIsUpdating(false);
         setLoading(false);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        const newPos: Position = {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          accuracy: pos.coords.accuracy,
-          timestamp: pos.timestamp,
-        };
-        setPosition(newPos);
-        setLocationHistory((prev) => [...prev.slice(-49), newPos]);
-      },
-      () => {},
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   }, []);
+
+  const startTracking = useCallback(() => {
+    if (!navigator.geolocation) {
+      setError("Geolocalização não suportada neste navegador");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    fetchPosition();
+  }, [fetchPosition]);
 
   const stopTracking = useCallback(() => {
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
+    if (intervalRef.current !== null) {
+      window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
     setTracking(false);
   }, []);
 
+  // Reagendar intervalo conforme modo (normal 10min / emergência 30s)
+  useEffect(() => {
+    if (!tracking) return;
+    if (intervalRef.current !== null) {
+      window.clearInterval(intervalRef.current);
+    }
+    const ms = (emergencyMode ? INTERVAL_EMERGENCY : INTERVAL_NORMAL) * 1000;
+    intervalRef.current = window.setInterval(() => fetchPosition(), ms);
+
+    // Em emergência, watch contínuo de alta precisão
+    if (emergencyMode && watchIdRef.current === null) {
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        (pos) => {
+          const newPos: Position = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+            timestamp: pos.timestamp,
+          };
+          setPosition(newPos);
+          setLocationHistory((prev) => [...prev.slice(-49), newPos]);
+          setLastUpdateAt(Date.now());
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      );
+    } else if (!emergencyMode && watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+
+    return () => {
+      if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
+    };
+  }, [tracking, emergencyMode, fetchPosition]);
+
   useEffect(() => {
     return () => {
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-      }
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+      if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
     };
   }, []);
 
-  const shareLocation = useCallback(async () => {
+  const secondsSinceUpdate = lastUpdateAt ? Math.floor((now - lastUpdateAt) / 1000) : 0;
+  const interval = emergencyMode ? INTERVAL_EMERGENCY : INTERVAL_NORMAL;
+  const nextUpdateSecs = Math.max(0, interval - secondsSinceUpdate);
+
+
+  const openShare = useCallback(() => {
     if (!position) return;
-    const text = `📍 Minha localização atual:\nhttps://www.google.com/maps?q=${position.lat},${position.lng}`;
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: "Minha Localização", text });
-        toast({ title: "Localização compartilhada!" });
-      } catch { /* cancelled */ }
-    } else {
-      await navigator.clipboard.writeText(text);
-      toast({ title: "Link copiado!", description: "Cole para compartilhar sua localização." });
-    }
+    setShowShareModal(true);
   }, [position]);
+
 
   const copyCoords = useCallback(async () => {
     if (!position) return;
@@ -177,6 +222,16 @@ export function LocationView() {
         )}
       </div>
 
+      {/* Update indicator */}
+      {tracking && lastUpdateAt && (
+        <UpdateIndicator
+          secondsSinceUpdate={secondsSinceUpdate}
+          nextUpdateSecs={nextUpdateSecs}
+          isUpdating={isUpdating}
+          emergency={emergencyMode}
+        />
+      )}
+
       {/* Controls */}
       <div className="flex gap-2">
         <Button
@@ -189,14 +244,24 @@ export function LocationView() {
           {loading ? "Localizando..." : tracking ? "Parar rastreio" : "Rastrear"}
         </Button>
         <Button
-          onClick={shareLocation}
+          onClick={openShare}
           disabled={!position}
           variant="outline"
           className="gap-2 rounded-xl"
         >
           <Share2 size={16} /> Compartilhar
         </Button>
+        <Button
+          onClick={() => setShowAlertModal(true)}
+          disabled={!position}
+          variant="outline"
+          className="gap-2 rounded-xl"
+          title="Alertar dispositivo"
+        >
+          <Bell size={16} />
+        </Button>
       </div>
+
 
       {/* Position info */}
       {position && (
@@ -294,6 +359,14 @@ export function LocationView() {
           📍 Abrir no Google Maps
         </a>
       )}
+
+      {showAlertModal && position && (
+        <AlertModal deviceName="Este dispositivo" onClose={() => setShowAlertModal(false)} />
+      )}
+      {showShareModal && position && (
+        <ShareLocationModal lat={position.lat} lng={position.lng} onClose={() => setShowShareModal(false)} />
+      )}
     </div>
   );
 }
+
