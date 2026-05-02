@@ -68,78 +68,76 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, in
     >
       <div className="w-1 shrink-0 rounded-l-[18px]" style={{ background: colors.bar }} />
 
-      <div className="flex items-center gap-3 px-4 py-3 flex-1 min-w-0">
+      <div className="flex items-center gap-2 px-2 py-2 flex-1 min-w-0" style={{ padding: 8 }}>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <HighlightText
               text={note.title || "Sem título"}
               highlight={searchQuery}
-              className="font-bold text-[15px] leading-snug line-clamp-2 break-words"
-              style={{ color: "#1A1A2E", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+              className="font-bold text-[13px] leading-tight truncate"
+              style={{ color: "#1A1A2E" }}
             />
             {isDraft && (
               <span
                 className="inline-flex items-center gap-0.5 shrink-0 text-white font-bold"
-                style={{ fontSize: 10, background: "#F9A825", borderRadius: 6, padding: "2px 8px" }}
+                style={{ fontSize: 9, background: "#F9A825", borderRadius: 5, padding: "1px 5px" }}
               >
-                <Pencil size={9} /> Rascunho
+                <Pencil size={8} /> Rascunho
               </span>
             )}
             {note.isLocked && (
-              <Lock size={13} style={{ color: "#F9A825" }} className="shrink-0" />
+              <Lock size={11} style={{ color: "#F9A825" }} className="shrink-0" />
             )}
           </div>
           {preview && (
             <HighlightText
               text={preview}
               highlight={note.isLocked ? "" : searchQuery}
-              className="text-[12px] mt-0.5 break-words"
-              style={{ color: "#777", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+              className="text-[11px] mt-0.5 truncate"
+              style={{ color: "#777" }}
             />
           )}
-          <div className="flex items-center gap-1 mt-1">
-            <Clock size={11} style={{ color: "#999" }} />
-            <span className="text-[11.5px] font-semibold" style={{ color: "#999" }}>
+          <div className="flex items-center gap-1 mt-0.5">
+            <Clock size={9} style={{ color: "#999" }} />
+            <span className="text-[10px] font-semibold" style={{ color: "#999" }}>
               {format(note.updatedAt, "d MMM, HH:mm", { locale: ptBR })}
             </span>
             {hasReminder && (
-              <span className="flex items-center gap-0.5 ml-1 text-[10px] font-semibold" style={{ color: "#F9A825" }}>
-                <Bell size={10} /> {note.reminderDate} {note.reminderTime}
+              <span className="flex items-center gap-0.5 ml-1 text-[9px] font-semibold" style={{ color: "#F9A825" }}>
+                <Bell size={9} /> {note.reminderDate} {note.reminderTime}
               </span>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-0.5 shrink-0">
-          {/* Bell button */}
+        <div className="flex items-center gap-0 shrink-0">
           <button
             onClick={(e) => { e.stopPropagation(); onBellClick?.(note); }}
-            className="p-1.5 rounded-md transition-all hover:bg-black/5"
+            className="p-1 rounded-md transition-all hover:bg-black/5"
             style={{ color: hasReminder ? "#F9A825" : "#BDBDBD" }}
             title={hasReminder ? "Editar lembrete" : "Adicionar lembrete"}
           >
-            <Bell size={14} />
+            <Bell size={13} />
           </button>
-          {/* Lock button */}
           <button
             onClick={(e) => { e.stopPropagation(); onLockClick?.(note); }}
-            className="p-1.5 rounded-md transition-all hover:bg-black/5"
+            className="p-1 rounded-md transition-all hover:bg-black/5"
             style={{ color: note.isLocked ? "#F9A825" : "#BDBDBD" }}
             title={note.isLocked ? "Gerenciar bloqueio" : "Bloquear nota"}
           >
-            <Lock size={14} />
+            <Lock size={13} />
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(note.id); }}
-            className="p-1.5 rounded-md transition-all hover:bg-red-50"
+            className="p-1 rounded-md transition-all hover:bg-red-50"
             style={{ color: "#E53935" }}
             title="Excluir nota"
           >
-            <Trash2 size={16} />
+            <Trash2 size={14} />
           </button>
           <ChevronRight
-            size={16}
-            className="transition-transform duration-200 group-hover:translate-x-[3px]"
+            size={13}
+            className="transition-transform duration-200 group-hover:translate-x-[2px]"
             style={{ color: "#BDBDBD" }}
           />
         </div>
