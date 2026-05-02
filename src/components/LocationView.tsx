@@ -222,6 +222,16 @@ export function LocationView() {
         )}
       </div>
 
+      {/* Update indicator */}
+      {tracking && lastUpdateAt && (
+        <UpdateIndicator
+          secondsSinceUpdate={secondsSinceUpdate}
+          nextUpdateSecs={nextUpdateSecs}
+          isUpdating={isUpdating}
+          emergency={emergencyMode}
+        />
+      )}
+
       {/* Controls */}
       <div className="flex gap-2">
         <Button
@@ -234,14 +244,24 @@ export function LocationView() {
           {loading ? "Localizando..." : tracking ? "Parar rastreio" : "Rastrear"}
         </Button>
         <Button
-          onClick={shareLocation}
+          onClick={openShare}
           disabled={!position}
           variant="outline"
           className="gap-2 rounded-xl"
         >
           <Share2 size={16} /> Compartilhar
         </Button>
+        <Button
+          onClick={() => setShowAlertModal(true)}
+          disabled={!position}
+          variant="outline"
+          className="gap-2 rounded-xl"
+          title="Alertar dispositivo"
+        >
+          <Bell size={16} />
+        </Button>
       </div>
+
 
       {/* Position info */}
       {position && (
