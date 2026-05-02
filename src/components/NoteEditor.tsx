@@ -1217,7 +1217,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                 style={{
                   background: theme.toolbarBg,
                   borderTop: `1px solid ${theme.lines}`,
-                  paddingBottom: "calc(6px + env(safe-area-inset-bottom))",
+                  paddingBottom: "calc(60px + env(safe-area-inset-bottom))",
                 }}
               >
                 <button
@@ -1243,7 +1243,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                 style={{
                   background: theme.toolbarBg,
                   borderTop: `1px solid ${theme.lines}`,
-                  paddingBottom: "calc(6px + env(safe-area-inset-bottom))",
+                  paddingBottom: "calc(60px + env(safe-area-inset-bottom))",
                 }}
               >
                 <button
@@ -1269,7 +1269,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
               style={{
                 background: theme.toolbarBg,
                 borderTop: `1px solid ${theme.lines}`,
-                paddingBottom: "calc(6px + env(safe-area-inset-bottom))",
+                paddingBottom: "calc(60px + env(safe-area-inset-bottom))",
               }}
             >
               <span className="text-xs font-semibold" style={{ color: theme.textMuted }}>👁️ Modo visualização</span>
