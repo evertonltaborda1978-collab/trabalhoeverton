@@ -139,19 +139,11 @@ export function LocationView() {
   const nextUpdateSecs = Math.max(0, interval - secondsSinceUpdate);
 
 
-  const shareLocation = useCallback(async () => {
+  const openShare = useCallback(() => {
     if (!position) return;
-    const text = `📍 Minha localização atual:\nhttps://www.google.com/maps?q=${position.lat},${position.lng}`;
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: "Minha Localização", text });
-        toast({ title: "Localização compartilhada!" });
-      } catch { /* cancelled */ }
-    } else {
-      await navigator.clipboard.writeText(text);
-      toast({ title: "Link copiado!", description: "Cole para compartilhar sua localização." });
-    }
+    setShowShareModal(true);
   }, [position]);
+
 
   const copyCoords = useCallback(async () => {
     if (!position) return;
