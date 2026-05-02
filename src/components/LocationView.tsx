@@ -359,6 +359,14 @@ export function LocationView() {
           📍 Abrir no Google Maps
         </a>
       )}
+
+      {showAlertModal && position && (
+        <AlertModal deviceName="Este dispositivo" onClose={() => setShowAlertModal(false)} />
+      )}
+      {showShareModal && position && (
+        <ShareLocationModal lat={position.lat} lng={position.lng} onClose={() => setShowShareModal(false)} />
+      )}
     </div>
   );
 }
+
