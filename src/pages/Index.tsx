@@ -46,7 +46,7 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen" style={{ background: "#F7F5F2", paddingBottom: "calc(80px + env(safe-area-inset-bottom) + 80px)" }}>
+    <div className="min-h-screen" style={{ background: "#F7F5F2", paddingBottom: "calc(80px + env(safe-area-inset-bottom) + 40px)" }}>
       {/* Header */}
       <header
         className="sticky top-0 z-40"
