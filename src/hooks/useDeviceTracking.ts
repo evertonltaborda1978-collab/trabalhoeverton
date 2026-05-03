@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 export interface UserDevice {
   id: string;
   device_name: string;
+  custom_label: string | null;
   browser: string;
   os: string;
   last_seen_at: string;
