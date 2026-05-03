@@ -140,7 +140,13 @@ const Index = () => {
       {/* Bottom Navigation */}
       <BottomNav active={tab} onChange={setTab} />
       <SnoozeAlert alert={activeAlert || reminderAlert} onDismiss={(id) => { dismissAlert(id); dismissReminderAlert(id); }} onSnooze={(id, min) => { snoozeAlert(id, min); snoozeReminderAlert(id, min); }} />
-    </div>
+      {showLabelModal && currentDevice && (
+        <DeviceLabelModal
+          deviceId={currentDevice.id}
+          defaultName={currentDevice.device_name}
+          onDone={() => { setShowLabelModal(false); fetchDevices(); }}
+        />
+      )}
   );
 };
 
