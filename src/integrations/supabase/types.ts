@@ -74,6 +74,136 @@ export type Database = {
         }
         Relationships: []
       }
+      device_commands: {
+        Row: {
+          command: string
+          created_at: string
+          device_id: string
+          executed_at: string | null
+          id: string
+          payload: Json | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          command: string
+          created_at?: string
+          device_id: string
+          executed_at?: string | null
+          id?: string
+          payload?: Json | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          command?: string
+          created_at?: string
+          device_id?: string
+          executed_at?: string | null
+          id?: string
+          payload?: Json | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_commands_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "user_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      device_locations: {
+        Row: {
+          accuracy: number | null
+          address: string | null
+          battery_level: number | null
+          device_id: string
+          id: string
+          is_online: boolean | null
+          latitude: number
+          longitude: number
+          recorded_at: string
+          source: string
+          user_id: string
+        }
+        Insert: {
+          accuracy?: number | null
+          address?: string | null
+          battery_level?: number | null
+          device_id: string
+          id?: string
+          is_online?: boolean | null
+          latitude: number
+          longitude: number
+          recorded_at?: string
+          source?: string
+          user_id: string
+        }
+        Update: {
+          accuracy?: number | null
+          address?: string | null
+          battery_level?: number | null
+          device_id?: string
+          id?: string
+          is_online?: boolean | null
+          latitude?: number
+          longitude?: number
+          recorded_at?: string
+          source?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_locations_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "user_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      geofence_reminders: {
+        Row: {
+          address: string
+          created_at: string
+          id: string
+          is_active: boolean
+          latitude: number
+          longitude: number
+          radius_m: number
+          title: string
+          triggered_at: string | null
+          user_id: string
+        }
+        Insert: {
+          address: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          latitude: number
+          longitude: number
+          radius_m?: number
+          title: string
+          triggered_at?: string | null
+          user_id: string
+        }
+        Update: {
+          address?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          latitude?: number
+          longitude?: number
+          radius_m?: number
+          title?: string
+          triggered_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       google_calendar_tokens: {
         Row: {
           access_token: string
@@ -103,6 +233,44 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      location_shares: {
+        Row: {
+          created_at: string
+          device_id: string | null
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          token: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_id?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          token: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          device_id?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          token?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_shares_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "user_devices"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notes: {
         Row: {
@@ -168,6 +336,7 @@ export type Database = {
         Row: {
           browser: string
           created_at: string
+          custom_label: string | null
           device_fingerprint: string
           device_name: string
           id: string
@@ -180,6 +349,7 @@ export type Database = {
         Insert: {
           browser?: string
           created_at?: string
+          custom_label?: string | null
           device_fingerprint?: string
           device_name?: string
           id?: string
@@ -192,6 +362,7 @@ export type Database = {
         Update: {
           browser?: string
           created_at?: string
+          custom_label?: string | null
           device_fingerprint?: string
           device_name?: string
           id?: string
