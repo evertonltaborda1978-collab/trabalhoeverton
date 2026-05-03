@@ -9,6 +9,7 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
 import ShareReceiver from "./pages/ShareReceiver";
+import PublicShare from "./pages/PublicShare";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +39,7 @@ const App = () => (
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/share" element={<ProtectedRoute><ShareReceiver /></ProtectedRoute>} />
+            <Route path="/share/:token" element={<PublicShare />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
