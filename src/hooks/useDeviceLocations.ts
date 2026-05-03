@@ -27,29 +27,7 @@ async function getBattery(): Promise<number | null> {
   return null;
 }
 
-async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
-  try {
-    const { data, error } = await supabase.functions.invoke("google-geocode", {
-      body: null,
-      method: "GET",
-      headers: {},
-    });
-    if (error || !data) {
-      // fallback to fetch
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-geocode?mode=reverse&lat=${lat}&lng=${lng}`;
-      const resp = await fetch(url, {
-        headers: { Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
-      });
-      const j = await resp.json();
-      return j.results?.[0]?.formatted ?? null;
-    }
-    return (data as any).results?.[0]?.formatted ?? null;
-  } catch {
-    return null;
-  }
-}
-
-async function reverseGeocodeFetch(lat: number, lng: number): Promise<string | null> {
+export async function reverseGeocodeFetch(lat: number, lng: number): Promise<string | null> {
   try {
     const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-geocode?mode=reverse&lat=${lat}&lng=${lng}`;
     const resp = await fetch(url, {
@@ -62,13 +40,25 @@ async function reverseGeocodeFetch(lat: number, lng: number): Promise<string | n
   }
 }
 
+export async function forwardGeocodeFetch(query: string): Promise<{ formatted: string; lat: number; lng: number }[]> {
+  try {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-geocode?mode=forward&q=${encodeURIComponent(query)}`;
+    const resp = await fetch(url, {
+      headers: { Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+    });
+    const j = await resp.json();
+    return j.results || [];
+  } catch {
+    return [];
+  }
+}
+
 export function useDeviceLocations() {
   const { user } = useAuth();
   const [locations, setLocations] = useState<DeviceLocation[]>([]);
 
   const fetchLocations = useCallback(async () => {
     if (!user) return;
-    // get latest 1 per device using order + DISTINCT-like via aggregate query
     const { data } = await supabase
       .from("device_locations")
       .select("*")
@@ -80,7 +70,6 @@ export function useDeviceLocations() {
 
   useEffect(() => { fetchLocations(); }, [fetchLocations]);
 
-  // Realtime updates
   useEffect(() => {
     if (!user) return;
     const ch = supabase
@@ -108,5 +97,11 @@ export function useDeviceLocations() {
     fetchLocations();
   }, [user, fetchLocations]);
 
-  return { locations, fetchLocations, recordLocation };
+  // Latest location per device
+  const latestByDevice = locations.reduce<Record<string, DeviceLocation>>((acc, l) => {
+    if (!acc[l.device_id]) acc[l.device_id] = l;
+    return acc;
+  }, {});
+
+  return { locations, latestByDevice, fetchLocations, recordLocation };
 }
