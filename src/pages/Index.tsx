@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MoonPhaseWidget } from "@/components/MoonPhaseWidget";
 import { BottomNav } from "@/components/BottomNav";
 import { NotesView } from "@/components/NotesView";
@@ -8,8 +8,10 @@ import { WeatherView } from "@/components/WeatherView";
 import { DevicesView } from "@/components/DevicesView";
 import { FuelCalculatorView } from "@/components/FuelCalculatorView";
 import { SnoozeAlert } from "@/components/SnoozeAlert";
+import { DeviceLabelModal } from "@/components/local/DeviceLabelModal";
 import { useNotes } from "@/hooks/useNotes";
 import { useAppointments } from "@/hooks/useAppointments";
+import { useDeviceTracking } from "@/hooks/useDeviceTracking";
 import { useAuth } from "@/contexts/AuthContext";
 import { LogOut } from "lucide-react";
 
@@ -29,6 +31,14 @@ const Index = () => {
   const { notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, setNoteLock, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes } = useNotes();
   const { appointments, trashedAppointments, addAppointment, updateAppointment, deleteAppointment, restoreAppointment, permanentDeleteAppointment, emptyAppointmentTrash, activeAlert, dismissAlert, snoozeAlert } = useAppointments();
   const { signOut } = useAuth();
+  const { currentDevice, fetchDevices } = useDeviceTracking();
+  const [showLabelModal, setShowLabelModal] = useState(false);
+
+  useEffect(() => {
+    if (currentDevice && !currentDevice.custom_label) {
+      setShowLabelModal(true);
+    }
+  }, [currentDevice]);
 
   // When deleting an appointment, also clear matching note reminders
   const handleDeleteAppointment = (id: string) => {
@@ -130,6 +140,13 @@ const Index = () => {
       {/* Bottom Navigation */}
       <BottomNav active={tab} onChange={setTab} />
       <SnoozeAlert alert={activeAlert || reminderAlert} onDismiss={(id) => { dismissAlert(id); dismissReminderAlert(id); }} onSnooze={(id, min) => { snoozeAlert(id, min); snoozeReminderAlert(id, min); }} />
+      {showLabelModal && currentDevice && (
+        <DeviceLabelModal
+          deviceId={currentDevice.id}
+          defaultName={currentDevice.device_name}
+          onDone={() => { setShowLabelModal(false); fetchDevices(); }}
+        />
+      )}
     </div>
   );
 };

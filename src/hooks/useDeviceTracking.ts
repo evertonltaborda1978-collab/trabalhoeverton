@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 export interface UserDevice {
   id: string;
   device_name: string;
+  custom_label: string | null;
   browser: string;
   os: string;
   last_seen_at: string;
@@ -98,11 +99,18 @@ export function useDeviceTracking() {
     setDevices((prev) => prev.filter((d) => d.id !== id));
   }, []);
 
+  const renameDevice = useCallback(async (id: string, label: string) => {
+    await supabase.from("user_devices").update({ custom_label: label }).eq("id", id);
+    setDevices((prev) => prev.map((d) => (d.id === id ? { ...d, custom_label: label } : d)));
+  }, []);
+
   useEffect(() => {
     if (user) {
       trackDevice().then(fetchDevices);
     }
   }, [user, trackDevice, fetchDevices]);
 
-  return { devices, loading, removeDevice, fetchDevices };
+  const currentDevice = devices.find((d) => d.is_current) || null;
+
+  return { devices, loading, removeDevice, renameDevice, fetchDevices, currentDevice };
 }
