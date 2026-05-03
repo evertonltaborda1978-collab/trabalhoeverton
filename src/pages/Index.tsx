@@ -147,6 +147,7 @@ const Index = () => {
           onDone={() => { setShowLabelModal(false); fetchDevices(); }}
         />
       )}
+    </div>
   );
 };
 
