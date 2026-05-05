@@ -25,7 +25,9 @@ interface NotesViewProps {
   onDelete: (id: string) => void;
   onUpdate: (id: string, title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string, status?: "rascunho" | "publicada") => void;
   onSetReminder: (id: string, date: string | null, time: string | null) => void;
-  onSetLock: (id: string, isLocked: boolean, lockPin: string | null) => void;
+  onLockNote: (id: string, pin: string) => Promise<boolean>;
+  onUnlockNote: (id: string, pin: string) => Promise<boolean>;
+  onVerifyPin: (id: string, pin: string) => Promise<unknown | null>;
   onAddAppointment?: (title: string, date: Date, time: string, description: string) => void;
   syncStatus: SyncStatus;
   draftCount: number;
@@ -38,7 +40,7 @@ interface NotesViewProps {
   onEmptyTrash: () => void;
 }
 
-export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onSetLock, onAddAppointment, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, trashedNotes, onRestoreNote, onPermanentDeleteNote, onEmptyTrash }: NotesViewProps) {
+export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onLockNote, onUnlockNote, onVerifyPin, onAddAppointment, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, trashedNotes, onRestoreNote, onPermanentDeleteNote, onEmptyTrash }: NotesViewProps) {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
@@ -158,30 +160,38 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onS
     setLockMode(note.isLocked ? "manage" : "set");
   };
 
-  const handleSetPin = (pin: string) => {
+  const handleSetPin = async (pin: string) => {
     if (!lockNote) return;
-    onSetLock(lockNote.id, true, pin);
-    toast({ title: "🔒 Nota protegida!", description: "Senha definida com sucesso" });
+    const ok = await onLockNote(lockNote.id, pin);
+    if (ok) toast({ title: "🔒 Nota protegida!", description: "Conteúdo criptografado neste dispositivo" });
   };
 
-  const handleUnlockAttempt = (pin: string): boolean => {
+  const handleUnlockAttempt = async (pin: string): Promise<boolean> => {
     if (!lockNote) return false;
-    if (lockNote.lockPin === pin) {
-      // If unlocking to open editor
-      if (pendingUnlockNote?.id === lockNote.id) {
-        setEditingNote(pendingUnlockNote);
-        setDialogOpen(true);
-        setPendingUnlockNote(null);
-      }
-      return true;
+    const payload = await onVerifyPin(lockNote.id, pin);
+    if (!payload) return false;
+    // If unlocking to open editor, give the editor a temporarily decrypted note
+    if (pendingUnlockNote?.id === lockNote.id) {
+      setEditingNote({ ...pendingUnlockNote, ...(payload as any), isLocked: true });
+      setEditorReadOnly(true);
+      setDialogOpen(true);
+      setPendingUnlockNote(null);
     }
-    return false;
+    return true;
   };
 
-  const handleRemoveLock = () => {
+  const handleRemoveLock = async () => {
     if (!lockNote) return;
-    onSetLock(lockNote.id, false, null);
-    toast({ title: "🔓 Proteção removida" });
+    // mode 'manage' first verifies PIN via handleUnlockAttempt; here we permanently unlock using stored decrypted state
+    // The modal calls onUnlock(pin) -> handleUnlockAttempt; on success the note is decrypted in-memory.
+    // To persist removal, we need the PIN — handled in handleManageRemove below.
+  };
+
+  const handleManageRemove = async (pin: string): Promise<boolean> => {
+    if (!lockNote) return false;
+    const ok = await onUnlockNote(lockNote.id, pin);
+    if (ok) toast({ title: "🔓 Proteção removida" });
+    return ok;
   };
 
   const handleExport = () => {
