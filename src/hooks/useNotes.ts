@@ -19,7 +19,9 @@ export interface Note {
   reminderDate?: string | null;
   reminderTime?: string | null;
   isLocked: boolean;
-  lockPin?: string | null;
+  lockSalt?: string | null;
+  reminderDate?: string | null;
+  reminderTime?: string | null;
   deletedAt?: Date | null;
 }
 
