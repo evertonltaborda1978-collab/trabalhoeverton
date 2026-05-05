@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
     // Look up nonce -> user_id, ensure not expired, then delete (single-use)
     const { data: stateRow } = await adminClient
       .from('oauth_states')
-      .select('user_id, expires_at')
+      .select('user_id, expires_at, app_origin')
       .eq('token', state)
       .maybeSingle();
 
