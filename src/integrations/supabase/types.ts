@@ -284,6 +284,7 @@ export type Database = {
           images: string[]
           is_locked: boolean
           lock_pin: string | null
+          lock_salt: string | null
           reminder_date: string | null
           reminder_time: string | null
           sincronizado: boolean
@@ -303,6 +304,7 @@ export type Database = {
           images?: string[]
           is_locked?: boolean
           lock_pin?: string | null
+          lock_salt?: string | null
           reminder_date?: string | null
           reminder_time?: string | null
           sincronizado?: boolean
@@ -322,12 +324,37 @@ export type Database = {
           images?: string[]
           is_locked?: boolean
           lock_pin?: string | null
+          lock_salt?: string | null
           reminder_date?: string | null
           reminder_time?: string | null
           sincronizado?: boolean
           status?: string
           title?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      oauth_states: {
+        Row: {
+          created_at: string
+          expires_at: string
+          provider: string
+          token: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          provider?: string
+          token: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          provider?: string
+          token?: string
           user_id?: string
         }
         Relationships: []
