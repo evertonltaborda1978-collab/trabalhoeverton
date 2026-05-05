@@ -374,7 +374,6 @@ export function useNotes() {
         images: [],
         is_locked: true,
         lock_salt: salt,
-        lock_pin: null,
         updated_at: now.toISOString(),
         sincronizado: true,
       }).eq("id", id);
@@ -407,7 +406,6 @@ export function useNotes() {
         images: payload.images,
         is_locked: false,
         lock_salt: null,
-        lock_pin: null,
         updated_at: now.toISOString(),
         sincronizado: true,
       }).eq("id", id);
