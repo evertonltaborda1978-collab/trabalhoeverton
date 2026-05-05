@@ -90,7 +90,7 @@ function mapRow(n: any): Note {
     reminderDate: n.reminder_date || null,
     reminderTime: n.reminder_time || null,
     isLocked: n.is_locked || false,
-    lockPin: n.lock_pin || null,
+    lockSalt: n.lock_salt || null,
     deletedAt: n.deleted_at ? new Date(n.deleted_at) : null,
   };
 }
@@ -220,7 +220,7 @@ export function useNotes() {
         status,
         sincronizado: false,
         isLocked: false,
-        lockPin: null,
+        lockSalt: null,
         reminderDate: null,
         reminderTime: null,
       };
@@ -356,14 +356,65 @@ export function useNotes() {
     } catch { setSyncStatus("offline"); }
   }, []);
 
-  // Set/remove lock
-  const setNoteLock = useCallback(async (id: string, isLocked: boolean, lockPin: string | null) => {
-    setNotes((prev) => prev.map((n) => n.id === id ? { ...n, isLocked, lockPin, updatedAt: new Date(), sincronizado: false } : n));
+  // Lock a note: encrypts content+title+images with PIN-derived key. PIN is never stored.
+  const lockNoteWithPin = useCallback(async (id: string, pin: string): Promise<boolean> => {
+    const note = notes.find((n) => n.id === id);
+    if (!note) return false;
+    if (isEncrypted(note.content)) return true; // already locked
+    const payload: LockPayload = { title: note.title, content: note.content, images: note.images };
+    const { cipher, salt } = await encryptNote(pin, payload);
+    const now = new Date();
+    setNotes((prev) => prev.map((n) => n.id === id
+      ? { ...n, title: "🔒", content: cipher, images: [], isLocked: true, lockSalt: salt, updatedAt: now, sincronizado: false }
+      : n));
     try {
-      await (supabase.from("notes") as any).update({ is_locked: isLocked, lock_pin: lockPin, updated_at: new Date().toISOString(), sincronizado: true }).eq("id", id);
+      await (supabase.from("notes") as any).update({
+        title: "🔒",
+        content: cipher,
+        images: [],
+        is_locked: true,
+        lock_salt: salt,
+        lock_pin: null,
+        updated_at: now.toISOString(),
+        sincronizado: true,
+      }).eq("id", id);
       setNotes((prev) => prev.map((n) => n.id === id ? { ...n, sincronizado: true } : n));
-    } catch { setSyncStatus("offline"); }
-  }, []);
+      return true;
+    } catch { setSyncStatus("offline"); return true; }
+  }, [notes]);
+
+  // Verify a PIN against an encrypted note (does not persist or unlock).
+  const verifyNotePin = useCallback(async (id: string, pin: string): Promise<LockPayload | null> => {
+    const note = notes.find((n) => n.id === id);
+    if (!note || !note.lockSalt || !isEncrypted(note.content)) return null;
+    return decryptNote(pin, note.content, note.lockSalt);
+  }, [notes]);
+
+  // Permanently unlock: decrypt with PIN, restore plaintext, clear lock fields.
+  const unlockNoteWithPin = useCallback(async (id: string, pin: string): Promise<boolean> => {
+    const note = notes.find((n) => n.id === id);
+    if (!note || !note.lockSalt) return false;
+    const payload = await decryptNote(pin, note.content, note.lockSalt);
+    if (!payload) return false;
+    const now = new Date();
+    setNotes((prev) => prev.map((n) => n.id === id
+      ? { ...n, title: payload.title, content: payload.content, images: payload.images, isLocked: false, lockSalt: null, updatedAt: now, sincronizado: false }
+      : n));
+    try {
+      await (supabase.from("notes") as any).update({
+        title: payload.title,
+        content: payload.content,
+        images: payload.images,
+        is_locked: false,
+        lock_salt: null,
+        lock_pin: null,
+        updated_at: now.toISOString(),
+        sincronizado: true,
+      }).eq("id", id);
+      setNotes((prev) => prev.map((n) => n.id === id ? { ...n, sincronizado: true } : n));
+      return true;
+    } catch { setSyncStatus("offline"); return true; }
+  }, [notes]);
 
   const draftCount = notes.filter((n) => n.status === "rascunho" && !n.deletedAt).length;
   const activeNotes = notes.filter((n) => !n.deletedAt);
