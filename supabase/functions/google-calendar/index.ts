@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
     }, { onConflict: 'user_id' });
 
     // Determine app origin to scope postMessage. Falls back to '*' only if missing.
-    const appOrigin = url.searchParams.get('app_origin') || req.headers.get('origin') || '';
+    const appOrigin = stateRow.app_origin || '';
     const targetOrigin = appOrigin && /^https?:\/\//.test(appOrigin) ? JSON.stringify(appOrigin) : '"*"';
 
     return new Response(`<html><body><script>try{window.opener && window.opener.postMessage('google_calendar_connected', ${targetOrigin});}catch(e){}window.close();</script><p>Conectado! Você pode fechar esta janela.</p></body></html>`, {
