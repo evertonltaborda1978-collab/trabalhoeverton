@@ -29,11 +29,35 @@ Deno.serve(async (req) => {
     });
   }
 
-  // Generate auth URL
+  const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+  // Generate auth URL — requires authenticated user; issues short-lived random nonce as state
   if (action === 'auth_url') {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const { data: { user }, error: userError } = await adminClient.auth.getUser(authHeader.replace('Bearer ', ''));
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: 'Invalid token' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const redirectUri = url.searchParams.get('redirect_uri') || `${SUPABASE_URL}/functions/v1/google-calendar?action=callback`;
-    const state = url.searchParams.get('state') || '';
-    
+
+    // Random opaque nonce mapped to user_id, expires in 10min
+    const nonceBytes = new Uint8Array(32);
+    crypto.getRandomValues(nonceBytes);
+    const nonce = Array.from(nonceBytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+    await adminClient.from('oauth_states').insert({
+      token: nonce,
+      user_id: user.id,
+      provider: 'google',
+    });
+
     const params = new URLSearchParams({
       client_id: GOOGLE_CLIENT_ID,
       redirect_uri: redirectUri,
@@ -41,7 +65,7 @@ Deno.serve(async (req) => {
       scope: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events',
       access_type: 'offline',
       prompt: 'consent',
-      state,
+      state: nonce,
     });
 
     return new Response(JSON.stringify({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` }), {
@@ -52,12 +76,25 @@ Deno.serve(async (req) => {
   // OAuth callback
   if (action === 'callback') {
     const code = url.searchParams.get('code');
-    const state = url.searchParams.get('state'); // contains user JWT
-    
-    if (!code) {
-      return new Response('Missing code', { status: 400, headers: corsHeaders });
+    const state = url.searchParams.get('state'); // opaque nonce
+
+    if (!code || !state) {
+      return new Response('Missing code or state', { status: 400, headers: corsHeaders });
     }
 
+    // Look up nonce -> user_id, ensure not expired, then delete (single-use)
+    const { data: stateRow } = await adminClient
+      .from('oauth_states')
+      .select('user_id, expires_at')
+      .eq('token', state)
+      .maybeSingle();
+
+    if (!stateRow || new Date(stateRow.expires_at) < new Date()) {
+      return new Response('Invalid or expired state', { status: 401, headers: corsHeaders });
+    }
+    await adminClient.from('oauth_states').delete().eq('token', state);
+
+    const userId = stateRow.user_id;
     const redirectUri = `${SUPABASE_URL}/functions/v1/google-calendar?action=callback`;
 
     // Exchange code for tokens
@@ -79,28 +116,22 @@ Deno.serve(async (req) => {
       return new Response('Authentication failed. Please reconnect.', { status: 400, headers: corsHeaders });
     }
 
-    // Get user from state (JWT)
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const { data: { user }, error: userError } = await supabase.auth.getUser(state || '');
-    
-    if (userError || !user) {
-      return new Response('Invalid user token', { status: 401, headers: corsHeaders });
-    }
-
     // Store tokens
     const expiresAt = new Date(Date.now() + (tokens.expires_in || 3600) * 1000).toISOString();
-    
-    await supabase.from('google_calendar_tokens').upsert({
-      user_id: user.id,
+
+    await adminClient.from('google_calendar_tokens').upsert({
+      user_id: userId,
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token || '',
       expires_at: expiresAt,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' });
 
-    // Redirect back to app
-    const appUrl = url.searchParams.get('app_url') || url.origin;
-    return new Response(`<html><body><script>window.close(); window.opener && window.opener.postMessage('google_calendar_connected', '*');</script><p>Conectado! Você pode fechar esta janela.</p></body></html>`, {
+    // Determine app origin to scope postMessage. Falls back to '*' only if missing.
+    const appOrigin = url.searchParams.get('app_origin') || req.headers.get('origin') || '';
+    const targetOrigin = appOrigin && /^https?:\/\//.test(appOrigin) ? JSON.stringify(appOrigin) : '"*"';
+
+    return new Response(`<html><body><script>try{window.opener && window.opener.postMessage('google_calendar_connected', ${targetOrigin});}catch(e){}window.close();</script><p>Conectado! Você pode fechar esta janela.</p></body></html>`, {
       headers: { ...corsHeaders, 'Content-Type': 'text/html' },
     });
   }
@@ -112,16 +143,15 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const { data: { user }, error: userError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
-    
+    const { data: { user }, error: userError } = await adminClient.auth.getUser(authHeader.replace('Bearer ', ''));
+
     if (userError || !user) {
       return new Response(JSON.stringify({ error: 'Invalid token' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     // Get stored Google tokens
-    const { data: tokenData } = await supabase.from('google_calendar_tokens').select('*').eq('user_id', user.id).single();
-    
+    const { data: tokenData } = await adminClient.from('google_calendar_tokens').select('*').eq('user_id', user.id).single();
+
     if (!tokenData) {
       return new Response(JSON.stringify({ error: 'Not connected', connected: false }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
@@ -145,7 +175,7 @@ Deno.serve(async (req) => {
       if (refreshData.access_token) {
         accessToken = refreshData.access_token;
         const newExpiry = new Date(Date.now() + (refreshData.expires_in || 3600) * 1000).toISOString();
-        await supabase.from('google_calendar_tokens').update({
+        await adminClient.from('google_calendar_tokens').update({
           access_token: accessToken,
           expires_at: newExpiry,
           updated_at: new Date().toISOString(),
@@ -226,13 +256,12 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ connected: false }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const { data: { user } } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
+    const { data: { user } } = await adminClient.auth.getUser(authHeader.replace('Bearer ', ''));
     if (!user) {
       return new Response(JSON.stringify({ connected: false }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const { data } = await supabase.from('google_calendar_tokens').select('id').eq('user_id', user.id).single();
+    const { data } = await adminClient.from('google_calendar_tokens').select('id').eq('user_id', user.id).single();
     return new Response(JSON.stringify({ connected: !!data }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
@@ -243,13 +272,12 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const { data: { user } } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
+    const { data: { user } } = await adminClient.auth.getUser(authHeader.replace('Bearer ', ''));
     if (!user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    await supabase.from('google_calendar_tokens').delete().eq('user_id', user.id);
+    await adminClient.from('google_calendar_tokens').delete().eq('user_id', user.id);
     return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
