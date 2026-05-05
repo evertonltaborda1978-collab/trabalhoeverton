@@ -2,3 +2,6 @@ project_id = "smmsegqcykavajkkqlne"
 
 [functions.google-geocode]
 verify_jwt = false
+
+[functions.google-calendar]
+verify_jwt = false

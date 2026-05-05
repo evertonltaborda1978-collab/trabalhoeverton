@@ -44,8 +44,10 @@ export function useGoogleCalendar() {
   useEffect(() => {
     checkStatus();
 
-    // Listen for OAuth popup completion
+    const EXPECTED_ORIGIN = `https://${PROJECT_ID}.supabase.co`;
+    // Listen for OAuth popup completion — only accept messages from our edge function origin
     const handler = (e: MessageEvent) => {
+      if (e.origin !== EXPECTED_ORIGIN) return;
       if (e.data === "google_calendar_connected") {
         setConnected(true);
         fetchEvents();
@@ -58,8 +60,12 @@ export function useGoogleCalendar() {
   // Connect - open OAuth popup
   const connect = useCallback(async () => {
     const token = await getAuthHeader();
+    if (!token) return;
     const callbackUri = `${FUNCTION_URL}?action=callback`;
-    const res = await fetch(`${FUNCTION_URL}?action=auth_url&redirect_uri=${encodeURIComponent(callbackUri)}&state=${token}`);
+    const res = await fetch(
+      `${FUNCTION_URL}?action=auth_url&redirect_uri=${encodeURIComponent(callbackUri)}&app_origin=${encodeURIComponent(window.location.origin)}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
     const data = await res.json();
     if (data.url) {
       window.open(data.url, "google_auth", "width=500,height=600,left=200,top=100");
