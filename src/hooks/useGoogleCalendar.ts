@@ -61,9 +61,9 @@ export function useGoogleCalendar() {
   const connect = useCallback(async () => {
     const token = await getAuthHeader();
     if (!token) return;
-    const callbackUri = `${FUNCTION_URL}?action=callback&app_origin=${encodeURIComponent(window.location.origin)}`;
+    const callbackUri = `${FUNCTION_URL}?action=callback`;
     const res = await fetch(
-      `${FUNCTION_URL}?action=auth_url&redirect_uri=${encodeURIComponent(callbackUri)}`,
+      `${FUNCTION_URL}?action=auth_url&redirect_uri=${encodeURIComponent(callbackUri)}&app_origin=${encodeURIComponent(window.location.origin)}`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
     const data = await res.json();
