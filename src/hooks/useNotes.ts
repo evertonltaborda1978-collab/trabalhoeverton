@@ -20,8 +20,6 @@ export interface Note {
   reminderTime?: string | null;
   isLocked: boolean;
   lockSalt?: string | null;
-  reminderDate?: string | null;
-  reminderTime?: string | null;
   deletedAt?: Date | null;
 }
 
