@@ -47,6 +47,7 @@ Deno.serve(async (req) => {
     }
 
     const redirectUri = url.searchParams.get('redirect_uri') || `${SUPABASE_URL}/functions/v1/google-calendar?action=callback`;
+    const appOrigin = url.searchParams.get('app_origin') || req.headers.get('origin') || '';
 
     // Random opaque nonce mapped to user_id, expires in 10min
     const nonceBytes = new Uint8Array(32);
@@ -56,6 +57,7 @@ Deno.serve(async (req) => {
       token: nonce,
       user_id: user.id,
       provider: 'google',
+      app_origin: appOrigin,
     });
 
     const params = new URLSearchParams({
