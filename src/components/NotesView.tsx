@@ -403,7 +403,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onL
         onOpenChange={(v) => { if (!v) { setLockNote(null); setPendingUnlockNote(null); } }}
         mode={lockMode}
         onSetPin={handleSetPin}
-        onUnlock={handleUnlockAttempt}
+        onUnlock={lockMode === "manage" ? handleManageRemove : handleUnlockAttempt}
         onRemoveLock={handleRemoveLock}
       />
 
