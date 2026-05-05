@@ -1,0 +1,1 @@
+ALTER TABLE public.notes DROP COLUMN IF EXISTS lock_pin;
