@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { SnoozeAlertData } from "@/components/SnoozeAlert";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { encryptNote, decryptNote, isEncrypted, LockPayload } from "@/lib/noteCrypto";
 
 export interface Note {
   id: string;
