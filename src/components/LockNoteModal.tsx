@@ -8,7 +8,7 @@ interface LockNoteModalProps {
   onOpenChange: (open: boolean) => void;
   mode: "set" | "unlock" | "manage";
   onSetPin: (pin: string) => void;
-  onUnlock: (pin: string) => boolean;
+  onUnlock: (pin: string) => boolean | Promise<boolean>;
   onRemoveLock: () => void;
 }
 
@@ -43,7 +43,7 @@ export function LockNoteModal({ open, onOpenChange, mode, onSetPin, onUnlock, on
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (mode === "set") {
       if (step === "enter") {
         if (pin.length < 4) { setError("Mínimo 4 dígitos"); return; }
@@ -58,7 +58,7 @@ export function LockNoteModal({ open, onOpenChange, mode, onSetPin, onUnlock, on
 
     if (mode === "unlock") {
       if (pin.length < 4) { setError("Digite a senha"); return; }
-      const ok = onUnlock(pin);
+      const ok = await onUnlock(pin);
       if (!ok) { setError("Senha incorreta"); setPin(""); return; }
       handleClose(false);
       return;
@@ -66,7 +66,7 @@ export function LockNoteModal({ open, onOpenChange, mode, onSetPin, onUnlock, on
 
     if (mode === "manage") {
       if (pin.length < 4) { setError("Digite a senha atual"); return; }
-      const ok = onUnlock(pin);
+      const ok = await onUnlock(pin);
       if (!ok) { setError("Senha incorreta"); setPin(""); return; }
       onRemoveLock();
       handleClose(false);
