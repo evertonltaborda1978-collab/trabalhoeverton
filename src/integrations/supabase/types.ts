@@ -412,7 +412,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_shared_location: {
+        Args: { _token: string }
+        Returns: {
+          address: string
+          battery_level: number
+          device_id: string
+          expires_at: string
+          latitude: number
+          longitude: number
+          recorded_at: string
+          share_id: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
