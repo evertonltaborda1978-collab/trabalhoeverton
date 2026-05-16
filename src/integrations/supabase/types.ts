@@ -370,6 +370,8 @@ export type Database = {
           ip_address: string | null
           is_current: boolean
           last_seen_at: string
+          manual_address: string | null
+          manual_address_updated_at: string | null
           os: string
           user_id: string
         }
@@ -383,6 +385,8 @@ export type Database = {
           ip_address?: string | null
           is_current?: boolean
           last_seen_at?: string
+          manual_address?: string | null
+          manual_address_updated_at?: string | null
           os?: string
           user_id: string
         }
@@ -396,6 +400,8 @@ export type Database = {
           ip_address?: string | null
           is_current?: boolean
           last_seen_at?: string
+          manual_address?: string | null
+          manual_address_updated_at?: string | null
           os?: string
           user_id?: string
         }

@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { MapPin, Navigation, AlertTriangle, Share2, Loader2, MapPinOff, Bell, Lock, Volume2, History, Battery, Globe } from "lucide-react";
+import { MapPin, Navigation, AlertTriangle, Share2, Loader2, MapPinOff, Bell, Lock, Volume2, History, Battery, Globe, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { UpdateIndicator } from "./local/UpdateIndicator";
 import { AlertModal } from "./local/AlertModal";
 import { ShareLocationModal } from "./local/ShareLocationModal";
+import { EditAddressModal } from "./local/EditAddressModal";
 import { useDeviceTracking } from "@/hooks/useDeviceTracking";
 import { useDeviceLocations, reverseGeocodeFetch } from "@/hooks/useDeviceLocations";
 import { useDeviceCommands } from "@/hooks/useDeviceCommands";
@@ -24,8 +25,9 @@ interface Position {
 }
 
 export function LocationView() {
-  const { devices, currentDevice } = useDeviceTracking();
+  const { devices, currentDevice, fetchDevices } = useDeviceTracking();
   const { latestByDevice, recordLocation } = useDeviceLocations();
+  const [editingDevice, setEditingDevice] = useState<{ id: string; name: string; address: string | null } | null>(null);
 
   const [position, setPosition] = useState<Position | null>(null);
   const [tracking, setTracking] = useState(false);
@@ -322,18 +324,37 @@ export function LocationView() {
             devices.map((d) => {
               const loc = latestByDevice[d.id];
               const name = d.custom_label || d.device_name;
+              const isManual = !!d.manual_address;
+              const displayAddress = d.manual_address || loc?.address || (loc ? `${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}` : null);
+              const mapsHref = loc
+                ? (displayAddress && !displayAddress.match(/^-?\d/)
+                    ? `https://www.google.com/maps?q=${encodeURIComponent(displayAddress)}&ll=${loc.latitude},${loc.longitude}`
+                    : `https://www.google.com/maps?q=${loc.latitude},${loc.longitude}`)
+                : null;
               return (
                 <div key={d.id} className="rounded-2xl p-3" style={{ background: "#FFF", border: d.is_current ? "1px solid #C8E6C9" : "1px solid #F0F0F0" }}>
                   <div className="flex items-start gap-2 mb-2">
                     <div className="text-2xl">{d.os === "Android" || d.os === "iOS" ? "📱" : "💻"}</div>
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-sm truncate" style={{ color: "#1A1A2E" }}>{name}{d.is_current && " · este aparelho"}</p>
-                      {loc ? (
+                      {loc || isManual ? (
                         <>
-                          <p className="text-[11px] truncate" style={{ color: "#4A5568" }}>{loc.address || `${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}`}</p>
-                          <p className="text-[10px] flex items-center gap-2 mt-0.5" style={{ color: "#9E9E9E" }}>
-                            <span>{format(new Date(loc.recorded_at), "dd/MM HH:mm", { locale: ptBR })}</span>
-                            {loc.battery_level != null && (<span className="flex items-center gap-0.5"><Battery size={10} />{loc.battery_level}%</span>)}
+                          <div className="flex items-start gap-1.5">
+                            <p className="text-[11px] flex-1 min-w-0 break-words" style={{ color: "#4A5568" }}>{displayAddress}</p>
+                            <button
+                              onClick={() => setEditingDevice({ id: d.id, name, address: d.manual_address || loc?.address || null })}
+                              className="p-1 rounded-md hover:bg-black/5 shrink-0"
+                              title="Editar endereço"
+                            >
+                              <Pencil size={12} style={{ color: "#2D9E7F" }} />
+                            </button>
+                          </div>
+                          <p className="text-[10px] flex items-center gap-2 mt-0.5 flex-wrap" style={{ color: "#9E9E9E" }}>
+                            <span className="px-1.5 py-0.5 rounded-full font-bold" style={{ background: isManual ? "#FFF3E0" : "#E8F5E9", color: isManual ? "#E65100" : "#2D9E7F" }}>
+                              {isManual ? "✏️ Corrigido" : "📍 Automático"}
+                            </span>
+                            {loc && <span>{format(new Date(loc.recorded_at), "dd/MM HH:mm", { locale: ptBR })}</span>}
+                            {loc?.battery_level != null && (<span className="flex items-center gap-0.5"><Battery size={10} />{loc.battery_level}%</span>)}
                           </p>
                         </>
                       ) : (
@@ -342,7 +363,7 @@ export function LocationView() {
                     </div>
                   </div>
                   <div className="grid grid-cols-4 gap-1.5">
-                    <ActionBtn icon={<MapPin size={14} />} label="Mapa" onClick={() => loc && window.open(`https://www.google.com/maps?q=${loc.latitude},${loc.longitude}`, "_blank")} disabled={!loc} />
+                    <ActionBtn icon={<MapPin size={14} />} label="Mapa" onClick={() => mapsHref && window.open(mapsHref, "_blank")} disabled={!mapsHref} />
                     <ActionBtn icon={<Volume2 size={14} />} label="Alarme" onClick={() => { sendCommand(d.id, "ring"); toast({ title: "🔔 Alarme enviado" }); }} />
                     <ActionBtn icon={<Lock size={14} />} label="Bloquear" onClick={() => { sendCommand(d.id, "lock"); toast({ title: "🔒 Comando enviado" }); }} />
                     <ActionBtn icon={<Navigation size={14} />} label="Atualizar" onClick={() => { sendCommand(d.id, "update_now"); toast({ title: "📍 Solicitado" }); }} />
@@ -398,6 +419,15 @@ export function LocationView() {
           lng={showShareModal.lng}
           deviceId={currentDevice?.id ?? null}
           onClose={() => setShowShareModal(null)}
+        />
+      )}
+      {editingDevice && (
+        <EditAddressModal
+          deviceId={editingDevice.id}
+          deviceName={editingDevice.name}
+          currentAddress={editingDevice.address}
+          onClose={() => setEditingDevice(null)}
+          onSaved={fetchDevices}
         />
       )}
     </div>
