@@ -61,9 +61,7 @@ const Index = () => {
       <header
         className="sticky top-0 z-40"
         style={{
-          background: "rgba(247,245,242,0.85)",
-          backdropFilter: "blur(12px)",
-          WebkitBackdropFilter: "blur(12px)",
+          background: "rgba(247,245,242,0.98)",
           borderBottom: "1px solid rgba(0,0,0,0.04)",
         }}
       >

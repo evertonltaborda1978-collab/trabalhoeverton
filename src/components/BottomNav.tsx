@@ -21,9 +21,7 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
     <nav
       className="fixed bottom-0 left-0 right-0 z-50 px-2"
       style={{
-        background: "rgba(255,255,255,0.92)",
-        backdropFilter: "blur(12px)",
-        WebkitBackdropFilter: "blur(12px)",
+        background: "rgba(255,255,255,0.98)",
         borderTop: "1px solid #F0F0F0",
         boxShadow: "0 -4px 16px rgba(0,0,0,0.04)",
         paddingBottom: "calc(env(safe-area-inset-bottom) + 40px)",
