@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { MapPin, Navigation, AlertTriangle, Share2, Loader2, MapPinOff, Bell, Lock, Volume2, History, Battery, Globe } from "lucide-react";
+import { MapPin, Navigation, AlertTriangle, Share2, Loader2, MapPinOff, Bell, Lock, Volume2, History, Battery, Globe, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { UpdateIndicator } from "./local/UpdateIndicator";
 import { AlertModal } from "./local/AlertModal";
 import { ShareLocationModal } from "./local/ShareLocationModal";
+import { EditAddressModal } from "./local/EditAddressModal";
 import { useDeviceTracking } from "@/hooks/useDeviceTracking";
 import { useDeviceLocations, reverseGeocodeFetch } from "@/hooks/useDeviceLocations";
 import { useDeviceCommands } from "@/hooks/useDeviceCommands";
