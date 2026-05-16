@@ -421,6 +421,15 @@ export function LocationView() {
           onClose={() => setShowShareModal(null)}
         />
       )}
+      {editingDevice && (
+        <EditAddressModal
+          deviceId={editingDevice.id}
+          deviceName={editingDevice.name}
+          currentAddress={editingDevice.address}
+          onClose={() => setEditingDevice(null)}
+          onSaved={fetchDevices}
+        />
+      )}
     </div>
   );
 }
