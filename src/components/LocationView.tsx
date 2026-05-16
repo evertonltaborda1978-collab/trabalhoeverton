@@ -25,8 +25,9 @@ interface Position {
 }
 
 export function LocationView() {
-  const { devices, currentDevice } = useDeviceTracking();
+  const { devices, currentDevice, reload: reloadDevices } = useDeviceTracking();
   const { latestByDevice, recordLocation } = useDeviceLocations();
+  const [editingDevice, setEditingDevice] = useState<{ id: string; name: string; address: string | null } | null>(null);
 
   const [position, setPosition] = useState<Position | null>(null);
   const [tracking, setTracking] = useState(false);
