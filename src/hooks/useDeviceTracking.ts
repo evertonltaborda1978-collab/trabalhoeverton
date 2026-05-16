@@ -12,6 +12,8 @@ export interface UserDevice {
   created_at: string;
   is_current: boolean;
   device_fingerprint: string;
+  manual_address?: string | null;
+  manual_address_updated_at?: string | null;
 }
 
 function getDeviceInfo() {
