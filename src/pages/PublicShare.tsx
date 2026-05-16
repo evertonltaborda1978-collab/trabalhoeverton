@@ -27,27 +27,19 @@ export default function PublicShare() {
     if (!token) return;
     let mounted = true;
     const load = async () => {
-      const { data } = await supabase
-        .from("location_shares")
-        .select("*")
-        .eq("token", token)
-        .eq("is_active", true)
-        .maybeSingle();
+      const { data, error: rpcErr } = await (supabase as any).rpc("get_shared_location", { _token: token });
       if (!mounted) return;
-      if (!data) { setError("Link inválido ou expirado."); return; }
-      if (data.expires_at && new Date(data.expires_at).getTime() < Date.now()) {
-        setError("Este link expirou."); return;
-      }
-      setShare(data as Share);
-      if (data.device_id) {
-        const { data: l } = await supabase
-          .from("device_locations")
-          .select("latitude,longitude,address,recorded_at,battery_level")
-          .eq("device_id", data.device_id)
-          .order("recorded_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (l) setLoc(l as Loc);
+      const row = Array.isArray(data) ? data[0] : data;
+      if (rpcErr || !row) { setError("Link inválido ou expirado."); return; }
+      setShare({ id: row.share_id, device_id: row.device_id, expires_at: row.expires_at, is_active: true });
+      if (row.latitude != null && row.longitude != null) {
+        setLoc({
+          latitude: row.latitude,
+          longitude: row.longitude,
+          address: row.address,
+          recorded_at: row.recorded_at,
+          battery_level: row.battery_level,
+        });
       }
     };
     load();
