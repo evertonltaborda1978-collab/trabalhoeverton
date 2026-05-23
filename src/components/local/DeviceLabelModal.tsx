@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Smartphone } from "lucide-react";
+import { Smartphone, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -40,10 +40,18 @@ export function DeviceLabelModal({ deviceId, defaultName, onDone }: Props) {
           <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: "#E8F5E9" }}>
             <Smartphone size={22} style={{ color: "#2D9E7F" }} />
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <h3 className="font-bold text-base" style={{ color: "#1A1A2E" }}>Como chama este aparelho?</h3>
             <p className="text-xs" style={{ color: "#9E9E9E" }}>Vai aparecer na sua lista de dispositivos</p>
           </div>
+          <button
+            onClick={onDone}
+            className="p-2 rounded-lg transition-colors hover:bg-black/5 shrink-0"
+            aria-label="Fechar"
+            title="Fechar"
+          >
+            <X size={18} style={{ color: "#6B7280" }} />
+          </button>
         </div>
 
         <Input
@@ -68,9 +76,14 @@ export function DeviceLabelModal({ deviceId, defaultName, onDone }: Props) {
           ))}
         </div>
 
-        <Button onClick={save} disabled={saving || !name.trim()} className="w-full rounded-xl">
+        <div className="flex gap-2">
+        <Button variant="outline" onClick={onDone} disabled={saving} className="rounded-xl flex-1">
+          Depois
+        </Button>
+        <Button onClick={save} disabled={saving || !name.trim()} className="rounded-xl flex-1">
           {saving ? "Salvando..." : "Salvar"}
         </Button>
+        </div>
       </div>
     </div>
   );
