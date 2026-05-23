@@ -197,6 +197,9 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const ocrCameraRef = useRef<HTMLInputElement>(null);
   const focusedBlockRef = useRef<number>(0);
   const activeFieldRef = useRef<"title" | "content">("content");
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const textAreaRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
+  const pendingFocusRef = useRef<"title" | "content" | null>(null);
 
   // ── Auto-save draft to localStorage ───────────────────
   const DRAFT_KEY = "note_editor_draft";
@@ -287,64 +290,67 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
   // ── Sync on open (with draft recovery) ────────────────
   const lastNoteId = useRef<string | null>(null);
-  if (open) {
-    const noteId = editingNote?.id ?? "__new__";
-    if (lastNoteId.current !== noteId) {
-      lastNoteId.current = noteId;
-      let recovered = false;
-      // Try to recover draft from localStorage
-      if (!editingNote) {
-        try {
-          const raw = localStorage.getItem(DRAFT_KEY);
-          if (raw) {
-            const draft = JSON.parse(raw);
-            // Only recover if draft is for a new note (no noteId) and less than 1 hour old
-            if (!draft.noteId && Date.now() - draft.timestamp < 3600000) {
-              setTitle(draft.title || "");
-              setBlocks(draft.blocks || [{ type: "text", content: "" }]);
-              setSelectedColor(draft.color || NOTE_COLORS[0].value);
-              recovered = true;
-            }
-          }
-        } catch {}
-      } else {
-        // For existing notes, check if there's a more recent draft
-        try {
-          const raw = localStorage.getItem(DRAFT_KEY);
-          if (raw) {
-            const draft = JSON.parse(raw);
-            if (draft.noteId === editingNote.id && Date.now() - draft.timestamp < 3600000) {
-              setTitle(draft.title || "");
-              setBlocks(draft.blocks || deserializeBlocks(editingNote.content));
-              setSelectedColor(draft.color || editingNote.color);
-              recovered = true;
-            }
-          }
-        } catch {}
-      }
-      if (!recovered) {
-        if (editingNote) {
-          setTitle(editingNote.title);
-          const parsed = deserializeBlocks(editingNote.content);
-          setBlocks(parsed);
-          setSelectedColor(editingNote.color);
-        } else if (initialSharedData && (initialSharedData.title || initialSharedData.content)) {
-          // Pre-fill from shared content received from another app
-          setTitle(initialSharedData.title || "");
-          setBlocks([{ type: "text", content: initialSharedData.content || "" }]);
-          setSelectedColor(NOTE_COLORS[0].value);
-        } else {
-          setTitle("");
-          setBlocks([{ type: "text", content: "" }]);
-          setSelectedColor(NOTE_COLORS[0].value);
-        }
-      }
-      setHistory([]);
-      setHistoryIdx(-1);
+  useEffect(() => {
+    if (!open) {
+      if (lastNoteId.current !== null) lastNoteId.current = null;
+      return;
     }
-  } else {
-    if (lastNoteId.current !== null) lastNoteId.current = null;
-  }
+
+    const noteId = editingNote?.id ?? "__new__";
+    if (lastNoteId.current === noteId) return;
+
+    lastNoteId.current = noteId;
+    let recovered = false;
+    // Try to recover draft from localStorage
+    if (!editingNote) {
+      try {
+        const raw = localStorage.getItem(DRAFT_KEY);
+        if (raw) {
+          const draft = JSON.parse(raw);
+          // Only recover if draft is for a new note (no noteId) and less than 1 hour old
+          if (!draft.noteId && Date.now() - draft.timestamp < 3600000) {
+            setTitle(draft.title || "");
+            setBlocks(draft.blocks || [{ type: "text", content: "" }]);
+            setSelectedColor(draft.color || NOTE_COLORS[0].value);
+            recovered = true;
+          }
+        }
+      } catch {}
+    } else {
+      // For existing notes, check if there's a more recent draft
+      try {
+        const raw = localStorage.getItem(DRAFT_KEY);
+        if (raw) {
+          const draft = JSON.parse(raw);
+          if (draft.noteId === editingNote.id && Date.now() - draft.timestamp < 3600000) {
+            setTitle(draft.title || "");
+            setBlocks(draft.blocks || deserializeBlocks(editingNote.content));
+            setSelectedColor(draft.color || editingNote.color);
+            recovered = true;
+          }
+        }
+      } catch {}
+    }
+    if (!recovered) {
+      if (editingNote) {
+        setTitle(editingNote.title);
+        const parsed = deserializeBlocks(editingNote.content);
+        setBlocks(parsed);
+        setSelectedColor(editingNote.color);
+      } else if (initialSharedData && (initialSharedData.title || initialSharedData.content)) {
+        // Pre-fill from shared content received from another app
+        setTitle(initialSharedData.title || "");
+        setBlocks([{ type: "text", content: initialSharedData.content || "" }]);
+        setSelectedColor(NOTE_COLORS[0].value);
+      } else {
+        setTitle("");
+        setBlocks([{ type: "text", content: "" }]);
+        setSelectedColor(NOTE_COLORS[0].value);
+      }
+    }
+    setHistory([]);
+    setHistoryIdx(-1);
+  }, [open, editingNote?.id, initialSharedData?.title, initialSharedData?.content]);
 
   const theme = getTheme(selectedColor);
   const isDark = selectedColor === "bg-gray-800";
@@ -622,6 +628,32 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     onSetReadOnly?.(false);
   }, [title, blocks, selectedColor, onSetReadOnly]);
 
+  const focusEditorField = useCallback((target: "title" | "content", blockIndex = 0) => {
+    pendingFocusRef.current = target;
+    activeFieldRef.current = target;
+    focusedBlockRef.current = blockIndex;
+  }, []);
+
+  const activateFieldForEditing = useCallback((target: "title" | "content", blockIndex = 0) => {
+    focusEditorField(target, blockIndex);
+    if (readOnly && editingNote) enterEditMode();
+  }, [editingNote, enterEditMode, focusEditorField, readOnly]);
+
+  useEffect(() => {
+    if (!open || readOnly || !pendingFocusRef.current) return;
+    const frame = requestAnimationFrame(() => {
+      const target = pendingFocusRef.current;
+      pendingFocusRef.current = null;
+      const el = target === "title" ? titleInputRef.current : textAreaRefs.current[focusedBlockRef.current];
+      el?.focus({ preventScroll: true });
+      if (el && "setSelectionRange" in el) {
+        const len = el.value.length;
+        el.setSelectionRange(len, len);
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open, readOnly]);
+
   const hasUnsavedChanges = useCallback(() => {
     if (!snapshotRef.current) return false;
     return (
@@ -725,10 +757,11 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const canRedo = historyIdx < history.length - 1;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); else onOpenChange(v); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); else onOpenChange(v); }} modal={false}>
       <DialogContent className="!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !w-screen !max-w-none !max-h-none !rounded-none !shadow-none !border-0 !p-0 !gap-0 !bg-transparent z-50"
         style={{ height: "100dvh" }}
         aria-describedby={undefined}
+        onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogTitle className="sr-only">Editor de Nota</DialogTitle>
         {/* ── NOTEPAD CONTAINER ── */}
@@ -767,8 +800,15 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
               </button>
 
               <input
+                ref={titleInputRef}
                 value={title}
                 onChange={(e) => !readOnly && setTitle(e.target.value)}
+                onPointerDown={(e) => {
+                  if (readOnly && editingNote) {
+                    e.preventDefault();
+                    activateFieldForEditing("title");
+                  }
+                }}
                 onFocus={() => { activeFieldRef.current = "title"; }}
                 onPaste={handleMobilePaste}
                 readOnly={readOnly}
@@ -918,6 +958,12 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                         updateTextBlock(idx, e.target.value);
                         autoResize(e.target);
                       }}
+                      onPointerDown={(e) => {
+                        if (readOnly && editingNote) {
+                          e.preventDefault();
+                          activateFieldForEditing("content", idx);
+                        }
+                      }}
                       onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
                       onPaste={handleMobilePaste}
                       readOnly={readOnly}
@@ -931,7 +977,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                         color: textColor,
                         "--placeholder-color": placeholderColor,
                       } as React.CSSProperties}
-                      ref={(el) => { if (el) autoResize(el); }}
+                      ref={(el) => { textAreaRefs.current[idx] = el; if (el) autoResize(el); }}
                     />
                   );
                 }
@@ -1000,6 +1046,12 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                             <input
                               value={item.text}
                               onChange={(e) => !readOnly && updateChecklistItem(idx, item.id, { text: e.target.value })}
+                              onPointerDown={(e) => {
+                                if (readOnly && editingNote) {
+                                  e.preventDefault();
+                                  activateFieldForEditing("content", idx);
+                                }
+                              }}
                               onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
                               onPaste={handleMobilePaste}
                               readOnly={readOnly}
