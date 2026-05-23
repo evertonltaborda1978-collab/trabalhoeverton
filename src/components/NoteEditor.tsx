@@ -197,6 +197,9 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const ocrCameraRef = useRef<HTMLInputElement>(null);
   const focusedBlockRef = useRef<number>(0);
   const activeFieldRef = useRef<"title" | "content">("content");
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const textAreaRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
+  const pendingFocusRef = useRef<"title" | "content" | null>(null);
 
   // ── Auto-save draft to localStorage ───────────────────
   const DRAFT_KEY = "note_editor_draft";
@@ -287,64 +290,67 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
   // ── Sync on open (with draft recovery) ────────────────
   const lastNoteId = useRef<string | null>(null);
-  if (open) {
-    const noteId = editingNote?.id ?? "__new__";
-    if (lastNoteId.current !== noteId) {
-      lastNoteId.current = noteId;
-      let recovered = false;
-      // Try to recover draft from localStorage
-      if (!editingNote) {
-        try {
-          const raw = localStorage.getItem(DRAFT_KEY);
-          if (raw) {
-            const draft = JSON.parse(raw);
-            // Only recover if draft is for a new note (no noteId) and less than 1 hour old
-            if (!draft.noteId && Date.now() - draft.timestamp < 3600000) {
-              setTitle(draft.title || "");
-              setBlocks(draft.blocks || [{ type: "text", content: "" }]);
-              setSelectedColor(draft.color || NOTE_COLORS[0].value);
-              recovered = true;
-            }
-          }
-        } catch {}
-      } else {
-        // For existing notes, check if there's a more recent draft
-        try {
-          const raw = localStorage.getItem(DRAFT_KEY);
-          if (raw) {
-            const draft = JSON.parse(raw);
-            if (draft.noteId === editingNote.id && Date.now() - draft.timestamp < 3600000) {
-              setTitle(draft.title || "");
-              setBlocks(draft.blocks || deserializeBlocks(editingNote.content));
-              setSelectedColor(draft.color || editingNote.color);
-              recovered = true;
-            }
-          }
-        } catch {}
-      }
-      if (!recovered) {
-        if (editingNote) {
-          setTitle(editingNote.title);
-          const parsed = deserializeBlocks(editingNote.content);
-          setBlocks(parsed);
-          setSelectedColor(editingNote.color);
-        } else if (initialSharedData && (initialSharedData.title || initialSharedData.content)) {
-          // Pre-fill from shared content received from another app
-          setTitle(initialSharedData.title || "");
-          setBlocks([{ type: "text", content: initialSharedData.content || "" }]);
-          setSelectedColor(NOTE_COLORS[0].value);
-        } else {
-          setTitle("");
-          setBlocks([{ type: "text", content: "" }]);
-          setSelectedColor(NOTE_COLORS[0].value);
-        }
-      }
-      setHistory([]);
-      setHistoryIdx(-1);
+  useEffect(() => {
+    if (!open) {
+      if (lastNoteId.current !== null) lastNoteId.current = null;
+      return;
     }
-  } else {
-    if (lastNoteId.current !== null) lastNoteId.current = null;
-  }
+
+    const noteId = editingNote?.id ?? "__new__";
+    if (lastNoteId.current === noteId) return;
+
+    lastNoteId.current = noteId;
+    let recovered = false;
+    // Try to recover draft from localStorage
+    if (!editingNote) {
+      try {
+        const raw = localStorage.getItem(DRAFT_KEY);
+        if (raw) {
+          const draft = JSON.parse(raw);
+          // Only recover if draft is for a new note (no noteId) and less than 1 hour old
+          if (!draft.noteId && Date.now() - draft.timestamp < 3600000) {
+            setTitle(draft.title || "");
+            setBlocks(draft.blocks || [{ type: "text", content: "" }]);
+            setSelectedColor(draft.color || NOTE_COLORS[0].value);
+            recovered = true;
+          }
+        }
+      } catch {}
+    } else {
+      // For existing notes, check if there's a more recent draft
+      try {
+        const raw = localStorage.getItem(DRAFT_KEY);
+        if (raw) {
+          const draft = JSON.parse(raw);
+          if (draft.noteId === editingNote.id && Date.now() - draft.timestamp < 3600000) {
+            setTitle(draft.title || "");
+            setBlocks(draft.blocks || deserializeBlocks(editingNote.content));
+            setSelectedColor(draft.color || editingNote.color);
+            recovered = true;
+          }
+        }
+      } catch {}
+    }
+    if (!recovered) {
+      if (editingNote) {
+        setTitle(editingNote.title);
+        const parsed = deserializeBlocks(editingNote.content);
+        setBlocks(parsed);
+        setSelectedColor(editingNote.color);
+      } else if (initialSharedData && (initialSharedData.title || initialSharedData.content)) {
+        // Pre-fill from shared content received from another app
+        setTitle(initialSharedData.title || "");
+        setBlocks([{ type: "text", content: initialSharedData.content || "" }]);
+        setSelectedColor(NOTE_COLORS[0].value);
+      } else {
+        setTitle("");
+        setBlocks([{ type: "text", content: "" }]);
+        setSelectedColor(NOTE_COLORS[0].value);
+      }
+    }
+    setHistory([]);
+    setHistoryIdx(-1);
+  }, [open, editingNote?.id, initialSharedData?.title, initialSharedData?.content]);
 
   const theme = getTheme(selectedColor);
   const isDark = selectedColor === "bg-gray-800";
