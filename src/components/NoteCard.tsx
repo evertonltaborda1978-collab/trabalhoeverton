@@ -64,6 +64,7 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, in
         border: "1px solid rgba(255,255,255,0.7)",
         animationDelay: `${index * 0.05}s`,
         animationFillMode: "both",
+        touchAction: "manipulation",
       }}
     >
       <div className="w-1 shrink-0 rounded-l-[18px]" style={{ background: colors.bar }} />
@@ -137,6 +138,7 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, in
           </button>
           <ChevronRight
             size={13}
+            onClick={(e) => { e.stopPropagation(); onClick(note); }}
             className="transition-transform duration-200 group-hover:translate-x-[2px]"
             style={{ color: "#BDBDBD" }}
           />
