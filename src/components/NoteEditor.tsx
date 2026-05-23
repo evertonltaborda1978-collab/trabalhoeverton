@@ -628,6 +628,32 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     onSetReadOnly?.(false);
   }, [title, blocks, selectedColor, onSetReadOnly]);
 
+  const focusEditorField = useCallback((target: "title" | "content", blockIndex = 0) => {
+    pendingFocusRef.current = target;
+    activeFieldRef.current = target;
+    focusedBlockRef.current = blockIndex;
+  }, []);
+
+  const activateFieldForEditing = useCallback((target: "title" | "content", blockIndex = 0) => {
+    focusEditorField(target, blockIndex);
+    if (readOnly && editingNote) enterEditMode();
+  }, [editingNote, enterEditMode, focusEditorField, readOnly]);
+
+  useEffect(() => {
+    if (!open || readOnly || !pendingFocusRef.current) return;
+    const frame = requestAnimationFrame(() => {
+      const target = pendingFocusRef.current;
+      pendingFocusRef.current = null;
+      const el = target === "title" ? titleInputRef.current : textAreaRefs.current[focusedBlockRef.current];
+      el?.focus({ preventScroll: true });
+      if (el && "setSelectionRange" in el) {
+        const len = el.value.length;
+        el.setSelectionRange(len, len);
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open, readOnly]);
+
   const hasUnsavedChanges = useCallback(() => {
     if (!snapshotRef.current) return false;
     return (
@@ -731,10 +757,11 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const canRedo = historyIdx < history.length - 1;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); else onOpenChange(v); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); else onOpenChange(v); }} modal={false}>
       <DialogContent className="!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !w-screen !max-w-none !max-h-none !rounded-none !shadow-none !border-0 !p-0 !gap-0 !bg-transparent z-50"
         style={{ height: "100dvh" }}
         aria-describedby={undefined}
+        onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogTitle className="sr-only">Editor de Nota</DialogTitle>
         {/* ── NOTEPAD CONTAINER ── */}
