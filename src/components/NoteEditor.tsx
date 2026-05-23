@@ -800,8 +800,15 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
               </button>
 
               <input
+                ref={titleInputRef}
                 value={title}
                 onChange={(e) => !readOnly && setTitle(e.target.value)}
+                onPointerDown={(e) => {
+                  if (readOnly && editingNote) {
+                    e.preventDefault();
+                    activateFieldForEditing("title");
+                  }
+                }}
                 onFocus={() => { activeFieldRef.current = "title"; }}
                 onPaste={handleMobilePaste}
                 readOnly={readOnly}
@@ -951,6 +958,12 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                         updateTextBlock(idx, e.target.value);
                         autoResize(e.target);
                       }}
+                      onPointerDown={(e) => {
+                        if (readOnly && editingNote) {
+                          e.preventDefault();
+                          activateFieldForEditing("content", idx);
+                        }
+                      }}
                       onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
                       onPaste={handleMobilePaste}
                       readOnly={readOnly}
@@ -964,7 +977,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                         color: textColor,
                         "--placeholder-color": placeholderColor,
                       } as React.CSSProperties}
-                      ref={(el) => { if (el) autoResize(el); }}
+                      ref={(el) => { textAreaRefs.current[idx] = el; if (el) autoResize(el); }}
                     />
                   );
                 }
