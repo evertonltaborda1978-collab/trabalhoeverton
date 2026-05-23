@@ -26,6 +26,8 @@ const titles: Record<Tab, string> = {
   fuel: "Combustível",
 };
 
+const DEVICE_LABEL_PROMPT_KEY = "device_label_prompt_dismissed";
+
 const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
   const { notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes } = useNotes();
@@ -35,10 +37,16 @@ const Index = () => {
   const [showLabelModal, setShowLabelModal] = useState(false);
 
   useEffect(() => {
-    if (currentDevice && !currentDevice.custom_label) {
+    const dismissedId = sessionStorage.getItem(DEVICE_LABEL_PROMPT_KEY);
+    if (currentDevice && !currentDevice.custom_label && dismissedId !== currentDevice.id) {
       setShowLabelModal(true);
     }
   }, [currentDevice]);
+
+  const closeLabelModal = () => {
+    if (currentDevice) sessionStorage.setItem(DEVICE_LABEL_PROMPT_KEY, currentDevice.id);
+    setShowLabelModal(false);
+  };
 
   // When deleting an appointment, also clear matching note reminders
   const handleDeleteAppointment = (id: string) => {
@@ -144,7 +152,7 @@ const Index = () => {
         <DeviceLabelModal
           deviceId={currentDevice.id}
           defaultName={currentDevice.device_name}
-          onDone={() => { setShowLabelModal(false); fetchDevices(); }}
+          onDone={() => { closeLabelModal(); fetchDevices(); }}
         />
       )}
     </div>
