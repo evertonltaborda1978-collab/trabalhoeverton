@@ -358,7 +358,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onL
         </div>
       ) : (
         <div className="flex flex-col gap-2.5">
-          {filtered.map((note, i) => (
+          {filtered.map((note) => (
             <NoteCard
               key={note.id}
               note={note}
@@ -366,7 +366,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onL
               onClick={openEdit}
               onBellClick={handleBellClick}
               onLockClick={handleLockClick}
-              index={i}
               searchQuery={search}
             />
           ))}
