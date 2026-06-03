@@ -46,7 +46,7 @@ interface NoteCardProps {
   searchQuery?: string;
 }
 
-export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, index = 0, searchQuery = "" }: NoteCardProps) {
+export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, searchQuery = "" }: NoteCardProps) {
   const colors = COLOR_MAP[note.color] || { bg: "#F3E5F5", bar: "#C9B8F0" };
   const isDraft = note.status === "rascunho";
   const hasReminder = !!note.reminderDate;
