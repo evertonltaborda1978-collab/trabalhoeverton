@@ -231,7 +231,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
   // Auto-sync to cloud every 10 seconds
   useEffect(() => {
-    if (!open) return;
+    if (!open || !editingNote) return;
     const interval = setInterval(() => {
       const hasContent = title.trim() || blocksToPlainText(blocks).trim();
       if (!hasContent) return;
@@ -251,7 +251,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
         saveDraftToLocal();
         // Also trigger cloud save
         const hasContent = title.trim() || blocksToPlainText(blocks).trim();
-        if (hasContent) {
+        if (hasContent && editingNote) {
           const serialized = serializeBlocks(blocks);
           const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
           const status = editingNote?.status || "rascunho";
