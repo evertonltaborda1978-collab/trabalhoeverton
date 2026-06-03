@@ -43,7 +43,6 @@ interface NoteCardProps {
   onClick: (note: Note) => void;
   onBellClick?: (note: Note) => void;
   onLockClick?: (note: Note) => void;
-  index?: number;
   searchQuery?: string;
 }
 
