@@ -231,7 +231,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
   // Auto-sync to cloud every 10 seconds
   useEffect(() => {
-    if (!open) return;
+    if (!open || !editingNote) return;
     const interval = setInterval(() => {
       const hasContent = title.trim() || blocksToPlainText(blocks).trim();
       if (!hasContent) return;
