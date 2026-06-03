@@ -62,8 +62,6 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, in
         background: colors.bg,
         boxShadow: "0 2px 12px -2px rgba(0,0,0,0.06), 0 1px 4px -1px rgba(0,0,0,0.04)",
         border: "1px solid rgba(255,255,255,0.7)",
-        animationDelay: `${index * 0.05}s`,
-        animationFillMode: "both",
         touchAction: "manipulation",
       }}
     >
