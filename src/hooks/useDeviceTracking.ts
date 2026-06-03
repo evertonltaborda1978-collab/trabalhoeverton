@@ -34,8 +34,9 @@ function getDeviceInfo() {
 
   const deviceName = /Mobile|Android|iPhone|iPad/.test(ua) ? "Celular/Tablet" : "Computador";
 
-  // Simple fingerprint from available data
-  const fingerprint = btoa(`${navigator.language}-${screen.width}x${screen.height}-${ua.slice(0, 50)}`).slice(0, 32);
+  // Stable fingerprint — only uses values that don't change between sessions
+  const platform = (navigator as any).platform || "";
+  const fingerprint = btoa(`${navigator.language}-${screen.width}x${screen.height}-${platform}`).slice(0, 32);
 
   return { browser, os, device_name: `${deviceName} - ${browser}/${os}`, fingerprint };
 }

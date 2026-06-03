@@ -762,6 +762,8 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
         style={{ height: "100dvh" }}
         aria-describedby={undefined}
         onOpenAutoFocus={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogTitle className="sr-only">Editor de Nota</DialogTitle>
         {/* ── NOTEPAD CONTAINER ── */}
