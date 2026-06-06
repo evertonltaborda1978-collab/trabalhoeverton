@@ -186,6 +186,40 @@ export function useNotes() {
     fetchNotes();
   }, [fetchNotes]);
 
+  // Realtime sync — atualiza automaticamente em todos os dispositivos
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel("notes_realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notes",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          fetchNotes();
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, fetchNotes]);
+
+  // Atualiza quando o app volta para primeiro plano
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchNotes();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [fetchNotes]);
+
   // Listen for online/offline
   useEffect(() => {
     const handleOnline = () => {
