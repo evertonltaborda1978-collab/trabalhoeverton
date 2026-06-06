@@ -67,12 +67,12 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, se
       <div className="w-1 shrink-0 rounded-l-[18px]" style={{ background: colors.bar }} />
 
       <div className="flex items-center gap-2 px-2 py-2 flex-1 min-w-0" style={{ padding: 8 }}>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
+        <div className="flex-1 min-w-0 overflow-hidden">
+          <div className="flex items-center gap-1.5 min-w-0">
             <HighlightText
               text={note.title || "Sem título"}
               highlight={searchQuery}
-              className="font-bold text-[13px] leading-tight truncate"
+              className="block flex-1 min-w-0 font-bold text-[13px] leading-tight truncate"
               style={{ color: "#1A1A2E" }}
             />
             {isDraft && (
@@ -91,7 +91,7 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, se
             <HighlightText
               text={preview}
               highlight={note.isLocked ? "" : searchQuery}
-              className="text-[11px] mt-0.5 truncate"
+              className="block max-w-full text-[11px] mt-0.5 truncate"
               style={{ color: "#777" }}
             />
           )}
