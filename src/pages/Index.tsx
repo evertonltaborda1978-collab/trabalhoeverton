@@ -37,14 +37,14 @@ const Index = () => {
   const [showLabelModal, setShowLabelModal] = useState(false);
 
   useEffect(() => {
-    const dismissedId = sessionStorage.getItem(DEVICE_LABEL_PROMPT_KEY);
+    const dismissedId = localStorage.getItem(DEVICE_LABEL_PROMPT_KEY);
     if (currentDevice && !currentDevice.custom_label && dismissedId !== currentDevice.id) {
       setShowLabelModal(true);
     }
   }, [currentDevice]);
 
   const closeLabelModal = () => {
-    if (currentDevice) sessionStorage.setItem(DEVICE_LABEL_PROMPT_KEY, currentDevice.id);
+    if (currentDevice) localStorage.setItem(DEVICE_LABEL_PROMPT_KEY, currentDevice.id);
     setShowLabelModal(false);
   };
 

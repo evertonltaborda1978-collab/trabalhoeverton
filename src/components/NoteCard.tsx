@@ -56,7 +56,7 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, se
   return (
     <div
       onClick={() => onClick(note)}
-      className="group relative flex items-stretch rounded-[18px] cursor-pointer transition-all duration-200 hover:-translate-y-0.5 overflow-hidden"
+      className="group relative flex items-stretch rounded-[18px] cursor-pointer overflow-hidden"
       style={{
         background: colors.bg,
         boxShadow: "0 2px 12px -2px rgba(0,0,0,0.06), 0 1px 4px -1px rgba(0,0,0,0.04)",
