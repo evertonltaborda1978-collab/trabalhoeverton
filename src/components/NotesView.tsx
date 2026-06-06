@@ -357,7 +357,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onL
           </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-2.5" style={{ transform: "none", animation: "none", visibility: dialogOpen ? "hidden" : "visible", opacity: dialogOpen ? 0 : 1, transition: "opacity 0.1s ease" }}>
+        <div className="flex flex-col gap-2.5" style={{ transform: "none", animation: "none", visibility: (dialogOpen || !!confirmDeleteId) ? "hidden" : "visible", opacity: (dialogOpen || !!confirmDeleteId) ? 0 : 1, transition: "opacity 0.15s ease" }}>
           {filtered.map((note) => (
             <NoteCard
               key={note.id}
