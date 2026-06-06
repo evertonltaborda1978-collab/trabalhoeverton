@@ -68,7 +68,7 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, se
 
       <div className="flex items-center gap-2 px-2 py-2 flex-1 min-w-0" style={{ padding: 8 }}>
         <div className="flex-1 min-w-0 overflow-hidden">
-          <div className="flex items-center gap-1.5 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
             <HighlightText
               text={note.title || "Sem título"}
               highlight={searchQuery}
