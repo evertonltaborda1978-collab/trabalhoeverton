@@ -86,6 +86,7 @@ export function useDeviceTracking() {
         os: info.os,
         device_fingerprint: info.fingerprint,
         is_current: true,
+        last_seen_at: new Date().toISOString(),
       }, { onConflict: "user_id,device_fingerprint" });
     }
   }, [user]);
