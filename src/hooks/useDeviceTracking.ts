@@ -80,7 +80,7 @@ export function useDeviceTracking() {
       // Reset current flag
       await supabase.from("user_devices").update({ is_current: false }).eq("user_id", user.id);
       // Insert new device
-      await supabase.from("user_devices").upsert({
+      const { error: insertError } = await supabase.from("user_devices").insert({
         user_id: user.id,
         device_name: info.device_name,
         custom_label: info.device_name,
@@ -89,7 +89,27 @@ export function useDeviceTracking() {
         device_fingerprint: info.fingerprint,
         is_current: true,
         last_seen_at: new Date().toISOString(),
-      }, { onConflict: "user_id,device_fingerprint" });
+      });
+
+      if (insertError?.code === "23505") {
+        const { data: conflictDevice } = await supabase
+          .from("user_devices")
+          .select("id, custom_label")
+          .eq("user_id", user.id)
+          .eq("device_fingerprint", info.fingerprint)
+          .maybeSingle();
+
+        if (conflictDevice) {
+          await supabase.from("user_devices").update({
+            last_seen_at: new Date().toISOString(),
+            is_current: true,
+            device_name: info.device_name,
+            browser: info.browser,
+            os: info.os,
+            custom_label: conflictDevice.custom_label || info.device_name,
+          }).eq("id", conflictDevice.id);
+        }
+      }
     }
   }, [user]);
 
