@@ -79,14 +79,14 @@ export function useDeviceTracking() {
       // Reset current flag
       await supabase.from("user_devices").update({ is_current: false }).eq("user_id", user.id);
       // Insert new device
-      await supabase.from("user_devices").insert({
+      await supabase.from("user_devices").upsert({
         user_id: user.id,
         device_name: info.device_name,
         browser: info.browser,
         os: info.os,
         device_fingerprint: info.fingerprint,
         is_current: true,
-      });
+      }, { onConflict: "user_id,device_fingerprint" });
     }
   }, [user]);
 
