@@ -60,7 +60,7 @@ export function useDeviceTracking() {
     // Check if device already exists
     const { data: existing } = await supabase
       .from("user_devices")
-      .select("id")
+      .select("id, custom_label")
       .eq("user_id", user.id)
       .eq("device_fingerprint", info.fingerprint)
       .maybeSingle();
@@ -74,6 +74,7 @@ export function useDeviceTracking() {
         device_name: info.device_name,
         browser: info.browser,
         os: info.os,
+        custom_label: existing.custom_label || info.device_name,
       }).eq("id", existing.id);
     } else {
       // Reset current flag
@@ -82,6 +83,7 @@ export function useDeviceTracking() {
       await supabase.from("user_devices").upsert({
         user_id: user.id,
         device_name: info.device_name,
+        custom_label: info.device_name,
         browser: info.browser,
         os: info.os,
         device_fingerprint: info.fingerprint,
