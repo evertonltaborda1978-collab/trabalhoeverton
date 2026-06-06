@@ -111,7 +111,7 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, se
         <div className="flex items-center gap-0 shrink-0">
           <button
             onClick={(e) => { e.stopPropagation(); onBellClick?.(note); }}
-            className="p-1 rounded-md transition-all hover:bg-black/5"
+            className="p-1 rounded-md"
             style={{ color: hasReminder ? "#F9A825" : "#BDBDBD" }}
             title={hasReminder ? "Editar lembrete" : "Adicionar lembrete"}
           >
@@ -119,7 +119,7 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, se
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onLockClick?.(note); }}
-            className="p-1 rounded-md transition-all hover:bg-black/5"
+            className="p-1 rounded-md"
             style={{ color: note.isLocked ? "#F9A825" : "#BDBDBD" }}
             title={note.isLocked ? "Gerenciar bloqueio" : "Bloquear nota"}
           >
@@ -127,7 +127,7 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, se
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(note.id); }}
-            className="p-1 rounded-md transition-all hover:bg-red-50"
+            className="p-1 rounded-md"
             style={{ color: "#E53935" }}
             title="Excluir nota"
           >
@@ -136,7 +136,7 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, se
           <ChevronRight
             size={13}
             onClick={(e) => { e.stopPropagation(); onClick(note); }}
-            className="transition-transform duration-200 group-hover:translate-x-[2px]"
+            className="shrink-0"
             style={{ color: "#BDBDBD" }}
           />
         </div>
