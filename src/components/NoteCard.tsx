@@ -62,6 +62,9 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, se
         boxShadow: "0 2px 12px -2px rgba(0,0,0,0.06), 0 1px 4px -1px rgba(0,0,0,0.04)",
         border: "1px solid rgba(255,255,255,0.7)",
         touchAction: "manipulation",
+        transform: "translateZ(0)",
+        WebkitTransform: "translateZ(0)",
+        isolation: "isolate" as const,
       }}
     >
       <div className="w-1 shrink-0 rounded-l-[18px]" style={{ background: colors.bar }} />
