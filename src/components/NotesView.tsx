@@ -248,7 +248,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onL
   }
 
   return (
-    <div className="animate-fade-in">
+    <div>
       {/* Sync indicator + draft counter + trash */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
@@ -357,7 +357,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onL
           </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-2.5" style={{ transform: "none", animation: "none" }}>
           {filtered.map((note) => (
             <NoteCard
               key={note.id}

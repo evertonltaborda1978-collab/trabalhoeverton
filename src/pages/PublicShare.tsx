@@ -27,12 +27,14 @@ export default function PublicShare() {
     if (!token) return;
     let mounted = true;
     const load = async () => {
-      const { data, error: rpcErr } = await (supabase as any).rpc("get_shared_location", { _token: token });
+      const { data, error: functionError } = await supabase.functions.invoke("get-shared-location", {
+        body: { token },
+      });
       if (!mounted) return;
-      const row = Array.isArray(data) ? data[0] : data;
-      if (rpcErr || !row) { setError("Link inválido ou expirado."); return; }
-      setShare({ id: row.share_id, device_id: row.device_id, expires_at: row.expires_at, is_active: true });
-      if (row.latitude != null && row.longitude != null) {
+      if (functionError || data?.error || !data?.share) { setError("Link inválido ou expirado."); return; }
+      const row = data.location;
+      setShare({ id: data.share.id, device_id: data.share.device_id, expires_at: data.share.expires_at, is_active: true });
+      if (row?.latitude != null && row?.longitude != null) {
         setLoc({
           latitude: row.latitude,
           longitude: row.longitude,
