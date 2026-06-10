@@ -204,6 +204,8 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const textAreaRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
   const pendingFocusRef = useRef<"title" | "content" | null>(null);
   const pendingCursorRef = useRef<number | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const savedScrollRef = useRef<number>(0);
 
   // ── Auto-save draft to localStorage ───────────────────
   const DRAFT_KEY = "note_editor_draft";
@@ -647,6 +649,10 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
   // ── Edit mode helpers ─────────────────────────────────
   const enterEditMode = useCallback(() => {
+    // Save scroll position before switching to edit mode
+    if (scrollContainerRef.current) {
+      savedScrollRef.current = scrollContainerRef.current.scrollTop;
+    }
     snapshotRef.current = { title, blocks: JSON.parse(JSON.stringify(blocks)), color: selectedColor };
     onSetReadOnly?.(false);
   }, [title, blocks, selectedColor, onSetReadOnly]);
@@ -780,12 +786,12 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const charCount = plainText.length;
 
   const autoResize = (el: HTMLTextAreaElement) => {
-    // Prevent scroll jump: save scroll position before resize
-    const scrollEl = el.closest(".overflow-y-auto") as HTMLElement;
+    // Prevent scroll jump: save and restore scroll position
+    const scrollEl = scrollContainerRef.current ?? (el.closest(".overflow-y-auto") as HTMLElement);
     const scrollTop = scrollEl?.scrollTop ?? 0;
     el.style.height = "auto";
     el.style.height = el.scrollHeight + "px";
-    if (scrollEl) scrollEl.scrollTop = scrollTop;
+    if (scrollEl) requestAnimationFrame(() => { scrollEl.scrollTop = scrollTop; });
   };
 
   const canUndo = historyIdx > 0;
@@ -1008,6 +1014,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
           {/* ── LINED PAPER BODY ── */}
           <div
+            ref={scrollContainerRef}
             className="flex-1 overflow-y-auto px-4"
             style={{
               background: `repeating-linear-gradient(to bottom, transparent, transparent 31px, ${theme.lines} 32px)`,
@@ -1093,7 +1100,10 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                               pendingCursorRef.current = null;
                               const safePos = Math.min(pos, el.value.length);
                               el.setSelectionRange(safePos, safePos);
-                              setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "nearest" }), 50);
+                              // Restore scroll position immediately
+                              if (scrollContainerRef.current && savedScrollRef.current > 0) {
+                                scrollContainerRef.current.scrollTop = savedScrollRef.current;
+                              }
                             });
                           }
                         }
