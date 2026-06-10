@@ -837,7 +837,11 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                     activateFieldForEditing("title");
                   }
                 }}
-                onFocus={() => { activeFieldRef.current = "title"; }}
+                onFocus={(e) => {
+                  if (readOnly) { e.target.blur(); return; }
+                  activeFieldRef.current = "title";
+                }}
+                tabIndex={readOnly ? -1 : 0}
                 onPaste={handleMobilePaste}
                 readOnly={readOnly}
                 placeholder="Título da nota..."
@@ -1012,9 +1016,14 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                           activateFieldForEditing("content", idx);
                         }
                       }}
-                      onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
+                      onFocus={(e) => {
+                        if (readOnly) { e.target.blur(); return; }
+                        focusedBlockRef.current = idx;
+                        activeFieldRef.current = "content";
+                      }}
                       onPaste={handleMobilePaste}
                       readOnly={readOnly}
+                      tabIndex={readOnly ? -1 : 0}
                       placeholder={idx === 0 && blocks.length === 1 ? "Comece a escrever sua nota..." : ""}
                       className="w-full bg-transparent border-0 outline-none resize-none text-base"
                       style={{
@@ -1100,7 +1109,12 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                                   activateFieldForEditing("content", idx);
                                 }
                               }}
-                              onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
+                              onFocus={(e) => {
+                                if (readOnly) { e.target.blur(); return; }
+                                focusedBlockRef.current = idx;
+                                activeFieldRef.current = "content";
+                              }}
+                              tabIndex={readOnly ? -1 : 0}
                               onPaste={handleMobilePaste}
                               readOnly={readOnly}
                               onKeyDown={(e) => {
