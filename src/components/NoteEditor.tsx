@@ -663,17 +663,23 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
   useEffect(() => {
     if (!open || readOnly || !pendingFocusRef.current) return;
-    const frame = requestAnimationFrame(() => {
+    // Use setTimeout to ensure textarea is rendered before focusing
+    const timer = setTimeout(() => {
       const target = pendingFocusRef.current;
       pendingFocusRef.current = null;
-      const el = target === "title" ? titleInputRef.current : textAreaRefs.current[focusedBlockRef.current];
-      el?.focus({ preventScroll: true });
-      if (el && "setSelectionRange" in el) {
-        const len = el.value.length;
-        el.setSelectionRange(len, len);
+      const el = target === "title"
+        ? titleInputRef.current
+        : textAreaRefs.current[focusedBlockRef.current];
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      if ("setSelectionRange" in el) {
+        const len = (el as HTMLTextAreaElement).value.length;
+        (el as HTMLTextAreaElement).setSelectionRange(len, len);
       }
-    });
-    return () => cancelAnimationFrame(frame);
+      // Scroll the element into view smoothly
+      el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 80);
+    return () => clearTimeout(timer);
   }, [open, readOnly]);
 
   const hasUnsavedChanges = useCallback(() => {
