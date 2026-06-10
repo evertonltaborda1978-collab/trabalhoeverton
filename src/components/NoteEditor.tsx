@@ -796,12 +796,12 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const charCount = plainText.length;
 
   const autoResize = (el: HTMLTextAreaElement) => {
-    // Prevent scroll jump: save and restore scroll position
-    const scrollEl = scrollContainerRef.current ?? (el.closest(".overflow-y-auto") as HTMLElement);
+    const scrollEl = scrollContainerRef.current;
     const scrollTop = scrollEl?.scrollTop ?? 0;
     el.style.height = "auto";
     el.style.height = el.scrollHeight + "px";
-    if (scrollEl) requestAnimationFrame(() => { scrollEl.scrollTop = scrollTop; });
+    // Restore scroll synchronously to prevent jump
+    if (scrollEl) scrollEl.scrollTop = scrollTop;
   };
 
   const canUndo = historyIdx > 0;
