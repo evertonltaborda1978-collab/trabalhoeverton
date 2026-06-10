@@ -663,8 +663,9 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
   useEffect(() => {
     if (!open || readOnly || !pendingFocusRef.current) return;
-    // Use setTimeout to ensure textarea is rendered before focusing
+    // Fallback: if ref callback didn't handle focus, try here
     const timer = setTimeout(() => {
+      if (!pendingFocusRef.current) return; // already handled by ref callback
       const target = pendingFocusRef.current;
       pendingFocusRef.current = null;
       const el = target === "title"
@@ -676,9 +677,8 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
         const len = (el as HTMLTextAreaElement).value.length;
         (el as HTMLTextAreaElement).setSelectionRange(len, len);
       }
-      // Scroll the element into view smoothly
       el.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }, 80);
+    }, 150);
     return () => clearTimeout(timer);
   }, [open, readOnly]);
 
@@ -843,7 +843,17 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                 </div>
               ) : (
                 <input
-                  ref={titleInputRef}
+                  ref={(el) => {
+                    (titleInputRef as React.MutableRefObject<HTMLInputElement | null>).current = el;
+                    if (el && pendingFocusRef.current === "title") {
+                      pendingFocusRef.current = null;
+                      requestAnimationFrame(() => {
+                        el.focus({ preventScroll: true });
+                        const len = el.value.length;
+                        el.setSelectionRange(len, len);
+                      });
+                    }
+                  }}
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   onFocus={() => { activeFieldRef.current = "title"; }}
@@ -1051,7 +1061,22 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                         color: textColor,
                         "--placeholder-color": placeholderColor,
                       } as React.CSSProperties}
-                      ref={(el) => { textAreaRefs.current[idx] = el; if (el) autoResize(el); }}
+                      ref={(el) => {
+                        textAreaRefs.current[idx] = el;
+                        if (el) {
+                          autoResize(el);
+                          // Focus immediately when mounted if this is the pending focus block
+                          if (pendingFocusRef.current === "content" && focusedBlockRef.current === idx) {
+                            pendingFocusRef.current = null;
+                            requestAnimationFrame(() => {
+                              el.focus({ preventScroll: true });
+                              const len = el.value.length;
+                              el.setSelectionRange(len, len);
+                              setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "nearest" }), 50);
+                            });
+                          }
+                        }
+                      }}
                     />
                   );
                 }
