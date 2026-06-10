@@ -1242,29 +1242,33 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
                 if (block.type === "image" && block.url) {
                   return (
-                    <div key={`img-${idx}`} className="relative group/img my-2" style={{ width: "40%", maxWidth: "40%" }}>
-                      <img
-                        src={block.url}
-                        alt=""
-                        style={{
-                          width: "100%",
-                          height: "auto",
-                          objectFit: "contain",
-                          borderRadius: 8,
-                          boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-                          display: "block",
-                        }}
-                      />
-                      {!readOnly && (
-                        <button
-                          onClick={() => removeImageBlock(idx)}
-                          className="absolute -top-2 -right-2 rounded-full text-white transition-all hover:bg-black/80 active:scale-95"
-                          style={{ background: "rgba(0,0,0,0.7)", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 6px rgba(0,0,0,0.2)" }}
-                          aria-label="Remover imagem"
-                        >
-                          <X size={16} />
-                        </button>
-                      )}
+                    <div key={`img-${idx}`} className="relative group/img my-3 flex justify-center">
+                      <div style={{ width: "100%", maxWidth: "100%", position: "relative" }}>
+                        <img
+                          src={block.url}
+                          alt=""
+                          style={{
+                            width: "100%",
+                            height: "auto",
+                            maxHeight: "320px",
+                            objectFit: "contain",
+                            borderRadius: 12,
+                            boxShadow: "0 4px 16px rgba(0,0,0,0.18)",
+                            display: "block",
+                            margin: "0 auto",
+                          }}
+                        />
+                        {!readOnly && (
+                          <button
+                            onClick={() => removeImageBlock(idx)}
+                            className="absolute -top-2 -right-2 rounded-full text-white transition-all hover:bg-black/80 active:scale-95"
+                            style={{ background: "rgba(0,0,0,0.7)", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 6px rgba(0,0,0,0.2)" }}
+                            aria-label="Remover imagem"
+                          >
+                            <X size={16} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 }
