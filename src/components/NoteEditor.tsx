@@ -827,27 +827,26 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={textColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
               </button>
 
-              <input
-                ref={titleInputRef}
-                value={title}
-                onChange={(e) => !readOnly && setTitle(e.target.value)}
-                onPointerDown={(e) => {
-                  if (readOnly && editingNote) {
-                    e.preventDefault();
-                    activateFieldForEditing("title");
-                  }
-                }}
-                onFocus={(e) => {
-                  if (readOnly) { e.target.blur(); return; }
-                  activeFieldRef.current = "title";
-                }}
-                tabIndex={readOnly ? -1 : 0}
-                onPaste={handleMobilePaste}
-                readOnly={readOnly}
-                placeholder="Título da nota..."
-                className="flex-1 min-w-0 bg-white/90 rounded-lg px-3 py-2 text-base font-semibold placeholder:text-gray-400 outline-none border-0 shadow-sm"
-                style={{ color: "#1A1A2E", fontSize: "16px" }}
-              />
+              {readOnly ? (
+                <div
+                  onClick={() => { if (editingNote) activateFieldForEditing("title"); }}
+                  className="flex-1 min-w-0 bg-white/90 rounded-lg px-3 py-2 text-base font-semibold outline-none shadow-sm cursor-text select-text"
+                  style={{ color: title ? "#1A1A2E" : "#9CA3AF", fontSize: "16px", minHeight: "38px", display: "flex", alignItems: "center", WebkitUserSelect: "text" }}
+                >
+                  {title || "Título da nota..."}
+                </div>
+              ) : (
+                <input
+                  ref={titleInputRef}
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  onFocus={() => { activeFieldRef.current = "title"; }}
+                  onPaste={handleMobilePaste}
+                  placeholder="Título da nota..."
+                  className="flex-1 min-w-0 bg-white/90 rounded-lg px-3 py-2 text-base font-semibold placeholder:text-gray-400 outline-none border-0 shadow-sm"
+                  style={{ color: "#1A1A2E", fontSize: "16px" }}
+                />
+              )}
 
               <button
                 onClick={handleClose}
@@ -1001,29 +1000,41 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
             <div className="py-2">
               {blocks.map((block, idx) => {
                 if (block.type === "text") {
+                  if (readOnly) {
+                    return (
+                      <div
+                        key={`text-${idx}`}
+                        onClick={() => { if (editingNote) activateFieldForEditing("content", idx); }}
+                        className="w-full bg-transparent text-base select-text"
+                        style={{
+                          lineHeight: "32px",
+                          minHeight: "32px",
+                          fontSize: "16px",
+                          color: block.content ? textColor : placeholderColor,
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                          cursor: "text",
+                          userSelect: "text",
+                          WebkitUserSelect: "text",
+                        }}
+                      >
+                        {block.content || (idx === 0 && blocks.length === 1 ? "Comece a escrever sua nota..." : "")}
+                      </div>
+                    );
+                  }
                   return (
                     <textarea
                       key={`text-${idx}`}
                       value={block.content || ""}
                       onChange={(e) => {
-                        if (readOnly) return;
                         updateTextBlock(idx, e.target.value);
                         autoResize(e.target);
                       }}
-                      onPointerDown={(e) => {
-                        if (readOnly && editingNote) {
-                          e.preventDefault();
-                          activateFieldForEditing("content", idx);
-                        }
-                      }}
-                      onFocus={(e) => {
-                        if (readOnly) { e.target.blur(); return; }
+                      onFocus={() => {
                         focusedBlockRef.current = idx;
                         activeFieldRef.current = "content";
                       }}
                       onPaste={handleMobilePaste}
-                      readOnly={readOnly}
-                      tabIndex={readOnly ? -1 : 0}
                       placeholder={idx === 0 && blocks.length === 1 ? "Comece a escrever sua nota..." : ""}
                       className="w-full bg-transparent border-0 outline-none resize-none text-base"
                       style={{
