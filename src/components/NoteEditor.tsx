@@ -232,28 +232,22 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     return () => clearInterval(interval);
   }, [open, saveDraftToLocal]);
 
-  // Fix keyboard overlap on mobile using visualViewport API
+  // Fix keyboard overlap on mobile — scroll focused element into view when keyboard opens
   useEffect(() => {
     if (!open) return;
     const handleViewportResize = () => {
       if (!window.visualViewport) return;
-      const kbHeight = Math.max(0, window.innerHeight - window.visualViewport.height - (window.visualViewport.offsetTop || 0));
-      setKeyboardHeight(kbHeight);
-      // Keep focused element visible above keyboard
-      if (kbHeight > 0) {
+      const kbHeight = Math.max(0, window.innerHeight - window.visualViewport.height);
+      if (kbHeight > 100) {
         const focused = document.activeElement as HTMLElement;
         if (focused && (focused.tagName === "TEXTAREA" || focused.tagName === "INPUT")) {
-          setTimeout(() => focused.scrollIntoView({ behavior: "smooth", block: "nearest" }), 50);
+          setTimeout(() => focused.scrollIntoView({ behavior: "smooth", block: "nearest" }), 80);
         }
       }
     };
     window.visualViewport?.addEventListener("resize", handleViewportResize);
-    window.visualViewport?.addEventListener("scroll", handleViewportResize);
-    handleViewportResize();
     return () => {
       window.visualViewport?.removeEventListener("resize", handleViewportResize);
-      window.visualViewport?.removeEventListener("scroll", handleViewportResize);
-      setKeyboardHeight(0);
     };
   }, [open]);
 
@@ -777,8 +771,12 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const charCount = plainText.length;
 
   const autoResize = (el: HTMLTextAreaElement) => {
+    // Prevent scroll jump: save scroll position before resize
+    const scrollEl = el.closest(".overflow-y-auto") as HTMLElement;
+    const scrollTop = scrollEl?.scrollTop ?? 0;
     el.style.height = "auto";
     el.style.height = el.scrollHeight + "px";
+    if (scrollEl) scrollEl.scrollTop = scrollTop;
   };
 
   const canUndo = historyIdx > 0;
@@ -801,7 +799,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
             height: "100dvh",
             background: theme.bg,
             transition: "background 0.3s ease",
-            paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : "env(safe-area-inset-bottom)",
+            paddingBottom: "env(safe-area-inset-bottom)",
           }}
         >
 
@@ -988,11 +986,12 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
           {/* ── LINED PAPER BODY ── */}
           <div
-            className="flex-1 overflow-y-auto px-4 min-h-0"
+            className="flex-1 overflow-y-auto px-4"
             style={{
               background: `repeating-linear-gradient(to bottom, transparent, transparent 31px, ${theme.lines} 32px)`,
               backgroundPosition: "0 0",
               transition: "background 0.3s ease",
+              minHeight: "120px",
             }}
           >
             <div className="py-2">
