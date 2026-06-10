@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
 import { Note } from "@/hooks/useNotes";
 import {
   Camera,
@@ -206,6 +206,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const pendingCursorRef = useRef<number | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const savedScrollRef = useRef<number>(0);
+  const justEnteredEditRef = useRef(false);
 
   // ── Auto-save draft to localStorage ───────────────────
   const DRAFT_KEY = "note_editor_draft";
@@ -234,6 +235,14 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     const interval = setInterval(saveDraftToLocal, 2000);
     return () => clearInterval(interval);
   }, [open, saveDraftToLocal]);
+
+  // Restore scroll position immediately after entering edit mode (before browser paints)
+  useLayoutEffect(() => {
+    if (!readOnly && justEnteredEditRef.current && scrollContainerRef.current && savedScrollRef.current > 0) {
+      scrollContainerRef.current.scrollTop = savedScrollRef.current;
+      justEnteredEditRef.current = false;
+    }
+  });
 
   // Fix keyboard overlap on mobile — scroll focused element into view when keyboard opens
   useEffect(() => {
@@ -652,6 +661,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     // Save scroll position before switching to edit mode
     if (scrollContainerRef.current) {
       savedScrollRef.current = scrollContainerRef.current.scrollTop;
+      justEnteredEditRef.current = true;
     }
     snapshotRef.current = { title, blocks: JSON.parse(JSON.stringify(blocks)), color: selectedColor };
     onSetReadOnly?.(false);
