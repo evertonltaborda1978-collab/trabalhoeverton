@@ -798,10 +798,10 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
         <div
           className="flex flex-col"
           style={{
-            height: keyboardHeight > 0 ? `calc(100dvh - ${keyboardHeight}px)` : "100dvh",
+            height: "100dvh",
             background: theme.bg,
-            transition: "background 0.3s ease, height 0.1s ease",
-            paddingBottom: keyboardHeight > 0 ? 0 : "env(safe-area-inset-bottom)",
+            transition: "background 0.3s ease",
+            paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : "env(safe-area-inset-bottom)",
           }}
         >
 
