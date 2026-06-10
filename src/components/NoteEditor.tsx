@@ -56,6 +56,7 @@ const COLOR_THEMES: Record<string, { bg: string; lines: string; headerBg: string
   "bg-pink-100": { bg: "#F3E5F5", lines: "#CE93D8", headerBg: "#CE93D8", toolbarBg: "#EFE0F3", textMuted: "#7B3C8B", borderAccent: "#BA68C8" },
   "bg-blue-100": { bg: "#E3F2FD", lines: "#90CAF9", headerBg: "#90CAF9", toolbarBg: "#DCF0FC", textMuted: "#3C5E8B", borderAccent: "#64B5F6" },
   "bg-gray-800": { bg: "#2D2D2D", lines: "#444444", headerBg: "#444444", toolbarBg: "#333333", textMuted: "#AAAAAA", borderAccent: "#666666" },
+  "bg-paper": { bg: "#F5F0E8", lines: "#D3CFC5", headerBg: "#EDE8DF", toolbarBg: "#EDE8DF", textMuted: "#7A7468", borderAccent: "#C5BFB5" },
 };
 
 const NOTE_COLORS = [
@@ -66,6 +67,7 @@ const NOTE_COLORS = [
   { value: "bg-orange-100", label: "Laranja", dot: "#FED7AA" },
   { value: "bg-purple-100", label: "Roxo", dot: "#E9D5FF" },
   { value: "bg-gray-800", label: "Escura", dot: "#1F2937" },
+  { value: "bg-paper", label: "Papel", dot: "#F5F0E8" },
 ];
 
 // ── Helpers ────────────────────────────────────────────
@@ -182,6 +184,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("09:00");
   const [showUnsavedPrompt, setShowUnsavedPrompt] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // Snapshot of content when entering edit mode (for cancel)
   const snapshotRef = useRef<{ title: string; blocks: ContentBlock[]; color: string } | null>(null);
@@ -228,6 +231,31 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     const interval = setInterval(saveDraftToLocal, 2000);
     return () => clearInterval(interval);
   }, [open, saveDraftToLocal]);
+
+  // Fix keyboard overlap on mobile using visualViewport API
+  useEffect(() => {
+    if (!open) return;
+    const handleViewportResize = () => {
+      if (!window.visualViewport) return;
+      const kbHeight = Math.max(0, window.innerHeight - window.visualViewport.height - (window.visualViewport.offsetTop || 0));
+      setKeyboardHeight(kbHeight);
+      // Keep focused element visible above keyboard
+      if (kbHeight > 0) {
+        const focused = document.activeElement as HTMLElement;
+        if (focused && (focused.tagName === "TEXTAREA" || focused.tagName === "INPUT")) {
+          setTimeout(() => focused.scrollIntoView({ behavior: "smooth", block: "nearest" }), 50);
+        }
+      }
+    };
+    window.visualViewport?.addEventListener("resize", handleViewportResize);
+    window.visualViewport?.addEventListener("scroll", handleViewportResize);
+    handleViewportResize();
+    return () => {
+      window.visualViewport?.removeEventListener("resize", handleViewportResize);
+      window.visualViewport?.removeEventListener("scroll", handleViewportResize);
+      setKeyboardHeight(0);
+    };
+  }, [open]);
 
   // Auto-sync to cloud every 10 seconds
   useEffect(() => {
@@ -770,10 +798,10 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
         <div
           className="flex flex-col"
           style={{
-            height: "100dvh",
+            height: keyboardHeight > 0 ? `calc(100dvh - ${keyboardHeight}px)` : "100dvh",
             background: theme.bg,
-            transition: "background 0.3s ease",
-            paddingBottom: "env(safe-area-inset-bottom)",
+            transition: "background 0.3s ease, height 0.1s ease",
+            paddingBottom: keyboardHeight > 0 ? 0 : "env(safe-area-inset-bottom)",
           }}
         >
 
@@ -851,6 +879,25 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                 style={{ color: textColor, minWidth: 36, minHeight: 36 }}
               >
                 {copied ? <Check size={18} className="text-green-700" /> : <Copy size={18} />}
+              </button>
+
+              {/* Toggle modo escuro */}
+              <button
+                onClick={() => setSelectedColor(selectedColor === "bg-gray-800" ? (editingNote?.color || NOTE_COLORS[0].value) : "bg-gray-800")}
+                className="p-2 rounded-full hover:bg-black/10 transition-all shrink-0 flex items-center justify-center"
+                title={selectedColor === "bg-gray-800" ? "Modo claro" : "Modo escuro"}
+                aria-label={selectedColor === "bg-gray-800" ? "Modo claro" : "Modo escuro"}
+                style={{
+                  background: selectedColor === "bg-gray-800" ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.08)",
+                  width: 34, height: 34, minWidth: 34,
+                  color: textColor,
+                }}
+              >
+                {selectedColor === "bg-gray-800" ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                )}
               </button>
 
               {/* Compartilhar — em modo visualização */}
