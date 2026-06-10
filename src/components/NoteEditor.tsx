@@ -203,6 +203,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const titleInputRef = useRef<HTMLInputElement>(null);
   const textAreaRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
   const pendingFocusRef = useRef<"title" | "content" | null>(null);
+  const pendingCursorRef = useRef<number | null>(null);
 
   // ── Auto-save draft to localStorage ───────────────────
   const DRAFT_KEY = "note_editor_draft";
@@ -674,8 +675,10 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
       if (!el) return;
       el.focus({ preventScroll: true });
       if ("setSelectionRange" in el) {
-        const len = (el as HTMLTextAreaElement).value.length;
-        (el as HTMLTextAreaElement).setSelectionRange(len, len);
+        const pos = pendingCursorRef.current ?? (el as HTMLTextAreaElement).value.length;
+        pendingCursorRef.current = null;
+        const safePos = Math.min(pos, (el as HTMLTextAreaElement).value.length);
+        (el as HTMLTextAreaElement).setSelectionRange(safePos, safePos);
       }
       el.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }, 150);
@@ -1020,7 +1023,22 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                     return (
                       <div
                         key={`text-${idx}`}
-                        onClick={() => { if (editingNote) activateFieldForEditing("content", idx); }}
+                        onClick={(e) => {
+                          if (!editingNote) return;
+                          // Capture tap position to place cursor there
+                          let cursorPos = (block.content || "").length;
+                          try {
+                            if ((document as any).caretPositionFromPoint) {
+                              const pos = (document as any).caretPositionFromPoint(e.clientX, e.clientY);
+                              if (pos?.offset != null) cursorPos = pos.offset;
+                            } else if ((document as any).caretRangeFromPoint) {
+                              const range = (document as any).caretRangeFromPoint(e.clientX, e.clientY);
+                              if (range?.startOffset != null) cursorPos = range.startOffset;
+                            }
+                          } catch {}
+                          pendingCursorRef.current = cursorPos;
+                          activateFieldForEditing("content", idx);
+                        }}
                         className="w-full bg-transparent text-base select-text"
                         style={{
                           lineHeight: "32px",
@@ -1070,8 +1088,11 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                             pendingFocusRef.current = null;
                             requestAnimationFrame(() => {
                               el.focus({ preventScroll: true });
-                              const len = el.value.length;
-                              el.setSelectionRange(len, len);
+                              // Use tap position if available, otherwise go to end
+                              const pos = pendingCursorRef.current ?? el.value.length;
+                              pendingCursorRef.current = null;
+                              const safePos = Math.min(pos, el.value.length);
+                              el.setSelectionRange(safePos, safePos);
                               setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "nearest" }), 50);
                             });
                           }
