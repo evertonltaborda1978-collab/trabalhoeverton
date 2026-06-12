@@ -7,6 +7,7 @@ import { LocationView } from "@/components/LocationView";
 import { WeatherView } from "@/components/WeatherView";
 import { DevicesView } from "@/components/DevicesView";
 import { FuelCalculatorView } from "@/components/FuelCalculatorView";
+import { MedicationView } from "@/components/MedicationView";
 import { SnoozeAlert } from "@/components/SnoozeAlert";
 import { DeviceLabelModal } from "@/components/local/DeviceLabelModal";
 import { useNotes } from "@/hooks/useNotes";
@@ -15,7 +16,7 @@ import { useDeviceTracking } from "@/hooks/useDeviceTracking";
 import { useAuth } from "@/contexts/AuthContext";
 import { LogOut } from "lucide-react";
 
-type Tab = "notes" | "calendar" | "weather" | "location" | "devices" | "fuel";
+type Tab = "notes" | "calendar" | "weather" | "location" | "devices" | "fuel" | "medication";
 
 const titles: Record<Tab, string> = {
   notes: "Minhas Notas",
@@ -24,6 +25,7 @@ const titles: Record<Tab, string> = {
   location: "Localização",
   devices: "Segurança",
   fuel: "Combustível",
+  medication: "Saúde",
 };
 
 const DEVICE_LABEL_PROMPT_KEY = "device_label_prompt_dismissed";
@@ -141,6 +143,7 @@ const Index = () => {
         )}
         {tab === "weather" && <WeatherView />}
         {tab === "fuel" && <FuelCalculatorView />}
+        {tab === "medication" && <MedicationView />}
         {tab === "location" && <LocationView />}
         {tab === "devices" && <DevicesView />}
       </main>
