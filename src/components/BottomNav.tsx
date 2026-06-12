@@ -11,10 +11,10 @@ const tabs: { id: Tab; icon: typeof StickyNote; label: string }[] = [
   { id: "notes", icon: StickyNote, label: "Notas" },
   { id: "calendar", icon: Calendar, label: "Agenda" },
   { id: "fuel", icon: Fuel, label: "Combustível" },
+  { id: "medication", icon: Pill, label: "Remédios" },
   { id: "weather", icon: CloudSun, label: "Tempo" },
   { id: "location", icon: MapPin, label: "Local" },
   { id: "devices", icon: Shield, label: "Segurança" },
-  { id: "medication", icon: Pill, label: "Remédios" },
 ];
 
 export function BottomNav({ active, onChange }: BottomNavProps) {
