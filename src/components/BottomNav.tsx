@@ -39,18 +39,18 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
               key={id}
               onClick={() => onChange(id)}
               className="flex flex-col items-center gap-0.5 rounded-xl transition-all duration-200 shrink-0"
-              style={{ padding: "8px 6px" }}
+              style={{ padding: "8px 3px", minWidth: 0 }}
             >
               <div
                 className="flex items-center justify-center rounded-lg transition-colors"
                 style={{
-                  width: 30,
-                  height: 30,
+                  width: 28,
+                  height: 28,
                   background: isActive ? "rgba(26,26,46,0.05)" : "transparent",
                 }}
               >
                 <Icon
-                  size={18}
+                  size={16}
                   strokeWidth={isActive ? 2.5 : 1.8}
                   style={{ color: isActive ? "#1A1A2E" : "#BDBDBD" }}
                   className="transition-all"
@@ -59,7 +59,7 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
               <span
                 className="font-bold tracking-wide"
                 style={{
-                  fontSize: 8.5,
+                  fontSize: 8,
                   color: isActive ? "#1A1A2E" : "#BDBDBD",
                 }}
               >
