@@ -62,6 +62,16 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onL
   // For unlocking to open editor
   const [pendingUnlockNote, setPendingUnlockNote] = useState<Note | null>(null);
 
+  // Font size preference
+  const [fontSize, setFontSize] = useState<"sm" | "md" | "lg" | "xl">(() => {
+    return (localStorage.getItem("notes_font_size") as "sm" | "md" | "lg" | "xl") || "md";
+  });
+  const changeFontSize = (size: "sm" | "md" | "lg" | "xl") => {
+    setFontSize(size);
+    localStorage.setItem("notes_font_size", size);
+  };
+  const fontSizeMap = { sm: 12, md: 14, lg: 18, xl: 22 };
+
   // Voice search
   const handleVoiceResult = useCallback((text: string) => {
     setSearch((prev) => (prev + " " + text).trim());
@@ -367,6 +377,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onL
               onBellClick={handleBellClick}
               onLockClick={handleLockClick}
               searchQuery={search}
+              fontSize={fontSizeMap[fontSize]}
             />
           ))}
         </div>
