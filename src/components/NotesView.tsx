@@ -350,9 +350,32 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onL
         </button>
       </div>
 
-      <p className="text-xs font-semibold mb-4" style={{ color: "#BDBDBD", fontSize: 12 }}>
-        {filtered.length} {filtered.length === 1 ? "nota" : "notas"}
-      </p>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-semibold" style={{ color: "#BDBDBD", fontSize: 12 }}>
+          {filtered.length} {filtered.length === 1 ? "nota" : "notas"}
+        </p>
+        <div className="flex items-center gap-1.5">
+          {(["sm", "md", "lg", "xl"] as const).map((size, i) => (
+            <button
+              key={size}
+              onClick={() => changeFontSize(size)}
+              className="flex items-center justify-center rounded-lg transition-all"
+              style={{
+                width: 28, height: 28,
+                background: fontSize === size ? "#1A1A2E" : "rgba(0,0,0,0.04)",
+                border: fontSize === size ? "none" : "0.5px solid #E0E0E0",
+                fontSize: 9 + i * 2,
+                fontWeight: 700,
+                color: fontSize === size ? "white" : "#888",
+                cursor: "pointer",
+                lineHeight: 1,
+              }}
+            >
+              A
+            </button>
+          ))}
+        </div>
+      </div>
 
       {filtered.length === 0 ? (
         <div className="text-center py-16">
