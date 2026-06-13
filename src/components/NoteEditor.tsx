@@ -186,6 +186,14 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const [showUnsavedPrompt, setShowUnsavedPrompt] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [editorFontSize, setEditorFontSize] = useState<number>(() => {
+    const stored = parseInt(localStorage.getItem("editor_font_size") || "", 10);
+    return [14, 16, 20, 24].includes(stored) ? stored : 16;
+  });
+  const changeEditorFontSize = (size: number) => {
+    setEditorFontSize(size);
+    localStorage.setItem("editor_font_size", String(size));
+  };
 
   // Snapshot of content when entering edit mode (for cancel)
   const snapshotRef = useRef<{ title: string; blocks: ContentBlock[]; color: string } | null>(null);
