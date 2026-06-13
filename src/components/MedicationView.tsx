@@ -219,6 +219,192 @@ export function MedicationView() {
     return h >= nowH && h <= nowH + 3;
   }).length;
 
+  // When form is open, render it as a full page replacing everything
+  if (showForm) {
+    return (
+      <div style={{ minHeight: "60vh" }}>
+        {/* Header do formulário */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <button
+            onClick={() => { setShowForm(false); resetForm(); }}
+            style={{ display: "flex", alignItems: "center", gap: 6, background: "transparent", border: "none", cursor: "pointer", color: "var(--color-text-secondary)", fontSize: 13, fontWeight: 500, padding: "6px 0" }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+            Voltar
+          </button>
+          <div style={{ fontSize: 16, fontWeight: 500, color: "var(--color-text-primary)" }}>Novo medicamento</div>
+          <div style={{ width: 60 }} />
+        </div>
+
+        {/* Prévia */}
+        {formName && (
+          <div style={{ background: `${formColor}15`, border: `0.5px solid ${formColor}40`, borderRadius: 12, padding: 12, marginBottom: 14, display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: "50%", background: `${formColor}25`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, lineHeight: 1 }}>
+              {TYPE_MAP[formType].icon}
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 500, color: "var(--color-text-primary)" }}>{formName}</div>
+              <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{TYPE_MAP[formType].label}</div>
+            </div>
+          </div>
+        )}
+
+        {/* Nome */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>Nome</div>
+          <input value={formName} onChange={e => setFormName(e.target.value)} placeholder="Ex: Losartana 50mg"
+            style={{ width: "100%", padding: "9px 12px", borderRadius: 10, border: "0.5px solid var(--color-border-secondary)", fontSize: 14 }} />
+        </div>
+
+        {/* Tipo */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 6 }}>Tipo</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+            {(Object.entries(TYPE_MAP) as [Medication["type"], typeof TYPE_MAP[keyof typeof TYPE_MAP]][]).map(([key, val]) => (
+              <button key={key} onClick={() => setFormType(key)}
+                style={{ padding: "8px 6px", borderRadius: 10, border: `1.5px solid ${formType === key ? "#1A1A2E" : "var(--color-border-secondary)"}`, background: formType === key ? "#1A1A2E" : "transparent", color: formType === key ? "white" : "var(--color-text-primary)", fontSize: 11, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, fontWeight: formType === key ? 600 : 400 }}>
+                <span style={{ fontSize: 18, lineHeight: 1 }}>{val.icon}</span>
+                <span>{val.short}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Cor */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 6 }}>Cor</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {COLORS.map(c => (
+              <button key={c} onClick={() => setFormColor(c)}
+                style={{ width: 28, height: 28, borderRadius: "50%", background: c, border: formColor === c ? "2px solid #1A1A2E" : "none", cursor: "pointer" }} />
+            ))}
+          </div>
+        </div>
+
+        {/* Data início */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>Data de início</div>
+          <input type="date" value={formStartDate} onChange={e => setFormStartDate(e.target.value)}
+            style={{ width: "100%", padding: "9px 12px", borderRadius: 10, border: "0.5px solid var(--color-border-secondary)", fontSize: 14 }} />
+        </div>
+
+        {/* Fases */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 6 }}>
+            Fases da prescrição ({formPhases.length}/4)
+          </div>
+          {formPhases.map((phase, idx) => (
+            <div key={idx} style={{ background: "var(--color-background-secondary)", borderRadius: 12, padding: 12, marginBottom: 8, border: `0.5px solid ${COLORS[idx % COLORS.length]}40` }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: COLORS[idx % COLORS.length], marginBottom: 8 }}>Fase {idx + 1}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 3 }}>Dose</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <button onClick={() => updatePhase(idx, "dose", Math.max(0.5, phase.dose - 0.5))}
+                      style={{ width: 32, height: 32, borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>−</button>
+                    <span style={{ fontSize: 14, fontWeight: 500, minWidth: 32, textAlign: "center" }}>{phase.dose}</span>
+                    <button onClick={() => updatePhase(idx, "dose", phase.dose + 0.5)}
+                      style={{ width: 32, height: 32, borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>+</button>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 3 }}>Dias</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <button onClick={() => updatePhase(idx, "days", Math.max(1, phase.days - 1))}
+                      style={{ width: 32, height: 32, borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>−</button>
+                    <span style={{ fontSize: 14, fontWeight: 500, minWidth: 32, textAlign: "center" }}>{phase.days}</span>
+                    <button onClick={() => updatePhase(idx, "days", phase.days + 1)}
+                      style={{ width: 32, height: 32, borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>+</button>
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 3 }}>Vezes por dia</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <button onClick={() => updatePhase(idx, "timesPerDay", Math.max(1, phase.timesPerDay - 1))}
+                      style={{ width: 32, height: 32, borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>−</button>
+                    <span style={{ fontSize: 14, fontWeight: 500, minWidth: 32, textAlign: "center" }}>{phase.timesPerDay}x</span>
+                    <button onClick={() => updatePhase(idx, "timesPerDay", Math.min(12, phase.timesPerDay + 1))}
+                      style={{ width: 32, height: 32, borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>+</button>
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginTop: 2 }}>A cada {Math.round(24 / phase.timesPerDay)}h</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 3 }}>Horário inicial</div>
+                  <input type="time" value={phase.startTime} onChange={e => updatePhase(idx, "startTime", e.target.value)}
+                    style={{ width: "100%", padding: "7px 8px", borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", fontSize: 14 }} />
+                </div>
+              </div>
+              <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                {phase.schedules.map(s => (
+                  <span key={s} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: `${COLORS[idx % COLORS.length]}20`, color: COLORS[idx % COLORS.length], fontWeight: 500 }}>{s}</span>
+                ))}
+              </div>
+            </div>
+          ))}
+          {formPhases.length < 4 && (
+            <button onClick={addPhase}
+              style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px dashed var(--color-border-secondary)", background: "transparent", color: "var(--color-text-secondary)", fontSize: 12, cursor: "pointer", marginBottom: 8 }}>
+              + Adicionar fase
+            </button>
+          )}
+          <div style={{ marginTop: 4 }}>
+            <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 4 }}>Prescrição visual</div>
+            <div style={{ display: "flex", gap: 2, borderRadius: 4, overflow: "hidden", height: 10 }}>
+              {formPhases.map((p, i) => (
+                <div key={i} style={{ flex: p.days, background: COLORS[i % COLORS.length] }} />
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+              {formPhases.map((p, i) => (
+                <span key={i} style={{ fontSize: 10, color: COLORS[i % COLORS.length] }}>● Fase {i + 1}: {p.days} dias</span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Estoque */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>Estoque inicial</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button onClick={() => setFormStock(Math.max(0, formStock - 1))}
+                style={{ width: 32, height: 32, borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", fontSize: 18 }}>−</button>
+              <span style={{ fontSize: 14, fontWeight: 500, minWidth: 32, textAlign: "center" }}>{formStock}</span>
+              <button onClick={() => setFormStock(formStock + 1)}
+                style={{ width: 32, height: 32, borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", fontSize: 18 }}>+</button>
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>Alerta estoque baixo</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button onClick={() => setFormLowStock(Math.max(1, formLowStock - 1))}
+                style={{ width: 32, height: 32, borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", fontSize: 18 }}>−</button>
+              <span style={{ fontSize: 14, fontWeight: 500, minWidth: 32, textAlign: "center" }}>{formLowStock}</span>
+              <button onClick={() => setFormLowStock(formLowStock + 1)}
+                style={{ width: 32, height: 32, borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", fontSize: 18 }}>+</button>
+            </div>
+          </div>
+        </div>
+
+        <button onClick={handleSave}
+          style={{ width: "100%", padding: 14, borderRadius: 14, border: "none", background: "#1A1A2E", color: "white", fontSize: 14, fontWeight: 500, cursor: "pointer", marginBottom: 20 }}>
+          Salvar medicamento
+        </button>
+
+        {/* Botão voltar inferior */}
+        <button
+          onClick={() => { setShowForm(false); resetForm(); }}
+          style={{ width: "100%", padding: 12, borderRadius: 14, border: "0.5px solid var(--color-border-secondary)", background: "transparent", color: "var(--color-text-secondary)", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+          Voltar para medicamentos
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* Perfis de família */}
@@ -401,204 +587,6 @@ export function MedicationView() {
         </div>
       )}
 
-      {/* Modal formulário */}
-      {showForm && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "var(--color-background-primary)", overflowY: "auto" }}>
-          <div style={{ padding: "16px 16px 120px 16px", maxWidth: 480, margin: "0 auto" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <div style={{ fontSize: 16, fontWeight: 500 }}>Novo medicamento</div>
-              <button onClick={() => { setShowForm(false); resetForm(); }} style={{ background: "transparent", border: "none", cursor: "pointer" }}><X size={20} /></button>
-            </div>
-
-            {/* Prévia */}
-            {formName && (
-              <div style={{ background: `${formColor}15`, border: `0.5px solid ${formColor}40`, borderRadius: 12, padding: 12, marginBottom: 14, display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 36, height: 36, borderRadius: "50%", background: `${formColor}25`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, lineHeight: 1 }}>
-                  {TYPE_MAP[formType].icon}
-                </div>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 500, color: "var(--color-text-primary)" }}>{formName}</div>
-                  <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{TYPE_MAP[formType].label}</div>
-                </div>
-              </div>
-            )}
-
-            {/* Nome */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>Nome</div>
-              <input value={formName} onChange={e => setFormName(e.target.value)} placeholder="Ex: Losartana 50mg"
-                style={{ width: "100%", padding: "9px 12px", borderRadius: 10, border: "0.5px solid var(--color-border-secondary)", fontSize: 14 }} />
-            </div>
-
-            {/* Tipo */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 6 }}>Tipo</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-                {(Object.entries(TYPE_MAP) as [Medication["type"], typeof TYPE_MAP[keyof typeof TYPE_MAP]][]).map(([key, val]) => (
-                  <button key={key} onClick={() => setFormType(key)}
-                    style={{ padding: "8px 6px", borderRadius: 10, border: `1.5px solid ${formType === key ? "#1A1A2E" : "var(--color-border-secondary)"}`, background: formType === key ? "#1A1A2E" : "transparent", color: formType === key ? "white" : "var(--color-text-primary)", fontSize: 11, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, fontWeight: formType === key ? 600 : 400 }}>
-                    <span style={{ fontSize: 18, lineHeight: 1 }}>{val.icon}</span>
-                    <span>{val.short}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Cor */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 6 }}>Cor</div>
-              <div style={{ display: "flex", gap: 6 }}>
-                {COLORS.map(c => (
-                  <button key={c} onClick={() => setFormColor(c)}
-                    style={{ width: 28, height: 28, borderRadius: "50%", background: c, border: formColor === c ? "2px solid #1A1A2E" : "none", cursor: "pointer" }} />
-                ))}
-              </div>
-            </div>
-
-            {/* Data início */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>Data de início</div>
-              <input type="date" value={formStartDate} onChange={e => setFormStartDate(e.target.value)}
-                style={{ width: "100%", padding: "9px 12px", borderRadius: 10, border: "0.5px solid var(--color-border-secondary)", fontSize: 14 }} />
-            </div>
-
-            {/* Fases */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 6, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span>Fases da prescrição ({formPhases.length}/4)</span>
-              </div>
-
-              {formPhases.map((phase, idx) => (
-                <div key={idx} style={{ background: "var(--color-background-secondary)", borderRadius: 12, padding: 12, marginBottom: 8, border: `0.5px solid ${COLORS[idx % COLORS.length]}40` }}>
-                  <div style={{ fontSize: 12, fontWeight: 500, color: COLORS[idx % COLORS.length], marginBottom: 8 }}>Fase {idx + 1}</div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-                    <div>
-                      <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 3 }}>Dose</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        <button onClick={() => updatePhase(idx, "dose", Math.max(0.5, phase.dose - 0.5))}
-                          style={{ width: 24, height: 24, borderRadius: 6, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <Minus size={12} />
-                        </button>
-                        <span style={{ fontSize: 13, fontWeight: 500, minWidth: 28, textAlign: "center" }}>{phase.dose}</span>
-                        <button onClick={() => updatePhase(idx, "dose", phase.dose + 0.5)}
-                          style={{ width: 24, height: 24, borderRadius: 6, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <Plus size={12} />
-                        </button>
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 3 }}>Dias</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        <button onClick={() => updatePhase(idx, "days", Math.max(1, phase.days - 1))}
-                          style={{ width: 24, height: 24, borderRadius: 6, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <Minus size={12} />
-                        </button>
-                        <span style={{ fontSize: 13, fontWeight: 500, minWidth: 28, textAlign: "center" }}>{phase.days}</span>
-                        <button onClick={() => updatePhase(idx, "days", phase.days + 1)}
-                          style={{ width: 24, height: 24, borderRadius: 6, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <Plus size={12} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                    <div>
-                      <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 3 }}>Vezes por dia</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        <button onClick={() => updatePhase(idx, "timesPerDay", Math.max(1, phase.timesPerDay - 1))}
-                          style={{ width: 24, height: 24, borderRadius: 6, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <Minus size={12} />
-                        </button>
-                        <span style={{ fontSize: 13, fontWeight: 500, minWidth: 28, textAlign: "center" }}>{phase.timesPerDay}x</span>
-                        <button onClick={() => updatePhase(idx, "timesPerDay", Math.min(12, phase.timesPerDay + 1))}
-                          style={{ width: 24, height: 24, borderRadius: 6, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <Plus size={12} />
-                        </button>
-                      </div>
-                      <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginTop: 2 }}>
-                        A cada {Math.round(24 / phase.timesPerDay)}h
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 3 }}>Horário inicial</div>
-                      <input type="time" value={phase.startTime} onChange={e => updatePhase(idx, "startTime", e.target.value)}
-                        style={{ width: "100%", padding: "5px 8px", borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", fontSize: 13 }} />
-                    </div>
-                  </div>
-
-                  {/* Horários gerados */}
-                  <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 4 }}>
-                    {phase.schedules.map(s => (
-                      <span key={s} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: `${COLORS[idx % COLORS.length]}20`, color: COLORS[idx % COLORS.length], fontWeight: 500 }}>{s}</span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-
-              {formPhases.length < 4 && (
-                <button onClick={addPhase}
-                  style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px dashed var(--color-border-secondary)", background: "transparent", color: "var(--color-text-secondary)", fontSize: 12, cursor: "pointer" }}>
-                  + Adicionar fase
-                </button>
-              )}
-
-              {/* Barra visual prescrição */}
-              <div style={{ marginTop: 10 }}>
-                <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 4 }}>Prescrição visual</div>
-                <div style={{ display: "flex", gap: 2, borderRadius: 4, overflow: "hidden", height: 10 }}>
-                  {formPhases.map((p, i) => (
-                    <div key={i} title={`Fase ${i + 1}: ${p.days} dias`} style={{ flex: p.days, background: COLORS[i % COLORS.length] }} />
-                  ))}
-                </div>
-                <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
-                  {formPhases.map((p, i) => (
-                    <span key={i} style={{ fontSize: 10, color: COLORS[i % COLORS.length] }}>● Fase {i + 1}: {p.days} dias</span>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Estoque */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
-              <div>
-                <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>Estoque inicial</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <button onClick={() => setFormStock(Math.max(0, formStock - 1))}
-                    style={{ width: 28, height: 28, borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Minus size={14} />
-                  </button>
-                  <span style={{ fontSize: 14, fontWeight: 500, minWidth: 32, textAlign: "center" }}>{formStock}</span>
-                  <button onClick={() => setFormStock(formStock + 1)}
-                    style={{ width: 28, height: 28, borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Plus size={14} />
-                  </button>
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>Alerta estoque baixo</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <button onClick={() => setFormLowStock(Math.max(1, formLowStock - 1))}
-                    style={{ width: 28, height: 28, borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Minus size={14} />
-                  </button>
-                  <span style={{ fontSize: 14, fontWeight: 500, minWidth: 32, textAlign: "center" }}>{formLowStock}</span>
-                  <button onClick={() => setFormLowStock(formLowStock + 1)}
-                    style={{ width: 28, height: 28, borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Plus size={14} />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <button onClick={handleSave}
-              style={{ width: "100%", padding: 14, borderRadius: 14, border: "none", background: "#1A1A2E", color: "white", fontSize: 14, fontWeight: 500, cursor: "pointer" }}>
-              Salvar medicamento
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
