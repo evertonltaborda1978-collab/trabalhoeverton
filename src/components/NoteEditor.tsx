@@ -885,10 +885,14 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
               )}
 
               <button
-                onClick={handleClose}
+                onClick={() => {
+                  // Save current work then go back to home
+                  handleClose();
+                  setTimeout(() => window.history.back(), 100);
+                }}
                 className="p-2 rounded-lg hover:bg-black/10 transition-colors shrink-0"
-                title="Fechar"
-                aria-label="Fechar"
+                title="Fechar aplicativo"
+                aria-label="Fechar aplicativo"
               >
                 <X size={22} style={{ color: textColor }} />
               </button>
@@ -999,9 +1003,28 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                 </span>
               )}
             </span>
-            <span>
-              {format(editingNote?.createdAt ?? new Date(), "d 'de' MMMM, HH:mm", { locale: ptBR })}
-            </span>
+            <div className="flex items-center gap-1">
+              {[14, 16, 20, 24].map((size, i) => (
+                <button
+                  key={size}
+                  onClick={() => changeEditorFontSize(size)}
+                  style={{
+                    width: 24, height: 24,
+                    borderRadius: 6,
+                    background: editorFontSize === size ? theme.borderAccent : "transparent",
+                    border: `0.5px solid ${editorFontSize === size ? theme.borderAccent : theme.lines}`,
+                    fontSize: 8 + i * 2,
+                    fontWeight: 700,
+                    color: editorFontSize === size ? isDark ? "#1A1A2E" : "#fff" : theme.textMuted,
+                    cursor: "pointer",
+                    lineHeight: 1,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >
+                  A
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* ── LINED PAPER BODY ── */}
@@ -1040,9 +1063,9 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                         }}
                         className="w-full bg-transparent text-base select-text"
                         style={{
-                          lineHeight: "32px",
-                          minHeight: "32px",
-                          fontSize: "16px",
+                          lineHeight: `${editorFontSize * 2}px`,
+                          minHeight: `${editorFontSize * 2}px`,
+                          fontSize: `${editorFontSize}px`,
                           color: block.content ? textColor : placeholderColor,
                           whiteSpace: "pre-wrap",
                           wordBreak: "break-word",
@@ -1071,9 +1094,9 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                       placeholder={idx === 0 && blocks.length === 1 ? "Comece a escrever sua nota..." : ""}
                       className="w-full bg-transparent border-0 outline-none resize-none text-base"
                       style={{
-                        lineHeight: "32px",
-                        minHeight: "32px",
-                        fontSize: "16px",
+                        lineHeight: `${editorFontSize * 2}px`,
+                        minHeight: `${editorFontSize * 2}px`,
+                        fontSize: `${editorFontSize}px`,
                         overflow: "hidden",
                         color: textColor,
                         "--placeholder-color": placeholderColor,
@@ -1396,7 +1419,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
             editingNote ? (
               /* Edit mode for existing note: Save + Cancel */
               <div
-                className="flex gap-3 px-4 py-1.5 shrink-0 justify-center"
+                className="flex gap-3 px-4 py-1.5 shrink-0"
                 style={{
                   background: theme.toolbarBg,
                   borderTop: `1px solid ${theme.lines}`,
@@ -1404,8 +1427,16 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                 }}
               >
                 <button
+                  onClick={handleClose}
+                  className="flex items-center justify-center rounded-full transition-all duration-200 hover:bg-black/5"
+                  style={{ borderColor: theme.borderAccent, color: theme.textMuted, border: `1px solid ${theme.borderAccent}`, width: 38, height: 38, flexShrink: 0 }}
+                  title="Voltar"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+                </button>
+                <button
                   onClick={cancelEdit}
-                  className="px-5 py-1.5 rounded-full text-[13px] font-semibold border transition-all duration-200 hover:bg-black/5"
+                  className="px-5 py-1.5 rounded-full text-[13px] font-semibold border transition-all duration-200 hover:bg-black/5 flex-1"
                   style={{ borderColor: theme.borderAccent, color: theme.textMuted }}
                 >
                   Cancelar
@@ -1413,7 +1444,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                 <button
                   onClick={handleSaveAndBackToView}
                   disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
-                  className="px-5 py-1.5 rounded-full text-[13px] font-semibold text-white shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50"
+                  className="px-5 py-1.5 rounded-full text-[13px] font-semibold text-white shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50 flex-1"
                   style={{ background: "#2D9E7F" }}
                 >
                   Salvar
@@ -1422,7 +1453,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
             ) : (
               /* New note: Draft + Create */
               <div
-                className="flex gap-3 px-4 py-1.5 shrink-0 justify-center"
+                className="flex gap-3 px-4 py-1.5 shrink-0"
                 style={{
                   background: theme.toolbarBg,
                   borderTop: `1px solid ${theme.lines}`,
@@ -1430,8 +1461,16 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                 }}
               >
                 <button
+                  onClick={handleClose}
+                  className="flex items-center justify-center rounded-full transition-all duration-200 hover:bg-black/5"
+                  style={{ borderColor: theme.borderAccent, color: theme.textMuted, border: `1px solid ${theme.borderAccent}`, width: 38, height: 38, flexShrink: 0 }}
+                  title="Voltar"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+                </button>
+                <button
                   onClick={handleSaveDraft}
-                  className="px-5 py-1.5 rounded-full text-[13px] font-semibold border transition-all duration-200 hover:bg-black/5"
+                  className="px-5 py-1.5 rounded-full text-[13px] font-semibold border transition-all duration-200 hover:bg-black/5 flex-1"
                   style={{ borderColor: theme.borderAccent, color: theme.textMuted }}
                 >
                   Rascunho
@@ -1439,7 +1478,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                 <button
                   onClick={() => doSaveAndClose("publicada")}
                   disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
-                  className="px-5 py-1.5 rounded-full text-[13px] font-semibold text-white shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50"
+                  className="px-5 py-1.5 rounded-full text-[13px] font-semibold text-white shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50 flex-1"
                   style={{ background: "#2D9E7F" }}
                 >
                   Criar nota
