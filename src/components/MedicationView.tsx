@@ -351,7 +351,7 @@ export function MedicationView() {
           return d.toISOString().slice(0, 10);
         });
         return (
-          <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+          <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}
             onClick={() => setShowHistory(null)}>
             <div style={{ background: "var(--color-background-primary)", borderRadius: "20px 20px 0 0", padding: 20, width: "100%", maxWidth: 480 }}
               onClick={e => e.stopPropagation()}>
@@ -380,7 +380,7 @@ export function MedicationView() {
 
       {/* Modal adicionar perfil */}
       {showAddProfile && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ background: "var(--color-background-primary)", borderRadius: 20, padding: 24, width: "88%", maxWidth: 320 }}>
             <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 14, textAlign: "center" }}>Novo perfil</div>
             <input value={newProfileName} onChange={e => setNewProfileName(e.target.value)} placeholder="Nome do familiar"
@@ -403,7 +403,7 @@ export function MedicationView() {
 
       {/* Modal formulário */}
       {showForm && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "var(--color-background-primary)", overflowY: "auto" }}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "var(--color-background-primary)", overflowY: "auto" }}>
           <div style={{ padding: "16px 16px 120px 16px", maxWidth: 480, margin: "0 auto" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
               <div style={{ fontSize: 16, fontWeight: 500 }}>Novo medicamento</div>
