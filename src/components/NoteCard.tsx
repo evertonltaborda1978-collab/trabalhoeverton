@@ -44,9 +44,10 @@ interface NoteCardProps {
   onBellClick?: (note: Note) => void;
   onLockClick?: (note: Note) => void;
   searchQuery?: string;
+  fontSize?: number;
 }
 
-export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, searchQuery = "" }: NoteCardProps) {
+export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, searchQuery = "", fontSize = 13 }: NoteCardProps) {
   const colors = COLOR_MAP[note.color] || { bg: "#F3E5F5", bar: "#C9B8F0" };
   const isDraft = note.status === "rascunho";
   const hasReminder = !!note.reminderDate;
@@ -75,8 +76,8 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, se
             <HighlightText
               text={note.title || "Sem título"}
               highlight={searchQuery}
-              className="block flex-1 min-w-0 font-bold text-[13px] leading-tight truncate"
-              style={{ color: "#1A1A2E" }}
+              className="block flex-1 min-w-0 font-bold leading-tight truncate"
+              style={{ color: "#1A1A2E", fontSize: fontSize }}
             />
             {isDraft && (
               <span
@@ -94,8 +95,8 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, se
             <HighlightText
               text={preview}
               highlight={note.isLocked ? "" : searchQuery}
-              className="block max-w-full text-[11px] mt-0.5 truncate"
-              style={{ color: "#777" }}
+              className="block max-w-full mt-0.5 truncate"
+              style={{ color: "#777", fontSize: Math.max(10, fontSize - 2) }}
             />
           )}
           <div className="flex items-center gap-1 mt-0.5">
