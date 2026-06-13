@@ -37,11 +37,11 @@ interface FamilyProfile {
 }
 
 const TYPE_MAP = {
-  pill: { icon: "💊", label: "Comprimido/Cápsula" },
-  liquid: { icon: "🧴", label: "Xarope/Líquido" },
-  injection: { icon: "💉", label: "Injeção" },
-  topical: { icon: "🩹", label: "Pomada/Externo" },
-  powder: { icon: "🧂", label: "Pó/Sachê" },
+  pill: { icon: "💊", label: "Comprimido", short: "Comp." },
+  liquid: { icon: "🧴", label: "Xarope/Líquido", short: "Xarope" },
+  injection: { icon: "💉", label: "Injeção", short: "Injeção" },
+  topical: { icon: "🩹", label: "Pomada/Externo", short: "Pomada" },
+  powder: { icon: "🧂", label: "Pó/Sachê", short: "Pó" },
 };
 
 const COLORS = ["#1D9E75", "#378ADD", "#EF9F27", "#D85A30", "#9C27B0", "#E24B4A"];
@@ -281,7 +281,7 @@ export function MedicationView() {
               borderRadius: 14, padding: 14, marginBottom: 10,
             }}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                <div style={{ width: 42, height: 42, borderRadius: "50%", background: `${med.color}20`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
+                <div style={{ width: 42, height: 42, borderRadius: "50%", background: `${med.color}20`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, lineHeight: 1, flexShrink: 0 }}>
                   {TYPE_MAP[med.type].icon}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -403,8 +403,8 @@ export function MedicationView() {
 
       {/* Modal formulário */}
       {showForm && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.5)", overflowY: "auto" }}>
-          <div style={{ background: "var(--color-background-primary)", borderRadius: "20px 20px 0 0", padding: 20, minHeight: "70vh", marginTop: "15vh" }}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "var(--color-background-primary)", overflowY: "auto" }}>
+          <div style={{ padding: "16px 16px 120px 16px", maxWidth: 480, margin: "0 auto" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
               <div style={{ fontSize: 16, fontWeight: 500 }}>Novo medicamento</div>
               <button onClick={() => { setShowForm(false); resetForm(); }} style={{ background: "transparent", border: "none", cursor: "pointer" }}><X size={20} /></button>
@@ -413,7 +413,7 @@ export function MedicationView() {
             {/* Prévia */}
             {formName && (
               <div style={{ background: `${formColor}15`, border: `0.5px solid ${formColor}40`, borderRadius: 12, padding: 12, marginBottom: 14, display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 36, height: 36, borderRadius: "50%", background: `${formColor}25`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
+                <div style={{ width: 36, height: 36, borderRadius: "50%", background: `${formColor}25`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, lineHeight: 1 }}>
                   {TYPE_MAP[formType].icon}
                 </div>
                 <div>
@@ -433,11 +433,12 @@ export function MedicationView() {
             {/* Tipo */}
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 6 }}>Tipo</div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
                 {(Object.entries(TYPE_MAP) as [Medication["type"], typeof TYPE_MAP[keyof typeof TYPE_MAP]][]).map(([key, val]) => (
                   <button key={key} onClick={() => setFormType(key)}
-                    style={{ padding: "6px 10px", borderRadius: 8, border: `0.5px solid ${formType === key ? "#1A1A2E" : "var(--color-border-secondary)"}`, background: formType === key ? "#1A1A2E" : "transparent", color: formType === key ? "white" : "var(--color-text-primary)", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-                    {val.icon} {val.label}
+                    style={{ padding: "8px 6px", borderRadius: 10, border: `1.5px solid ${formType === key ? "#1A1A2E" : "var(--color-border-secondary)"}`, background: formType === key ? "#1A1A2E" : "transparent", color: formType === key ? "white" : "var(--color-text-primary)", fontSize: 11, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, fontWeight: formType === key ? 600 : 400 }}>
+                    <span style={{ fontSize: 18, lineHeight: 1 }}>{val.icon}</span>
+                    <span>{val.short}</span>
                   </button>
                 ))}
               </div>
