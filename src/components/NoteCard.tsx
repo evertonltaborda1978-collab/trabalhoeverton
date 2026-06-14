@@ -1,5 +1,5 @@
 import { Note } from "@/hooks/useNotes";
-import { Trash2, Clock, ChevronRight, Pencil, Bell, Lock } from "lucide-react";
+import { Trash2, Clock, ChevronRight, Pencil, Bell, Lock, Pin } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { HighlightText } from "./HighlightText";
@@ -43,11 +43,12 @@ interface NoteCardProps {
   onClick: (note: Note) => void;
   onBellClick?: (note: Note) => void;
   onLockClick?: (note: Note) => void;
+  onPinClick?: (note: Note) => void;
   searchQuery?: string;
   fontSize?: number;
 }
 
-export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, searchQuery = "", fontSize = 13 }: NoteCardProps) {
+export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, onPinClick, searchQuery = "", fontSize = 13 }: NoteCardProps) {
   const colors = COLOR_MAP[note.color] || { bg: "#F3E5F5", bar: "#C9B8F0" };
   const isDraft = note.status === "rascunho";
   const hasReminder = !!note.reminderDate;
@@ -60,8 +61,10 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, se
       className="group relative flex items-stretch rounded-[18px] cursor-pointer overflow-hidden"
       style={{
         background: colors.bg,
-        boxShadow: "0 2px 12px -2px rgba(0,0,0,0.06), 0 1px 4px -1px rgba(0,0,0,0.04)",
-        border: "1px solid rgba(255,255,255,0.7)",
+        boxShadow: note.isPinned
+          ? "0 2px 12px -2px rgba(249,168,37,0.25), 0 1px 4px -1px rgba(0,0,0,0.04)"
+          : "0 2px 12px -2px rgba(0,0,0,0.06), 0 1px 4px -1px rgba(0,0,0,0.04)",
+        border: note.isPinned ? "1px solid rgba(249,168,37,0.5)" : "1px solid rgba(255,255,255,0.7)",
         touchAction: "manipulation",
         transform: "translateZ(0)",
         WebkitTransform: "translateZ(0)",
@@ -69,6 +72,15 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, se
       }}
     >
       <div className="w-1 shrink-0 rounded-l-[18px]" style={{ background: colors.bar }} />
+
+      {note.isPinned && (
+        <Pin
+          size={11}
+          fill="#F9A825"
+          className="absolute top-1.5 right-1.5 rotate-45"
+          style={{ color: "#F9A825" }}
+        />
+      )}
 
       <div className="flex items-center gap-2 px-2 py-2 flex-1 min-w-0" style={{ padding: 8 }}>
         <div className="flex-1 min-w-0 overflow-hidden">
@@ -113,6 +125,14 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, se
         </div>
 
         <div className="flex items-center gap-0 shrink-0">
+          <button
+            onClick={(e) => { e.stopPropagation(); onPinClick?.(note); }}
+            className="p-1 rounded-md"
+            style={{ color: note.isPinned ? "#F9A825" : "#BDBDBD" }}
+            title={note.isPinned ? "Desafixar nota" : "Fixar nota"}
+          >
+            <Pin size={13} fill={note.isPinned ? "#F9A825" : "none"} className={note.isPinned ? "rotate-45" : ""} />
+          </button>
           <button
             onClick={(e) => { e.stopPropagation(); onBellClick?.(note); }}
             className="p-1 rounded-md"
