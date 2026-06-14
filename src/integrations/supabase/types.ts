@@ -283,6 +283,7 @@ export type Database = {
           id: string
           images: string[]
           is_locked: boolean
+          is_pinned: boolean
           lock_salt: string | null
           reminder_date: string | null
           reminder_time: string | null
@@ -302,6 +303,7 @@ export type Database = {
           id?: string
           images?: string[]
           is_locked?: boolean
+          is_pinned?: boolean
           lock_salt?: string | null
           reminder_date?: string | null
           reminder_time?: string | null
@@ -321,6 +323,7 @@ export type Database = {
           id?: string
           images?: string[]
           is_locked?: boolean
+          is_pinned?: boolean
           lock_salt?: string | null
           reminder_date?: string | null
           reminder_time?: string | null
