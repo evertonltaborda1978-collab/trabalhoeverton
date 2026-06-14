@@ -124,35 +124,51 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, on
           </div>
         </div>
 
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-0.5 shrink-0">
           <button
             onClick={(e) => { e.stopPropagation(); onPinClick?.(note); }}
-            className="p-1 rounded-md"
-            style={{ color: note.isPinned ? "#F9A825" : "#BDBDBD" }}
+            className="flex items-center justify-center rounded-full transition-colors"
+            style={{
+              width: 30, height: 30,
+              color: note.isPinned ? "#F9A825" : "#9E9E9E",
+              background: note.isPinned ? "rgba(249,168,37,0.14)" : "transparent",
+            }}
             title={note.isPinned ? "Desafixar nota" : "Fixar nota"}
           >
-            <Pin size={13} fill={note.isPinned ? "#F9A825" : "none"} className={note.isPinned ? "rotate-45" : ""} />
+            <Pin size={14} fill={note.isPinned ? "#F9A825" : "none"} className={note.isPinned ? "rotate-45" : ""} />
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onBellClick?.(note); }}
-            className="p-1 rounded-md"
-            style={{ color: hasReminder ? "#F9A825" : "#BDBDBD" }}
+            className="flex items-center justify-center rounded-full transition-colors"
+            style={{
+              width: 30, height: 30,
+              color: hasReminder ? "#F9A825" : "#9E9E9E",
+              background: hasReminder ? "rgba(249,168,37,0.14)" : "transparent",
+            }}
             title={hasReminder ? "Editar lembrete" : "Adicionar lembrete"}
           >
-            <Bell size={13} />
+            <Bell size={14} />
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onLockClick?.(note); }}
-            className="p-1 rounded-md"
-            style={{ color: note.isLocked ? "#F9A825" : "#BDBDBD" }}
+            className="flex items-center justify-center rounded-full transition-colors"
+            style={{
+              width: 30, height: 30,
+              color: note.isLocked ? "#F9A825" : "#9E9E9E",
+              background: note.isLocked ? "rgba(249,168,37,0.14)" : "transparent",
+            }}
             title={note.isLocked ? "Gerenciar bloqueio" : "Bloquear nota"}
           >
-            <Lock size={13} />
+            <Lock size={14} />
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(note.id); }}
-            className="p-1 rounded-md"
-            style={{ color: "#E53935" }}
+            className="flex items-center justify-center rounded-full transition-colors"
+            style={{
+              width: 30, height: 30,
+              color: "#E53935",
+              background: "rgba(229,57,53,0.10)",
+            }}
             title="Excluir nota"
           >
             <Trash2 size={14} />
