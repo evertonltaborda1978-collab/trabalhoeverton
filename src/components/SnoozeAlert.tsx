@@ -6,7 +6,7 @@ export interface SnoozeAlertData {
   id: string;
   title: string;
   time: string;
-  type: "appointment" | "reminder";
+  type: "appointment" | "reminder" | "reminder_upcoming";
 }
 
 interface SnoozeAlertProps {
@@ -30,6 +30,7 @@ export function SnoozeAlert({ alert, onDismiss, onSnooze }: SnoozeAlertProps) {
   if (!alert || !visible) return null;
 
   const isAppointment = alert.type === "appointment";
+  const isUpcoming = alert.type === "reminder_upcoming";
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.6)" }}>
@@ -46,6 +47,8 @@ export function SnoozeAlert({ alert, onDismiss, onSnooze }: SnoozeAlertProps) {
           style={{
             background: isAppointment
               ? "linear-gradient(135deg, #FF6B35, #E53935)"
+              : isUpcoming
+              ? "linear-gradient(135deg, #42A5F5, #1E88E5)"
               : "linear-gradient(135deg, #F9A825, #FF8F00)",
           }}
         >
@@ -55,7 +58,7 @@ export function SnoozeAlert({ alert, onDismiss, onSnooze }: SnoozeAlertProps) {
             </div>
             <div>
               <p className="text-xs font-semibold" style={{ color: "rgba(255,255,255,0.8)" }}>
-                {isAppointment ? "Compromisso" : "Lembrete"}
+                {isAppointment ? "Compromisso" : isUpcoming ? "Lembrete em breve" : "Lembrete"}
               </p>
               <p className="text-base font-bold text-white">{alert.title}</p>
             </div>
@@ -73,7 +76,7 @@ export function SnoozeAlert({ alert, onDismiss, onSnooze }: SnoozeAlertProps) {
         <div className="flex items-center justify-center gap-2 py-3" style={{ background: "#FAFAFA", borderBottom: "1px solid #F0F0F0" }}>
           <Clock size={16} style={{ color: "#666" }} />
           <span className="text-sm font-semibold" style={{ color: "#333" }}>
-            Horário: {alert.time}
+            {isUpcoming ? `Agendado para ${alert.time}` : `Horário: ${alert.time}`}
           </span>
         </div>
 
