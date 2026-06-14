@@ -32,7 +32,7 @@ const DEVICE_LABEL_PROMPT_KEY = "device_label_prompt_dismissed";
 
 const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
-  const { notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes } = useNotes();
+  const { notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes } = useNotes();
   const { appointments, trashedAppointments, addAppointment, updateAppointment, deleteAppointment, restoreAppointment, permanentDeleteAppointment, emptyAppointmentTrash, activeAlert, dismissAlert, snoozeAlert } = useAppointments();
   const { signOut } = useAuth();
   const { currentDevice, fetchDevices } = useDeviceTracking();
@@ -98,68 +98,3 @@ const Index = () => {
                 }}
                 title="Sair"
               >
-                <LogOut size={16} style={{ color: "#1A1A2E" }} />
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Content */}
-      <main className="max-w-lg mx-auto px-4 pt-4">
-        {tab === "notes" && (
-          <NotesView
-            notes={notes}
-            onAdd={addNote}
-            onDelete={deleteNote}
-            onUpdate={updateNote}
-            onSetReminder={setNoteReminder}
-            onLockNote={lockNoteWithPin}
-            onUnlockNote={unlockNoteWithPin}
-            onVerifyPin={verifyNotePin}
-            onAddAppointment={addAppointment}
-            syncStatus={syncStatus}
-            draftCount={draftCount}
-            exportBackup={exportBackup}
-            importBackup={importBackup}
-            shouldRemindBackup={shouldRemindBackup}
-            trashedNotes={trashedNotes}
-            onRestoreNote={restoreNote}
-            onPermanentDeleteNote={permanentDeleteNote}
-            onEmptyTrash={emptyTrash}
-          />
-        )}
-        {tab === "calendar" && (
-          <CalendarView
-            appointments={appointments}
-            onAdd={addAppointment}
-            onUpdate={(id, title, date, time, desc) => updateAppointment(id, title, date, time, desc)}
-            onDelete={handleDeleteAppointment}
-            trashedAppointments={trashedAppointments}
-            onRestoreAppointment={restoreAppointment}
-            onPermanentDeleteAppointment={permanentDeleteAppointment}
-            onEmptyAppointmentTrash={emptyAppointmentTrash}
-          />
-        )}
-        {tab === "weather" && <WeatherView />}
-        {tab === "fuel" && <FuelCalculatorView />}
-        {tab === "medication" && <MedicationView />}
-        {tab === "location" && <LocationView />}
-        {tab === "devices" && <DevicesView />}
-      </main>
-
-      {/* Bottom Navigation */}
-      <BottomNav active={tab} onChange={setTab} />
-      <SnoozeAlert alert={activeAlert || reminderAlert} onDismiss={(id) => { dismissAlert(id); dismissReminderAlert(id); }} onSnooze={(id, min) => { snoozeAlert(id, min); snoozeReminderAlert(id, min); }} />
-      {showLabelModal && currentDevice && (
-        <DeviceLabelModal
-          deviceId={currentDevice.id}
-          defaultName={currentDevice.device_name}
-          onDone={() => { closeLabelModal(); fetchDevices(); }}
-        />
-      )}
-    </div>
-  );
-};
-
-export default Index;
