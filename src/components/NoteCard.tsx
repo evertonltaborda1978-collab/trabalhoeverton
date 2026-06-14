@@ -1,5 +1,5 @@
 import { Note } from "@/hooks/useNotes";
-import { Trash2, Clock, ChevronRight, Pencil, Bell, Lock } from "lucide-react";
+import { Trash2, Clock, ChevronRight, Pencil, Bell, Lock, Pin } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { HighlightText } from "./HighlightText";
@@ -42,12 +42,13 @@ interface NoteCardProps {
   onDelete: (id: string) => void;
   onClick: (note: Note) => void;
   onBellClick?: (note: Note) => void;
+  onPinClick?: (id: string) => void;
   onLockClick?: (note: Note) => void;
   searchQuery?: string;
   fontSize?: number;
 }
 
-export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, searchQuery = "", fontSize = 13 }: NoteCardProps) {
+export function NoteCard({ note, onDelete, onClick, onBellClick, onPinClick, onLockClick, searchQuery = "", fontSize = 13 }: NoteCardProps) {
   const colors = COLOR_MAP[note.color] || { bg: "#F3E5F5", bar: "#C9B8F0" };
   const isDraft = note.status === "rascunho";
   const hasReminder = !!note.reminderDate;
@@ -90,61 +91,10 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, se
             {note.isLocked && (
               <Lock size={11} style={{ color: "#F9A825" }} className="shrink-0" />
             )}
+            {note.isPinned && (
+              <Pin size={11} fill="#F9A825" style={{ color: "#F9A825" }} className="shrink-0" />
+            )}
           </div>
           {preview && (
             <HighlightText
               text={preview}
-              highlight={note.isLocked ? "" : searchQuery}
-              className="block max-w-full mt-0.5 truncate"
-              style={{ color: "#777", fontSize: Math.max(10, fontSize - 2) }}
-            />
-          )}
-          <div className="flex items-center gap-1 mt-0.5">
-            <Clock size={9} style={{ color: "#999" }} />
-            <span className="text-[10px] font-semibold" style={{ color: "#999" }}>
-              {format(note.updatedAt, "d MMM, HH:mm", { locale: ptBR })}
-            </span>
-            {hasReminder && (
-              <span className="flex items-center gap-0.5 ml-1 text-[9px] font-semibold" style={{ color: "#F9A825" }}>
-                <Bell size={9} /> {note.reminderDate} {note.reminderTime}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-0 shrink-0">
-          <button
-            onClick={(e) => { e.stopPropagation(); onBellClick?.(note); }}
-            className="p-1 rounded-md"
-            style={{ color: hasReminder ? "#F9A825" : "#BDBDBD" }}
-            title={hasReminder ? "Editar lembrete" : "Adicionar lembrete"}
-          >
-            <Bell size={13} />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onLockClick?.(note); }}
-            className="p-1 rounded-md"
-            style={{ color: note.isLocked ? "#F9A825" : "#BDBDBD" }}
-            title={note.isLocked ? "Gerenciar bloqueio" : "Bloquear nota"}
-          >
-            <Lock size={13} />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(note.id); }}
-            className="p-1 rounded-md"
-            style={{ color: "#E53935" }}
-            title="Excluir nota"
-          >
-            <Trash2 size={14} />
-          </button>
-          <ChevronRight
-            size={13}
-            onClick={(e) => { e.stopPropagation(); onClick(note); }}
-            className="shrink-0"
-            style={{ color: "#BDBDBD" }}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
