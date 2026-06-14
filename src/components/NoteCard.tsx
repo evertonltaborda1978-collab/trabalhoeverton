@@ -124,7 +124,7 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, on
           </div>
         </div>
 
-        <div className="flex items-center gap-0 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={(e) => { e.stopPropagation(); onPinClick?.(note); }}
             className="p-1 rounded-md"
