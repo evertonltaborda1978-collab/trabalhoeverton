@@ -225,7 +225,9 @@ export function useNotes() {
   // Listen for online/offline
   useEffect(() => {
     const handleOnline = () => {
-      syncToSupabase(notes);
+      setSyncStatus("syncing");
+      // Re-fetch to merge remote changes, then push any pending local changes
+      fetchNotes();
     };
     const handleOffline = () => setSyncStatus("offline");
     window.addEventListener("online", handleOnline);
@@ -234,7 +236,7 @@ export function useNotes() {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, [notes, syncToSupabase]);
+  }, [fetchNotes]);
 
   const addNote = useCallback(
     async (title: string, content: string, images: string[] = [], color?: string, fontFamily?: string, fontSize?: string, status: "rascunho" | "publicada" = "publicada") => {
@@ -474,8 +476,8 @@ export function useNotes() {
     });
   const trashedNotes = notes.filter((n) => !!n.deletedAt);
 
-  // Export backup
-  const exportBackup = useCallback(() => {
+  // Build backup payload (shared by manual export and auto-backup)
+  const buildBackupData = useCallback(() => {
     const data = notes.map((n) => ({
       id: n.id,
       titulo: n.title,
@@ -488,7 +490,13 @@ export function useNotes() {
       fontFamily: n.fontFamily,
       fontSize: n.fontSize,
     }));
-    const blob = new Blob([JSON.stringify({ app: "minhas_notas", version: 1, notas: data }, null, 2)], { type: "application/json" });
+    return { app: "minhas_notas", version: 1, notas: data };
+  }, [notes]);
+
+  // Export backup (manual download)
+  const exportBackup = useCallback(() => {
+    const payload = buildBackupData();
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     const dateStr = new Date().toISOString().slice(0, 10);
@@ -498,7 +506,28 @@ export function useNotes() {
     URL.revokeObjectURL(url);
     localStorage.setItem("ultimo_backup", new Date().toISOString());
     return true;
-  }, [notes]);
+  }, [buildBackupData]);
+
+  // Auto backup: silently saves the latest backup snapshot to localStorage
+  // whenever notes are synced with Supabase. No download/dialog is triggered.
+  const saveAutoBackup = useCallback(() => {
+    if (notes.length === 0) return;
+    try {
+      const payload = buildBackupData();
+      localStorage.setItem(
+        getLocalKey(user?.id || "anon") + "_auto_backup",
+        JSON.stringify(payload)
+      );
+      localStorage.setItem("ultimo_backup_automatico", new Date().toISOString());
+    } catch {}
+  }, [buildBackupData, notes, user]);
+
+  // Whenever sync completes successfully, refresh the automatic backup snapshot
+  useEffect(() => {
+    if (syncStatus === "synced") {
+      saveAutoBackup();
+    }
+  }, [syncStatus, saveAutoBackup]);
 
   // Import backup
   const importBackup = useCallback(async (file: File): Promise<number> => {
@@ -532,11 +561,14 @@ export function useNotes() {
     return imported;
   }, [notes, addNote, updateNote]);
 
-  // Check if backup reminder needed (weekly)
+  // Check if backup reminder needed (weekly) - considers both manual and automatic backups
   const shouldRemindBackup = useCallback(() => {
-    const last = localStorage.getItem("ultimo_backup");
-    if (!last) return notes.length > 0;
-    const diff = Date.now() - new Date(last).getTime();
+    const lastManual = localStorage.getItem("ultimo_backup");
+    const lastAuto = localStorage.getItem("ultimo_backup_automatico");
+    const lastTimestamps = [lastManual, lastAuto].filter(Boolean) as string[];
+    if (lastTimestamps.length === 0) return notes.length > 0;
+    const mostRecent = Math.max(...lastTimestamps.map((t) => new Date(t).getTime()));
+    const diff = Date.now() - mostRecent;
     return diff > 7 * 24 * 60 * 60 * 1000 && notes.length > 0;
   }, [notes]);
 
@@ -545,15 +577,22 @@ export function useNotes() {
   const snoozedRemindersRef = useRef<Map<string, number>>(new Map());
 
   const dismissReminderAlert = useCallback((id: string) => {
-    setReminderAlert(null);
-    const key = "reminder_fired_ids";
-    try {
-      const fired = JSON.parse(sessionStorage.getItem(key) || "[]") as string[];
-      if (!fired.includes(id)) {
-        fired.push(id);
-        sessionStorage.setItem(key, JSON.stringify(fired));
+    setReminderAlert((current) => {
+      // Só marca como "definitivamente dispensado" se for o alerta de lembrete vencido.
+      // Alertas "próximos" já foram marcados em reminder_upcoming_fired_ids ao disparar,
+      // e não devem impedir o alerta de "vencido" mais tarde.
+      if (current && current.id === id && current.type === "reminder") {
+        try {
+          const key = "reminder_fired_ids";
+          const fired = JSON.parse(sessionStorage.getItem(key) || "[]") as string[];
+          if (!fired.includes(id)) {
+            fired.push(id);
+            sessionStorage.setItem(key, JSON.stringify(fired));
+          }
+        } catch {}
       }
-    } catch {}
+      return null;
+    });
   }, []);
 
   const snoozeReminderAlert = useCallback((id: string, minutes: number) => {
@@ -563,21 +602,39 @@ export function useNotes() {
 
   useEffect(() => {
     const firedKey = "reminder_fired_ids";
-    const getFired = (): string[] => {
-      try { return JSON.parse(sessionStorage.getItem(firedKey) || "[]"); } catch { return []; }
+    const upcomingFiredKey = "reminder_upcoming_fired_ids";
+    const UPCOMING_WINDOW_MS = 15 * 60 * 1000; // avisa até 15 min antes do horário
+
+    const getFired = (key: string): string[] => {
+      try { return JSON.parse(sessionStorage.getItem(key) || "[]"); } catch { return []; }
     };
+    const markFired = (key: string, id: string) => {
+      try {
+        const fired = getFired(key);
+        if (!fired.includes(id)) {
+          fired.push(id);
+          sessionStorage.setItem(key, JSON.stringify(fired));
+        }
+      } catch {}
+    };
+
     const checkReminders = () => {
-      const now = new Date();
-      const fired = getFired();
+      if (reminderAlert) return;
+      const now = Date.now();
+      const fired = getFired(firedKey);
+      const upcomingFired = getFired(upcomingFiredKey);
+
       for (const note of notes) {
         if (!note.reminderDate || !note.reminderTime) continue;
-        if (fired.includes(note.id)) continue;
-        if (reminderAlert) break;
+
         const snoozeUntil = snoozedRemindersRef.current.get(note.id);
-        if (snoozeUntil && Date.now() < snoozeUntil) continue;
-        const reminderDateTime = new Date(`${note.reminderDate}T${note.reminderTime}:00`);
-        const diff = now.getTime() - reminderDateTime.getTime();
-        if (diff >= 0 && diff < 24 * 60 * 60 * 1000) {
+        if (snoozeUntil && now < snoozeUntil) continue;
+
+        const reminderTime = new Date(`${note.reminderDate}T${note.reminderTime}:00`).getTime();
+        const diff = now - reminderTime; // > 0 => já passou; < 0 => ainda vai chegar
+
+        // Já passou (até 24h atrás) — alerta de lembrete vencido
+        if (!fired.includes(note.id) && diff >= 0 && diff < 24 * 60 * 60 * 1000) {
           snoozedRemindersRef.current.delete(note.id);
           setReminderAlert({
             id: note.id,
@@ -585,7 +642,19 @@ export function useNotes() {
             time: note.reminderTime,
             type: "reminder",
           });
-          break;
+          return;
+        }
+
+        // Está próximo (até 15 min antes) — alerta de "lembrete em breve"
+        if (!upcomingFired.includes(note.id) && diff < 0 && diff > -UPCOMING_WINDOW_MS) {
+          markFired(upcomingFiredKey, note.id);
+          setReminderAlert({
+            id: note.id,
+            title: note.title || "Nota sem título",
+            time: note.reminderTime,
+            type: "reminder_upcoming",
+          });
+          return;
         }
       }
     };
