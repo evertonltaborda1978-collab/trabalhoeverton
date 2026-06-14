@@ -21,6 +21,7 @@ export interface Note {
   isLocked: boolean;
   lockSalt?: string | null;
   deletedAt?: Date | null;
+  isPinned: boolean;
 }
 
 const COLORS = [
@@ -92,6 +93,7 @@ function mapRow(n: any): Note {
     isLocked: n.is_locked || false,
     lockSalt: n.lock_salt || null,
     deletedAt: n.deleted_at ? new Date(n.deleted_at) : null,
+    isPinned: n.is_pinned || false,
   };
 }
 
@@ -257,6 +259,7 @@ export function useNotes() {
         lockSalt: null,
         reminderDate: null,
         reminderTime: null,
+        isPinned: false,
       };
 
       setNotes((prev) => [note, ...prev]);
@@ -390,6 +393,20 @@ export function useNotes() {
     } catch { setSyncStatus("offline"); }
   }, []);
 
+  // Toggle pinned state for a note
+  const togglePinNote = useCallback(async (id: string) => {
+    let newPinned = false;
+    setNotes((prev) => prev.map((n) => {
+      if (n.id !== id) return n;
+      newPinned = !n.isPinned;
+      return { ...n, isPinned: newPinned, sincronizado: false };
+    }));
+    try {
+      await (supabase.from("notes") as any).update({ is_pinned: newPinned, sincronizado: true }).eq("id", id);
+      setNotes((prev) => prev.map((n) => n.id === id ? { ...n, sincronizado: true } : n));
+    } catch { setSyncStatus("offline"); }
+  }, []);
+
   // Lock a note: encrypts content+title+images with PIN-derived key. PIN is never stored.
   const lockNoteWithPin = useCallback(async (id: string, pin: string): Promise<boolean> => {
     const note = notes.find((n) => n.id === id);
@@ -449,7 +466,12 @@ export function useNotes() {
   }, [notes]);
 
   const draftCount = notes.filter((n) => n.status === "rascunho" && !n.deletedAt).length;
-  const activeNotes = notes.filter((n) => !n.deletedAt);
+  const activeNotes = notes
+    .filter((n) => !n.deletedAt)
+    .sort((a, b) => {
+      if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+      return b.updatedAt.getTime() - a.updatedAt.getTime();
+    });
   const trashedNotes = notes.filter((n) => !!n.deletedAt);
 
   // Export backup
@@ -572,5 +594,5 @@ export function useNotes() {
     return () => clearInterval(interval);
   }, [notes, reminderAlert]);
 
-  return { notes: activeNotes, trashedNotes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, loading, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert };
+  return { notes: activeNotes, trashedNotes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, loading, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert };
 }
