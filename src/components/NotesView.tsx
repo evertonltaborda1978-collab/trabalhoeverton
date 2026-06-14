@@ -25,6 +25,7 @@ interface NotesViewProps {
   onDelete: (id: string) => void;
   onUpdate: (id: string, title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string, status?: "rascunho" | "publicada") => void;
   onSetReminder: (id: string, date: string | null, time: string | null) => void;
+  onTogglePin: (id: string) => void;
   onLockNote: (id: string, pin: string) => Promise<boolean>;
   onUnlockNote: (id: string, pin: string) => Promise<boolean>;
   onVerifyPin: (id: string, pin: string) => Promise<unknown | null>;
@@ -40,7 +41,7 @@ interface NotesViewProps {
   onEmptyTrash: () => void;
 }
 
-export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onLockNote, onUnlockNote, onVerifyPin, onAddAppointment, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, trashedNotes, onRestoreNote, onPermanentDeleteNote, onEmptyTrash }: NotesViewProps) {
+export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onTogglePin, onLockNote, onUnlockNote, onVerifyPin, onAddAppointment, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, trashedNotes, onRestoreNote, onPermanentDeleteNote, onEmptyTrash }: NotesViewProps) {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
@@ -147,6 +148,12 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onL
 
   // Bell click
   const handleBellClick = (note: Note) => setReminderNote(note);
+
+  // Pin click
+  const handlePinClick = (note: Note) => {
+    onTogglePin(note.id);
+    toast({ title: note.isPinned ? "📌 Nota desafixada" : "📌 Nota fixada" });
+  };
 
   const handleReminderSave = (date: string, time: string) => {
     if (!reminderNote) return;
@@ -399,6 +406,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onL
               onClick={openEdit}
               onBellClick={handleBellClick}
               onLockClick={handleLockClick}
+              onPinClick={handlePinClick}
               searchQuery={search}
               fontSize={fontSizeMap[fontSize]}
             />
