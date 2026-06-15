@@ -77,15 +77,15 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
                 }}
               >
                 <Icon
-                  size={16}
-                  strokeWidth={isActive ? 2.5 : 1.8}
-                  style={{ color: isActive ? "#1A1A2E" : "#9E9E9E" }}
+                  size={18}
+                  strokeWidth={isActive ? 2.5 : 2}
+                  style={{ color: isActive ? "#1A1A2E" : "#6B6B7D" }}
                 />
                 <span
                   className="font-bold"
                   style={{
-                    fontSize: 13,
-                    color: isActive ? "#1A1A2E" : "#777",
+                    fontSize: 14,
+                    color: isActive ? "#1A1A2E" : "#444",
                   }}
                 >
                   {label}
@@ -115,22 +115,22 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
           <div
             className="flex items-center justify-center rounded-xl transition-colors"
             style={{
-              width: 28,
-              height: 28,
+              width: 30,
+              height: 30,
               background: isNotesActive ? "rgba(26,26,46,0.06)" : "transparent",
             }}
           >
             <StickyNote
-              size={17}
-              strokeWidth={isNotesActive ? 2.5 : 1.8}
-              style={{ color: isNotesActive ? "#1A1A2E" : "#BDBDBD" }}
+              size={20}
+              strokeWidth={isNotesActive ? 2.5 : 2}
+              style={{ color: isNotesActive ? "#1A1A2E" : "#6B6B7D" }}
             />
           </div>
           <span
-            className="font-bold tracking-wide"
+            className="font-extrabold tracking-wide"
             style={{
-              fontSize: 9,
-              color: isNotesActive ? "#1A1A2E" : "#BDBDBD",
+              fontSize: 10.5,
+              color: isNotesActive ? "#1A1A2E" : "#6B6B7D",
               whiteSpace: "nowrap",
             }}
           >
@@ -156,22 +156,22 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
           <div
             className="flex items-center justify-center rounded-xl transition-colors"
             style={{
-              width: 28,
-              height: 28,
+              width: 30,
+              height: 30,
               background: (isMoreActive || showMore) ? "rgba(26,26,46,0.06)" : "transparent",
             }}
           >
             <MoreHorizontal
-              size={17}
-              strokeWidth={(isMoreActive || showMore) ? 2.5 : 1.8}
-              style={{ color: (isMoreActive || showMore) ? "#1A1A2E" : "#BDBDBD" }}
+              size={20}
+              strokeWidth={(isMoreActive || showMore) ? 2.5 : 2}
+              style={{ color: (isMoreActive || showMore) ? "#1A1A2E" : "#6B6B7D" }}
             />
           </div>
           <span
-            className="font-bold tracking-wide"
+            className="font-extrabold tracking-wide"
             style={{
-              fontSize: 9,
-              color: (isMoreActive || showMore) ? "#1A1A2E" : "#BDBDBD",
+              fontSize: 10.5,
+              color: (isMoreActive || showMore) ? "#1A1A2E" : "#6B6B7D",
               whiteSpace: "nowrap",
             }}
           >
