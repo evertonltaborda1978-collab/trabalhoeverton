@@ -37,6 +37,18 @@ const Index = () => {
   const { signOut } = useAuth();
   const { currentDevice, fetchDevices } = useDeviceTracking();
   const [showLabelModal, setShowLabelModal] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     const dismissedId = localStorage.getItem(DEVICE_LABEL_PROMPT_KEY);
@@ -66,7 +78,7 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen" style={{ background: "#F7F5F2", paddingBottom: "calc(80px + env(safe-area-inset-bottom) + 40px)" }}>
+    <div className="min-h-screen" style={{ background: "#F7F5F2", paddingBottom: "calc(64px + env(safe-area-inset-bottom) + 24px)" }}>
       {/* Header */}
       <header
         className="sticky top-0 z-40"
@@ -75,22 +87,36 @@ const Index = () => {
           borderBottom: "1px solid rgba(0,0,0,0.04)",
         }}
       >
-        <div className="max-w-lg mx-auto px-4 pt-4 pb-3">
-          <div className="flex items-center justify-between mb-3">
-            <h1
-              className="font-display"
-              style={{ fontWeight: 800, fontSize: 26, color: "#1A1A2E" }}
-            >
-              {titles[tab]}
-            </h1>
+        <div className="max-w-lg mx-auto px-4 pt-2 pb-2">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <MoonPhaseWidget />
+              <h1
+                className="font-display"
+                style={{ fontWeight: 800, fontSize: 19, color: "#1A1A2E" }}
+              >
+                {titles[tab]}
+              </h1>
+              <span
+                className="inline-block rounded-full shrink-0"
+                style={{
+                  width: 8,
+                  height: 8,
+                  background: isOnline ? "#43A047" : "#BDBDBD",
+                  transition: "background 0.3s",
+                }}
+                title={isOnline ? "Online" : "Offline"}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <div style={{ transform: "scale(0.8)", transformOrigin: "right center" }}>
+                <MoonPhaseWidget />
+              </div>
               <button
                 onClick={signOut}
                 className="flex items-center justify-center transition-all duration-200 hover:scale-105"
                 style={{
-                  width: 36,
-                  height: 36,
+                  width: 30,
+                  height: 30,
                   borderRadius: "50%",
                   background: "#FFFFFF",
                   border: "1px solid #EBEBEB",
@@ -98,7 +124,7 @@ const Index = () => {
                 }}
                 title="Sair"
               >
-                <LogOut size={16} style={{ color: "#1A1A2E" }} />
+                <LogOut size={14} style={{ color: "#1A1A2E" }} />
               </button>
             </div>
           </div>
@@ -106,7 +132,7 @@ const Index = () => {
       </header>
 
       {/* Content */}
-      <main className="max-w-lg mx-auto px-4 pt-4">
+      <main className="max-w-lg mx-auto px-4 pt-2">
         {tab === "notes" && (
           <NotesView
             notes={notes}
