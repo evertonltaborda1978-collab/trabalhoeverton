@@ -104,10 +104,12 @@ export function useNotes() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("synced");
   const syncingRef = useRef(false);
 
-  // Save to localStorage whenever notes change
+  // Save to localStorage whenever notes change. Uses "anon" as a fallback key
+  // when the user session isn't available yet (e.g. offline first load), so
+  // notes created before auth resolves aren't lost on refresh.
   useEffect(() => {
-    if (user && notes.length > 0) {
-      saveLocal(user.id, notes);
+    if (notes.length > 0) {
+      saveLocal(user?.id || "anon", notes);
     }
   }, [notes, user]);
 
@@ -151,8 +153,26 @@ export function useNotes() {
   }, [user]);
 
   const fetchNotes = useCallback(async () => {
-    if (!user) return;
-    const localNotes = loadLocal(user.id);
+    // Sem usuário ainda: carrega o que houver salvo localmente (chave "anon"
+    // ou de um usuário anterior) para não deixar a tela vazia/travada offline.
+    if (!user) {
+      const anonNotes = loadLocal("anon");
+      if (anonNotes.length > 0) {
+        setNotes(anonNotes);
+        setSyncStatus("offline");
+      }
+      setLoading(false);
+      return;
+    }
+
+    // Mescla qualquer nota criada antes da sessão ficar disponível ("anon")
+    // com as notas já salvas para este usuário.
+    const anonNotes = loadLocal("anon");
+    const userLocalNotes = loadLocal(user.id);
+    const localNotes = anonNotes.length > 0 ? mergeNotes(anonNotes, userLocalNotes) : userLocalNotes;
+    if (anonNotes.length > 0) {
+      try { localStorage.removeItem(getLocalKey("anon")); } catch {}
+    }
 
     try {
       const { data, error } = await supabase
@@ -178,6 +198,7 @@ export function useNotes() {
       // Offline - use local
       if (localNotes.length > 0) {
         setNotes(localNotes);
+        saveLocal(user.id, localNotes);
         setSyncStatus("offline");
       }
     }
@@ -240,7 +261,6 @@ export function useNotes() {
 
   const addNote = useCallback(
     async (title: string, content: string, images: string[] = [], color?: string, fontFamily?: string, fontSize?: string, status: "rascunho" | "publicada" = "publicada") => {
-      if (!user) return;
       const noteColor = color || COLORS[Math.floor(Math.random() * COLORS.length)];
       const newId = crypto.randomUUID();
       const now = new Date();
@@ -264,7 +284,15 @@ export function useNotes() {
         isPinned: false,
       };
 
+      // Sempre cria a nota localmente primeiro, independente de internet/sessão.
       setNotes((prev) => [note, ...prev]);
+
+      // Sem usuário autenticado ainda (ex: offline na primeira carga) — mantém
+      // a nota local; ela será sincronizada quando a sessão/conexão voltar.
+      if (!user) {
+        setSyncStatus("offline");
+        return note;
+      }
 
       try {
         const { data } = await (supabase.from("notes") as any)
