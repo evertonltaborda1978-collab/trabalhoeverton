@@ -53,7 +53,7 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
         background: "rgba(255,255,255,0.98)",
         borderTop: "1px solid #F0F0F0",
         boxShadow: "0 -4px 16px rgba(0,0,0,0.04)",
-        paddingBottom: "calc(env(safe-area-inset-bottom) + 40px)",
+        paddingBottom: "calc(env(safe-area-inset-bottom) + 24px)",
       }}
     >
       {/* "Mais" overflow menu */}
@@ -81,7 +81,7 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
                 }}
               >
                 <Icon
-                  size={20}
+                  size={18}
                   strokeWidth={isActive ? 2.5 : 1.8}
                   style={{ color: isActive ? "#1A1A2E" : "#9E9E9E" }}
                 />
@@ -115,20 +115,20 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
               onClick={() => onChange(id)}
               className="flex flex-col items-center gap-0.5 rounded-xl transition-all duration-200 shrink-0"
               style={{
-                padding: "8px 14px",
+                padding: "5px 14px",
                 minWidth: 64,
               }}
             >
               <div
                 className="flex items-center justify-center rounded-xl transition-colors"
                 style={{
-                  width: 36,
-                  height: 36,
+                  width: 30,
+                  height: 30,
                   background: isActive ? "rgba(26,26,46,0.06)" : "transparent",
                 }}
               >
                 <Icon
-                  size={20}
+                  size={18}
                   strokeWidth={isActive ? 2.5 : 1.8}
                   style={{ color: isActive ? "#1A1A2E" : "#BDBDBD" }}
                 />
@@ -136,7 +136,7 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
               <span
                 className="font-bold tracking-wide"
                 style={{
-                  fontSize: 9.5,
+                  fontSize: 9,
                   color: isActive ? "#1A1A2E" : "#BDBDBD",
                   whiteSpace: "nowrap",
                 }}
@@ -158,20 +158,20 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
           onClick={() => setShowMore((v) => !v)}
           className="flex flex-col items-center gap-0.5 rounded-xl transition-all duration-200 shrink-0"
           style={{
-            padding: "8px 14px",
+            padding: "5px 14px",
             minWidth: 64,
           }}
         >
           <div
             className="flex items-center justify-center rounded-xl transition-colors"
             style={{
-              width: 36,
-              height: 36,
+              width: 30,
+              height: 30,
               background: (isMoreActive || showMore) ? "rgba(26,26,46,0.06)" : "transparent",
             }}
           >
             <MoreHorizontal
-              size={20}
+              size={18}
               strokeWidth={(isMoreActive || showMore) ? 2.5 : 1.8}
               style={{ color: (isMoreActive || showMore) ? "#1A1A2E" : "#BDBDBD" }}
             />
@@ -179,7 +179,7 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
           <span
             className="font-bold tracking-wide"
             style={{
-              fontSize: 9.5,
+              fontSize: 9,
               color: (isMoreActive || showMore) ? "#1A1A2E" : "#BDBDBD",
               whiteSpace: "nowrap",
             }}
