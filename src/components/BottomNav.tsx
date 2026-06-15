@@ -8,8 +8,8 @@ interface BottomNavProps {
   onChange: (tab: Tab) => void;
 }
 
-const tabs: { id: Tab; icon: typeof StickyNote; label: string }[] = [
-  { id: "notes", icon: StickyNote, label: "Notas" },
+// "Mais" menu options (everything except Notas, which has its own button)
+const moreTabs: { id: Tab; icon: typeof StickyNote; label: string }[] = [
   { id: "calendar", icon: Calendar, label: "Agenda" },
   { id: "fuel", icon: Fuel, label: "Combustível" },
   { id: "medication", icon: Pill, label: "Saúde" },
@@ -18,15 +18,11 @@ const tabs: { id: Tab; icon: typeof StickyNote; label: string }[] = [
   { id: "devices", icon: Shield, label: "Segurança" },
 ];
 
-// Number of tabs shown directly in the bar; the rest go into the "Mais" menu.
-const VISIBLE_COUNT = 4;
-
 export function BottomNav({ active, onChange }: BottomNavProps) {
   const [showMore, setShowMore] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const visibleTabs = tabs.slice(0, VISIBLE_COUNT);
-  const moreTabs = tabs.slice(VISIBLE_COUNT);
+  const isNotesActive = active === "notes";
   const isMoreActive = moreTabs.some((t) => t.id === active);
 
   // Close the "more" menu when clicking outside of it
@@ -53,7 +49,7 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
         background: "rgba(255,255,255,0.98)",
         borderTop: "1px solid #F0F0F0",
         boxShadow: "0 -4px 16px rgba(0,0,0,0.04)",
-        paddingBottom: "calc(env(safe-area-inset-bottom) + 24px)",
+        paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)",
       }}
     >
       {/* "Mais" overflow menu */}
@@ -81,7 +77,7 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
                 }}
               >
                 <Icon
-                  size={18}
+                  size={16}
                   strokeWidth={isActive ? 2.5 : 1.8}
                   style={{ color: isActive ? "#1A1A2E" : "#9E9E9E" }}
                 />
@@ -101,77 +97,72 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
       )}
 
       <div
-        className="flex items-center justify-around"
+        className="flex items-center justify-center gap-12"
         style={{
           paddingLeft: 4,
           paddingRight: 4,
         }}
       >
-        {visibleTabs.map(({ id, icon: Icon, label }) => {
-          const isActive = active === id;
-          return (
-            <button
-              key={id}
-              onClick={() => onChange(id)}
-              className="flex flex-col items-center gap-0.5 rounded-xl transition-all duration-200 shrink-0"
-              style={{
-                padding: "5px 14px",
-                minWidth: 64,
-              }}
-            >
-              <div
-                className="flex items-center justify-center rounded-xl transition-colors"
-                style={{
-                  width: 30,
-                  height: 30,
-                  background: isActive ? "rgba(26,26,46,0.06)" : "transparent",
-                }}
-              >
-                <Icon
-                  size={18}
-                  strokeWidth={isActive ? 2.5 : 1.8}
-                  style={{ color: isActive ? "#1A1A2E" : "#BDBDBD" }}
-                />
-              </div>
-              <span
-                className="font-bold tracking-wide"
-                style={{
-                  fontSize: 9,
-                  color: isActive ? "#1A1A2E" : "#BDBDBD",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {label}
-              </span>
-              {isActive && (
-                <div
-                  className="w-1 h-1 rounded-full"
-                  style={{ background: "#1A1A2E" }}
-                />
-              )}
-            </button>
-          );
-        })}
+        {/* Notas button */}
+        <button
+          onClick={() => onChange("notes")}
+          className="flex flex-col items-center gap-0.5 rounded-xl transition-all duration-200 shrink-0"
+          style={{
+            padding: "3px 18px",
+            minWidth: 72,
+          }}
+        >
+          <div
+            className="flex items-center justify-center rounded-xl transition-colors"
+            style={{
+              width: 28,
+              height: 28,
+              background: isNotesActive ? "rgba(26,26,46,0.06)" : "transparent",
+            }}
+          >
+            <StickyNote
+              size={17}
+              strokeWidth={isNotesActive ? 2.5 : 1.8}
+              style={{ color: isNotesActive ? "#1A1A2E" : "#BDBDBD" }}
+            />
+          </div>
+          <span
+            className="font-bold tracking-wide"
+            style={{
+              fontSize: 9,
+              color: isNotesActive ? "#1A1A2E" : "#BDBDBD",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Notas
+          </span>
+          {isNotesActive && (
+            <div
+              className="w-1 h-1 rounded-full"
+              style={{ background: "#1A1A2E" }}
+            />
+          )}
+        </button>
 
         {/* "Mais" button */}
         <button
           onClick={() => setShowMore((v) => !v)}
           className="flex flex-col items-center gap-0.5 rounded-xl transition-all duration-200 shrink-0"
           style={{
-            padding: "5px 14px",
-            minWidth: 64,
+            padding: "3px 18px",
+            minWidth: 72,
           }}
         >
           <div
             className="flex items-center justify-center rounded-xl transition-colors"
             style={{
-              width: 30,
-              height: 30,
+              width: 28,
+              height: 28,
               background: (isMoreActive || showMore) ? "rgba(26,26,46,0.06)" : "transparent",
             }}
           >
             <MoreHorizontal
-              size={18}
+              size={17}
               strokeWidth={(isMoreActive || showMore) ? 2.5 : 1.8}
               style={{ color: (isMoreActive || showMore) ? "#1A1A2E" : "#BDBDBD" }}
             />
