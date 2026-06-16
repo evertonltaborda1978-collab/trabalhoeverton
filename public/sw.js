@@ -1,88 +1,35 @@
-// Service Worker — Virtual Assistant Pro
+// Kill-switch Service Worker
 //
-// Estratégia: "stale-while-revalidate" para o app shell (HTML/JS/CSS) e
-// assets estáticos. Isso garante que:
-//  - Offline: o app abre imediatamente usando a última versão em cache.
-//  - Online: o app é servido do cache instantaneamente, e em paralelo
-//    busca a versão mais nova na rede para atualizar o cache (a próxima
-//    abertura já usa a versão atualizada).
+// Este arquivo substitui o antigo Service Worker que cacheava o app shell
+// e causava a tela "Você está offline". Ele:
+//  1. Limpa os caches criados pela versão anterior (vap-cache-*).
+//  2. Desregistra a si mesmo, removendo o SW do navegador.
+//  3. Recarrega as abas abertas para servir a versão online do app.
 //
-// IMPORTANTE: o CACHE_VERSION deve ser incrementado sempre que houver uma
-// mudança importante, para forçar a limpeza de caches antigos.
-const CACHE_VERSION = "v1";
-const CACHE_NAME = `vap-cache-${CACHE_VERSION}`;
+// Mantemos este arquivo no mesmo caminho (/sw.js) por pelo menos um ciclo
+// de release para que navegadores que já registraram o SW antigo recebam
+// esta substituição e o desinstalem.
 
-// Arquivos essenciais para o "app shell" funcionar offline.
-const PRECACHE_URLS = [
-  "/",
-  "/index.html",
-  "/manifest.json",
-];
+self.addEventListener("install", () => self.skipWaiting());
 
-self.addEventListener("install", (event) => {
+self.addEventListener("activate", (event) =>
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
-  );
-  self.skipWaiting();
-});
-
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key.startsWith("vap-cache-") && key !== CACHE_NAME)
-          .map((key) => caches.delete(key))
-      )
-    )
-  );
-  self.clients.claim();
-});
-
-self.addEventListener("fetch", (event) => {
-  const { request } = event;
-
-  // Apenas GET requests do mesmo origin entram no cache.
-  if (request.method !== "GET" || new URL(request.url).origin !== self.location.origin) {
-    return;
-  }
-
-  // Nunca cacheia chamadas de API (Supabase, etc.) — sempre direto da rede.
-  if (request.url.includes("/rest/") || request.url.includes("/auth/") || request.url.includes("/realtime/")) {
-    return;
-  }
-
-  event.respondWith(
-    caches.open(CACHE_NAME).then(async (cache) => {
-      const cached = await cache.match(request);
-
-      const networkFetch = fetch(request)
-        .then((response) => {
-          if (response && response.status === 200) {
-            cache.put(request, response.clone());
-          }
-          return response;
-        })
-        .catch(() => null);
-
-      // Stale-while-revalidate: responde com o cache imediatamente se
-      // existir, e atualiza o cache em segundo plano. Sem cache, espera
-      // a rede; sem rede e sem cache, cai no fallback de navegação.
-      if (cached) {
-        networkFetch; // dispara em segundo plano, não esperamos
-        return cached;
+    (async () => {
+      try {
+        const cacheNames = await caches.keys();
+        const ourCaches = cacheNames.filter((name) => name.startsWith("vap-cache-"));
+        await Promise.allSettled(ourCaches.map((name) => caches.delete(name)));
+        await self.clients.claim();
+        const windowClients = await self.clients.matchAll({ type: "window" });
+        await Promise.allSettled(
+          windowClients.map((client) => client.navigate(client.url))
+        );
+      } finally {
+        await self.registration.unregister();
       }
+    })()
+  )
+);
 
-      const networkResponse = await networkFetch;
-      if (networkResponse) return networkResponse;
-
-      // Fallback para navegação (SPA): serve o index.html cacheado.
-      if (request.mode === "navigate") {
-        const fallback = await cache.match("/index.html");
-        if (fallback) return fallback;
-      }
-
-      return new Response("Offline", { status: 503, statusText: "Offline" });
-    })
-  );
-});
+// Nunca intercepta requisições — deixa o navegador buscar tudo da rede.
+self.addEventListener("fetch", () => {});
