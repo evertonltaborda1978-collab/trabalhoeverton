@@ -137,15 +137,13 @@ function mapRow(n: any): Note {
 
 export function useNotes() {
   const { user } = useAuth();
-  const [notes, setNotesState] = useState<Note[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
   const notesRef = useRef<Note[]>([]);
-  const setNotes = (updater: Note[] | ((prev: Note[]) => Note[])) => {
-    setNotesState((prev) => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      notesRef.current = next;
-      return next;
-    });
-  };
+
+  // Keep notesRef in sync with notes state
+  useEffect(() => {
+    notesRef.current = notes;
+  }, [notes]);
   const [loading, setLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("synced");
   const syncingRef = useRef(false);
