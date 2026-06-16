@@ -137,7 +137,15 @@ function mapRow(n: any): Note {
 
 export function useNotes() {
   const { user } = useAuth();
-  const [notes, setNotes] = useState<Note[]>([]);
+  const [notes, setNotesState] = useState<Note[]>([]);
+  const notesRef = useRef<Note[]>([]);
+  const setNotes = (updater: Note[] | ((prev: Note[]) => Note[])) => {
+    setNotesState((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      notesRef.current = next;
+      return next;
+    });
+  };
   const [loading, setLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("synced");
   const syncingRef = useRef(false);
@@ -481,52 +489,31 @@ export function useNotes() {
 
   // Toggle pinned state for a note (max 10 pinned notes at a time)
   const togglePinNote = useCallback(async (id: string) => {
-    // Lê o estado atual das notas de forma síncrona via ref
-    let newPinned: boolean | null = null;
+    const note = notesRef.current.find((n) => n.id === id);
+    if (!note) return;
 
-    setNotes((prev) => {
-      const note = prev.find((n) => n.id === id);
-      if (!note) return prev;
+    const pinnedCount = notesRef.current.filter((n) => n.isPinned && !n.deletedAt).length;
+    if (!note.isPinned && pinnedCount >= 10) return;
 
-      const pinnedCount = prev.filter((n) => n.isPinned && !n.deletedAt).length;
+    const newPinned = !note.isPinned;
 
-      // Se tentar fixar e já tiver 10, bloqueia silenciosamente
-      if (!note.isPinned && pinnedCount >= 10) {
-        newPinned = null; // sinaliza que foi bloqueado
-        return prev;
-      }
-
-      newPinned = !note.isPinned;
-      return prev.map((n) =>
-        n.id === id ? { ...n, isPinned: newPinned as boolean, sincronizado: false } : n
-      );
-    });
-
-    // Foi bloqueado pelo limite — não chama o Supabase
-    if (newPinned === null) return;
-
-    const pinnedValue = newPinned;
+    setNotes((prev) =>
+      prev.map((n) => n.id === id ? { ...n, isPinned: newPinned, sincronizado: false } : n)
+    );
 
     try {
       const { error } = await (supabase.from("notes") as any)
-        .update({ is_pinned: pinnedValue, sincronizado: true })
+        .update({ is_pinned: newPinned, sincronizado: true })
         .eq("id", id);
 
-      if (error) {
-        // Reverte localmente se o Supabase rejeitou
-        setNotes((prev) =>
-          prev.map((n) => n.id === id ? { ...n, isPinned: !pinnedValue, sincronizado: false } : n)
-        );
-        setSyncStatus("offline");
-        return;
-      }
+      if (error) throw error;
 
       setNotes((prev) =>
         prev.map((n) => n.id === id ? { ...n, sincronizado: true } : n)
       );
     } catch {
       setNotes((prev) =>
-        prev.map((n) => n.id === id ? { ...n, isPinned: !pinnedValue, sincronizado: false } : n)
+        prev.map((n) => n.id === id ? { ...n, isPinned: !newPinned, sincronizado: false } : n)
       );
       setSyncStatus("offline");
     }
