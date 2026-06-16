@@ -61,32 +61,6 @@ function loadLocal(userId: string): Note[] {
   }
 }
 
-// Finds any existing "notas_usuario_*" key in localStorage and returns its
-// notes. Used as a fallback when there's no authenticated user yet (e.g.
-// app opened offline before the session resolves), so previously saved
-// notes from a real user_id still show up instead of an empty list.
-function loadAnyLocalNotes(): { key: string; notes: Note[] } | null {
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key || !key.startsWith("notas_usuario_")) continue;
-      const raw = localStorage.getItem(key);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const notes = parsed.map((n: any) => ({
-          ...n,
-          createdAt: new Date(n.createdAt),
-          updatedAt: new Date(n.updatedAt),
-          deletedAt: n.deletedAt ? new Date(n.deletedAt) : null,
-        }));
-        return { key, notes };
-      }
-    }
-  } catch {}
-  return null;
-}
-
 function mergeNotes(local: Note[], remote: Note[]): Note[] {
   const map = new Map<string, Note>();
   for (const n of remote) map.set(n.id, { ...n, sincronizado: true });
@@ -99,18 +73,6 @@ function mergeNotes(local: Note[], remote: Note[]): Note[] {
     }
   }
   return Array.from(map.values()).sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
-}
-
-// Races a promise against a timeout. Used so that Supabase calls never hang
-// forever when offline (some environments don't reject fetch() promptly
-// without connectivity, which would otherwise leave loading=true forever).
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("timeout")), ms);
-    promise
-      .then((val) => { clearTimeout(timer); resolve(val); })
-      .catch((err) => { clearTimeout(timer); reject(err); });
-  });
 }
 
 function mapRow(n: any): Note {
@@ -191,21 +153,13 @@ export function useNotes() {
   }, [user]);
 
   const fetchNotes = useCallback(async () => {
-    // Sem usuário ainda: carrega o que houver salvo localmente — primeiro
-    // tenta a chave "anon", depois qualquer "notas_usuario_*" existente
-    // (ex: de um login anterior cuja sessão ainda não foi restaurada) —
-    // para não deixar a tela vazia/travada offline.
+    // Sem usuário ainda: carrega o que houver salvo localmente (chave "anon"
+    // ou de um usuário anterior) para não deixar a tela vazia/travada offline.
     if (!user) {
       const anonNotes = loadLocal("anon");
       if (anonNotes.length > 0) {
         setNotes(anonNotes);
         setSyncStatus("offline");
-      } else {
-        const fallback = loadAnyLocalNotes();
-        if (fallback) {
-          setNotes(fallback.notes);
-          setSyncStatus("offline");
-        }
       }
       setLoading(false);
       return;
@@ -220,23 +174,11 @@ export function useNotes() {
       try { localStorage.removeItem(getLocalKey("anon")); } catch {}
     }
 
-    // Mostra as notas locais imediatamente e libera a tela — não espera a
-    // rede para sair do estado de "loading". Se a rede responder, os dados
-    // remotos são mesclados em seguida.
-    if (localNotes.length > 0) {
-      setNotes(localNotes);
-    }
-    setLoading(false);
-
     try {
-      const { data, error } = await withTimeout(
-        supabase
-          .from("notes")
-          .select("*")
-          .order("updated_at", { ascending: false })
-          .then((res) => res),
-        8000
-      );
+      const { data, error } = await supabase
+        .from("notes")
+        .select("*")
+        .order("updated_at", { ascending: false });
 
       if (error) throw error;
 
@@ -253,9 +195,14 @@ export function useNotes() {
         setSyncStatus("synced");
       }
     } catch {
-      // Offline ou timeout - mantém os dados locais já exibidos
-      setSyncStatus("offline");
+      // Offline - use local
+      if (localNotes.length > 0) {
+        setNotes(localNotes);
+        saveLocal(user.id, localNotes);
+        setSyncStatus("offline");
+      }
     }
+    setLoading(false);
   }, [user, syncToSupabase]);
 
   useEffect(() => {
@@ -348,24 +295,21 @@ export function useNotes() {
       }
 
       try {
-        const { data } = await withTimeout(
-          (supabase.from("notes") as any)
-            .insert({
-              id: newId,
-              user_id: user.id,
-              title,
-              content,
-              images,
-              color: noteColor,
-              font_family: fontFamily || "default",
-              font_size: fontSize || "medium",
-              status,
-              sincronizado: true,
-            })
-            .select()
-            .single(),
-          8000
-        );
+        const { data } = await (supabase.from("notes") as any)
+          .insert({
+            id: newId,
+            user_id: user.id,
+            title,
+            content,
+            images,
+            color: noteColor,
+            font_family: fontFamily || "default",
+            font_size: fontSize || "medium",
+            status,
+            sincronizado: true,
+          })
+          .select()
+          .single();
 
         if (data) {
           setNotes((prev) =>
