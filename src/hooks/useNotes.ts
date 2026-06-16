@@ -138,12 +138,6 @@ function mapRow(n: any): Note {
 export function useNotes() {
   const { user } = useAuth();
   const [notes, setNotes] = useState<Note[]>([]);
-  const notesRef = useRef<Note[]>([]);
-
-  // Keep notesRef in sync with notes state
-  useEffect(() => {
-    notesRef.current = notes;
-  }, [notes]);
   const [loading, setLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("synced");
   const syncingRef = useRef(false);
@@ -485,36 +479,18 @@ export function useNotes() {
     } catch { setSyncStatus("offline"); }
   }, []);
 
-  // Toggle pinned state for a note (max 10 pinned notes at a time)
+  // Toggle pinned state for a note
   const togglePinNote = useCallback(async (id: string) => {
-    const note = notesRef.current.find((n) => n.id === id);
-    if (!note) return;
-
-    const pinnedCount = notesRef.current.filter((n) => n.isPinned && !n.deletedAt).length;
-    if (!note.isPinned && pinnedCount >= 10) return;
-
-    const newPinned = !note.isPinned;
-
-    setNotes((prev) =>
-      prev.map((n) => n.id === id ? { ...n, isPinned: newPinned, sincronizado: false } : n)
-    );
-
+    let newPinned = false;
+    setNotes((prev) => prev.map((n) => {
+      if (n.id !== id) return n;
+      newPinned = !n.isPinned;
+      return { ...n, isPinned: newPinned, sincronizado: false };
+    }));
     try {
-      const { error } = await (supabase.from("notes") as any)
-        .update({ is_pinned: newPinned, sincronizado: true })
-        .eq("id", id);
-
-      if (error) throw error;
-
-      setNotes((prev) =>
-        prev.map((n) => n.id === id ? { ...n, sincronizado: true } : n)
-      );
-    } catch {
-      setNotes((prev) =>
-        prev.map((n) => n.id === id ? { ...n, isPinned: !newPinned, sincronizado: false } : n)
-      );
-      setSyncStatus("offline");
-    }
+      await (supabase.from("notes") as any).update({ is_pinned: newPinned, sincronizado: true }).eq("id", id);
+      setNotes((prev) => prev.map((n) => n.id === id ? { ...n, sincronizado: true } : n));
+    } catch { setSyncStatus("offline"); }
   }, []);
 
   // Lock a note: encrypts content+title+images with PIN-derived key. PIN is never stored.
