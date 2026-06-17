@@ -470,6 +470,11 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
               resolve(ev.target?.result as string);
               return;
             }
+            // Preenche com fundo branco antes de desenhar — necessário para
+            // PNGs com transparência (ex: screenshots do celular), que
+            // ficariam pretos ao converter para JPEG sem esse passo.
+            ctx.fillStyle = "#FFFFFF";
+            ctx.fillRect(0, 0, w, h);
             ctx.drawImage(img, 0, 0, w, h);
             const dataUrl = canvas.toDataURL("image/jpeg", quality);
             // Sanity check: if result is suspiciously small (blank/black canvas),
