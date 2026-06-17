@@ -185,6 +185,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const [scheduleTime, setScheduleTime] = useState("09:00");
   const [showUnsavedPrompt, setShowUnsavedPrompt] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showFab, setShowFab] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [editorFontSize, setEditorFontSize] = useState<number>(() => {
     const stored = parseInt(localStorage.getItem("editor_font_size") || "", 10);
@@ -1301,137 +1302,174 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
             </div>
           </div>
 
-          {/* ── TOOLBAR (2 rows for mobile) ── */}
+          {/* ── FAB + FLOATING SAVE (substitui toolbar em modo edição) ── */}
           {!readOnly && (
-          <div
-            className="px-3 py-1.5 border-t shrink-0"
-            style={{ borderColor: theme.lines, background: theme.toolbarBg, transition: "background 0.3s ease, border-color 0.3s ease" }}
-          >
-            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageSelect} />
-            <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageSelect} />
-            <input ref={ocrCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleOcrImage} />
-            <input ref={ocrFileRef} type="file" accept="image/*" className="hidden" onChange={handleOcrImage} />
+            <>
+              {/* Hidden file inputs (mantidos fora da toolbar) */}
+              <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageSelect} />
+              <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageSelect} />
+              <input ref={ocrCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleOcrImage} />
+              <input ref={ocrFileRef} type="file" accept="image/*" className="hidden" onChange={handleOcrImage} />
 
-            {/* Row 1 — scroll horizontal para evitar corte em telas 360px */}
-            <div className="flex items-center gap-0.5 overflow-x-auto no-scrollbar" style={{ WebkitOverflowScrolling: "touch" }}>
-              <button onClick={() => cameraInputRef.current?.click()} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors shrink-0" style={{ color: theme.textMuted }}>
-                <Camera size={13} /> Câmera
-              </button>
-              <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors shrink-0" style={{ color: theme.textMuted }}>
-                <ImagePlus size={13} /> Galeria
-              </button>
-              <button onClick={handleCopy} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors shrink-0" style={{ color: theme.textMuted }}>
-                {copied ? <Check size={13} className="text-green-600" /> : <Copy size={13} />} Copiar
-              </button>
-              <button onClick={() => setShowOcrModal(true)} disabled={ocrLoading} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors shrink-0" style={{ color: theme.textMuted }}>
-                {ocrLoading ? <Loader2 size={13} className="animate-spin" /> : <ScanSearch size={13} />} OCR
-              </button>
-              <button onClick={handleStartQrScanner} disabled={qrLoading} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors shrink-0" style={{ color: theme.textMuted }}>
-                {qrLoading ? <Loader2 size={13} className="animate-spin" /> : <ScanLine size={13} />} QR
-              </button>
-            </div>
-            {/* Row 2 — scroll horizontal */}
-            <div className="flex items-center gap-0.5 overflow-x-auto no-scrollbar mt-0.5" style={{ WebkitOverflowScrolling: "touch" }}>
-              <button onClick={addChecklist} className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors shrink-0" style={{ color: theme.textMuted }}>
-                <ListChecks size={13} /> Lista
-              </button>
-              {onSchedule && (
-                <button
-                  onClick={() => { setScheduleDate(new Date().toISOString().slice(0, 10)); setScheduleTime("09:00"); setShowScheduleDialog(true); }}
-                  className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium hover:bg-black/5 transition-colors shrink-0"
-                  style={{ color: theme.textMuted }}
-                >
-                  <CalendarPlus size={13} /> Agendar
-                </button>
+              {/* FAB menu expandido */}
+              {showFab && (
+                <>
+                  {/* Overlay para fechar o menu */}
+                  <div
+                    className="fixed inset-0 z-[60]"
+                    onClick={() => setShowFab(false)}
+                  />
+                  {/* Menu de opções acima do FAB */}
+                  <div
+                    className="fixed z-[70] flex flex-col gap-2"
+                    style={{ bottom: "calc(80px + env(safe-area-inset-bottom))", left: 16 }}
+                  >
+                    {[
+                      { icon: <Camera size={18} />, label: "Câmera", action: () => { cameraInputRef.current?.click(); setShowFab(false); } },
+                      { icon: <ImagePlus size={18} />, label: "Galeria", action: () => { fileInputRef.current?.click(); setShowFab(false); } },
+                      { icon: ocrLoading ? <Loader2 size={18} className="animate-spin" /> : <ScanSearch size={18} />, label: "OCR", action: () => { setShowOcrModal(true); setShowFab(false); } },
+                      { icon: qrLoading ? <Loader2 size={18} className="animate-spin" /> : <ScanLine size={18} />, label: "QR", action: () => { handleStartQrScanner(); setShowFab(false); } },
+                      { icon: <ListChecks size={18} />, label: "Lista", action: () => { addChecklist(); setShowFab(false); } },
+                      ...(voiceSupported ? [{ icon: isListening ? <MicOff size={18} /> : <Mic size={18} />, label: isListening ? "Parar voz" : "Voz", action: () => { toggleVoice(); setShowFab(false); } }] : []),
+                      ...(onSchedule ? [{ icon: <CalendarPlus size={18} />, label: "Agendar", action: () => { setScheduleDate(new Date().toISOString().slice(0, 10)); setScheduleTime("09:00"); setShowScheduleDialog(true); setShowFab(false); } }] : []),
+                      { icon: <Undo2 size={18} />, label: "Desfazer", action: () => { undo(); setShowFab(false); }, disabled: !canUndo },
+                      { icon: <Redo2 size={18} />, label: "Refazer", action: () => { redo(); setShowFab(false); }, disabled: !canRedo },
+                    ].map((item, i) => (
+                      <button
+                        key={i}
+                        onClick={item.action}
+                        disabled={item.disabled}
+                        className="flex items-center gap-3 px-4 py-2.5 rounded-2xl shadow-lg transition-all active:scale-95"
+                        style={{
+                          background: isDark ? "#3A3A3A" : "#FFFFFF",
+                          color: item.disabled ? "#BDBDBD" : (isDark ? "#FFF" : "#1A1A2E"),
+                          boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+                          opacity: item.disabled ? 0.5 : 1,
+                        }}
+                      >
+                        <span style={{ color: isDark ? "#FFF" : theme.textMuted }}>{item.icon}</span>
+                        <span className="text-sm font-semibold">{item.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
               )}
-              {voiceSupported && (
-                <button
-                  onClick={toggleVoice}
-                  className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[11px] font-medium transition-all shrink-0"
-                  style={{ color: isListening ? "#E53935" : theme.textMuted, background: isListening ? "rgba(229,57,53,0.1)" : "transparent" }}
-                >
-                  {isListening ? <MicOff size={13} /> : <Mic size={13} />} Voz
-                </button>
-              )}
-              <div className="w-px h-3.5 mx-0.5 shrink-0" style={{ background: theme.lines }} />
-              <button onClick={undo} disabled={!canUndo} className="p-1 rounded-md hover:bg-black/5 transition-all shrink-0" style={{ color: canUndo ? "#555" : "#BDBDBD", opacity: canUndo ? 1 : 0.4 }}>
-                <Undo2 size={13} />
-              </button>
-              <button onClick={redo} disabled={!canRedo} className="p-1 rounded-md hover:bg-black/5 transition-all shrink-0" style={{ color: canRedo ? "#555" : "#BDBDBD", opacity: canRedo ? 1 : 0.4 }}>
-                <Redo2 size={13} />
-              </button>
-            </div>
 
-            {/* Schedule Dialog */}
-            {showScheduleDialog && (
-              <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)" }}>
-                <div className="rounded-2xl p-5 w-[90%] max-w-sm space-y-4" style={{ background: "#FFF", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
-                  <h3 className="text-base font-bold flex items-center gap-2" style={{ color: "#1A1A2E" }}>
-                    <CalendarPlus size={18} /> Agendar na Agenda
-                  </h3>
-                  <p className="text-xs" style={{ color: "#9E9E9E" }}>
-                    "{title || "Nota sem título"}"
-                  </p>
-                  <div>
-                    <label className="text-xs font-medium block mb-1" style={{ color: "#666" }}>Data</label>
-                    <input
-                      type="date"
-                      value={scheduleDate}
-                      min={new Date().toISOString().slice(0, 10)}
-                      onChange={(e) => setScheduleDate(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl text-sm border outline-none focus:ring-2 focus:ring-blue-200"
-                      style={{ borderColor: "#E0E0E0", color: "#1A1A2E" }}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium block mb-1" style={{ color: "#666" }}>Hora</label>
-                    <input
-                      type="time"
-                      value={scheduleTime}
-                      onChange={(e) => setScheduleTime(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl text-sm border outline-none focus:ring-2 focus:ring-blue-200"
-                      style={{ borderColor: "#E0E0E0", color: "#1A1A2E" }}
-                    />
-                  </div>
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      onClick={() => setShowScheduleDialog(false)}
-                      className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
-                      style={{ background: "#F5F5F5", color: "#666" }}
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (scheduleDate && onSchedule) {
-                          onSchedule(title, blocksToPlainText(blocks), scheduleDate, scheduleTime);
-                          toast({ title: "📅 Agendado!", description: `${scheduleDate} às ${scheduleTime}` });
-                          setShowScheduleDialog(false);
-                        }
-                      }}
-                      disabled={!scheduleDate}
-                      className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-colors disabled:opacity-40"
-                      style={{ background: "#1A1A2E" }}
-                    >
-                      Agendar
-                    </button>
+              {/* FAB circular — canto inferior esquerdo */}
+              <button
+                onClick={() => setShowFab((v) => !v)}
+                className="fixed z-[65] flex items-center justify-center rounded-full shadow-xl transition-all duration-200 active:scale-95"
+                style={{
+                  bottom: "calc(16px + env(safe-area-inset-bottom))",
+                  left: 16,
+                  width: 52,
+                  height: 52,
+                  background: showFab ? "#1A1A2E" : theme.headerBg,
+                  border: `2px solid ${theme.borderAccent}`,
+                  boxShadow: "0 6px 20px rgba(0,0,0,0.2)",
+                }}
+                title="Ferramentas"
+              >
+                {showFab ? (
+                  <X size={22} style={{ color: "#FFF" }} />
+                ) : (
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={theme.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>
+                  </svg>
+                )}
+              </button>
+
+              {/* Botão salvar flutuante — canto inferior direito */}
+              <button
+                onClick={editingNote ? handleSaveAndBackToView : () => doSaveAndClose("publicada")}
+                disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
+                className="fixed z-[65] flex items-center gap-2 px-5 rounded-full shadow-xl transition-all duration-200 active:scale-95 disabled:opacity-50"
+                style={{
+                  bottom: "calc(16px + env(safe-area-inset-bottom))",
+                  right: 16,
+                  height: 52,
+                  background: "#2D9E7F",
+                  boxShadow: "0 6px 20px rgba(45,158,127,0.4)",
+                  color: "#FFF",
+                  fontWeight: 700,
+                  fontSize: 14,
+                }}
+                title="Salvar nota"
+              >
+                <Check size={18} />
+                Salvar
+              </button>
+
+              {/* Schedule Dialog */}
+              {showScheduleDialog && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)" }}>
+                  <div className="rounded-2xl p-5 w-[90%] max-w-sm space-y-4" style={{ background: "#FFF", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+                    <h3 className="text-base font-bold flex items-center gap-2" style={{ color: "#1A1A2E" }}>
+                      <CalendarPlus size={18} /> Agendar na Agenda
+                    </h3>
+                    <p className="text-xs" style={{ color: "#9E9E9E" }}>
+                      "{title || "Nota sem título"}"
+                    </p>
+                    <div>
+                      <label className="text-xs font-medium block mb-1" style={{ color: "#666" }}>Data</label>
+                      <input
+                        type="date"
+                        value={scheduleDate}
+                        min={new Date().toISOString().slice(0, 10)}
+                        onChange={(e) => setScheduleDate(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl text-sm border outline-none focus:ring-2 focus:ring-blue-200"
+                        style={{ borderColor: "#E0E0E0", color: "#1A1A2E" }}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium block mb-1" style={{ color: "#666" }}>Hora</label>
+                      <input
+                        type="time"
+                        value={scheduleTime}
+                        onChange={(e) => setScheduleTime(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl text-sm border outline-none focus:ring-2 focus:ring-blue-200"
+                        style={{ borderColor: "#E0E0E0", color: "#1A1A2E" }}
+                      />
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        onClick={() => setShowScheduleDialog(false)}
+                        className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                        style={{ background: "#F5F5F5", color: "#666" }}
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (scheduleDate && onSchedule) {
+                            onSchedule(title, blocksToPlainText(blocks), scheduleDate, scheduleTime);
+                            toast({ title: "📅 Agendado!", description: `${scheduleDate} às ${scheduleTime}` });
+                            setShowScheduleDialog(false);
+                          }
+                        }}
+                        disabled={!scheduleDate}
+                        className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-colors disabled:opacity-40"
+                        style={{ background: "#1A1A2E" }}
+                      >
+                        Agendar
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </>
           )}
 
           {/* ── FOOTER BUTTONS ── */}
           {!readOnly ? (
             editingNote ? (
-              /* Edit mode for existing note: Save + Cancel */
+              /* Edit mode: só voltar e cancelar — salvar é o FAB verde */
               <div
-                className="flex gap-3 px-4 py-1.5 shrink-0"
+                className="flex gap-3 px-4 py-2 shrink-0"
                 style={{
                   background: theme.toolbarBg,
                   borderTop: `1px solid ${theme.lines}`,
-                  paddingBottom: "calc(60px + env(safe-area-inset-bottom))",
+                  paddingBottom: "calc(80px + env(safe-area-inset-bottom))",
                 }}
               >
                 <button
@@ -1449,23 +1487,15 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                 >
                   Cancelar
                 </button>
-                <button
-                  onClick={handleSaveAndBackToView}
-                  disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
-                  className="px-5 py-1.5 rounded-full text-[13px] font-semibold text-white shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50 flex-1"
-                  style={{ background: "#2D9E7F" }}
-                >
-                  Salvar
-                </button>
               </div>
             ) : (
-              /* New note: Draft + Create */
+              /* New note: Rascunho + espaço para o FAB verde */
               <div
-                className="flex gap-3 px-4 py-1.5 shrink-0"
+                className="flex gap-3 px-4 py-2 shrink-0"
                 style={{
                   background: theme.toolbarBg,
                   borderTop: `1px solid ${theme.lines}`,
-                  paddingBottom: "calc(60px + env(safe-area-inset-bottom))",
+                  paddingBottom: "calc(80px + env(safe-area-inset-bottom))",
                 }}
               >
                 <button
@@ -1482,14 +1512,6 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                   style={{ borderColor: theme.borderAccent, color: theme.textMuted }}
                 >
                   Rascunho
-                </button>
-                <button
-                  onClick={() => doSaveAndClose("publicada")}
-                  disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
-                  className="px-5 py-1.5 rounded-full text-[13px] font-semibold text-white shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50 flex-1"
-                  style={{ background: "#2D9E7F" }}
-                >
-                  Criar nota
                 </button>
               </div>
             )
