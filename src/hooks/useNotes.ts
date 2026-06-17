@@ -137,6 +137,8 @@ export function useNotes() {
           font_family: note.fontFamily,
           font_size: note.fontSize,
           status: note.status,
+          updated_at: note.updatedAt.toISOString(),
+          is_pinned: note.isPinned,
           sincronizado: true,
         };
         await (supabase.from("notes") as any).upsert(payload, { onConflict: "id" });
@@ -306,6 +308,7 @@ export function useNotes() {
             font_family: fontFamily || "default",
             font_size: fontSize || "medium",
             status,
+            is_pinned: false,
             sincronizado: true,
           })
           .select()
@@ -425,17 +428,34 @@ export function useNotes() {
 
   // Toggle pinned state for a note
   const togglePinNote = useCallback(async (id: string) => {
-    let newPinned = false;
-    setNotes((prev) => prev.map((n) => {
-      if (n.id !== id) return n;
-      newPinned = !n.isPinned;
-      return { ...n, isPinned: newPinned, sincronizado: false };
-    }));
+    const note = notes.find((n) => n.id === id);
+    if (!note) return;
+
+    const newPinned = !note.isPinned;
+    const now = new Date();
+
+    setNotes((prev) => prev.map((n) => (
+      n.id === id ? { ...n, isPinned: newPinned, updatedAt: now, sincronizado: false } : n
+    )));
+
+    if (!user) {
+      setSyncStatus("offline");
+      return;
+    }
+
     try {
-      await (supabase.from("notes") as any).update({ is_pinned: newPinned, sincronizado: true }).eq("id", id);
+      const { error } = await (supabase.from("notes") as any)
+        .update({ is_pinned: newPinned, updated_at: now.toISOString(), sincronizado: true })
+        .eq("id", id);
+
+      if (error) throw error;
+
       setNotes((prev) => prev.map((n) => n.id === id ? { ...n, sincronizado: true } : n));
-    } catch { setSyncStatus("offline"); }
-  }, []);
+      setSyncStatus("synced");
+    } catch {
+      setSyncStatus("offline");
+    }
+  }, [notes, user]);
 
   // Lock a note: encrypts content+title+images with PIN-derived key. PIN is never stored.
   const lockNoteWithPin = useCallback(async (id: string, pin: string): Promise<boolean> => {
