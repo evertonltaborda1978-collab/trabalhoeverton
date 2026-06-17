@@ -261,6 +261,17 @@ export function useNotes() {
     };
   }, [fetchNotes]);
 
+  // Auto-refresh every 30 seconds when online
+  useEffect(() => {
+    if (!user) return;
+    const id = setInterval(() => {
+      if (navigator.onLine && !syncingRef.current) {
+        fetchNotes();
+      }
+    }, 30000);
+    return () => clearInterval(id);
+  }, [user, fetchNotes]);
+
   const addNote = useCallback(
     async (title: string, content: string, images: string[] = [], color?: string, fontFamily?: string, fontSize?: string, status: "rascunho" | "publicada" = "publicada") => {
       const noteColor = color || COLORS[Math.floor(Math.random() * COLORS.length)];
@@ -711,5 +722,5 @@ export function useNotes() {
     return () => clearInterval(interval);
   }, [notes, reminderAlert]);
 
-  return { notes: activeNotes, trashedNotes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, loading, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert };
+  return { notes: activeNotes, trashedNotes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, loading, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, refreshNotes: fetchNotes };
 }

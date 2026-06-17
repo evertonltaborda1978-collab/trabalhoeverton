@@ -32,7 +32,7 @@ const DEVICE_LABEL_PROMPT_KEY = "device_label_prompt_dismissed";
 
 const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
-  const { notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes } = useNotes();
+  const { notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes, refreshNotes } = useNotes();
   const { appointments, trashedAppointments, addAppointment, updateAppointment, deleteAppointment, restoreAppointment, permanentDeleteAppointment, emptyAppointmentTrash, activeAlert, dismissAlert, snoozeAlert } = useAppointments();
   const { signOut } = useAuth();
   const { currentDevice, fetchDevices } = useDeviceTracking();
@@ -145,6 +145,7 @@ const Index = () => {
             onUnlockNote={unlockNoteWithPin}
             onVerifyPin={verifyNotePin}
             onAddAppointment={addAppointment}
+            onRefresh={refreshNotes}
             syncStatus={syncStatus}
             draftCount={draftCount}
             exportBackup={exportBackup}
