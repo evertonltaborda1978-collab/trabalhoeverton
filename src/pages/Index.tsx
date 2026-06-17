@@ -145,6 +145,7 @@ const Index = () => {
             onUnlockNote={unlockNoteWithPin}
             onVerifyPin={verifyNotePin}
             onAddAppointment={addAppointment}
+            onRefresh={refreshNotes}
             syncStatus={syncStatus}
             draftCount={draftCount}
             exportBackup={exportBackup}
