@@ -30,6 +30,7 @@ interface NotesViewProps {
   onUnlockNote: (id: string, pin: string) => Promise<boolean>;
   onVerifyPin: (id: string, pin: string) => Promise<unknown | null>;
   onAddAppointment?: (title: string, date: Date, time: string, description: string) => void;
+  onRefresh?: () => void;
   syncStatus: SyncStatus;
   draftCount: number;
   exportBackup: () => boolean;
@@ -41,7 +42,7 @@ interface NotesViewProps {
   onEmptyTrash: () => void;
 }
 
-export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onTogglePin, onLockNote, onUnlockNote, onVerifyPin, onAddAppointment, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, trashedNotes, onRestoreNote, onPermanentDeleteNote, onEmptyTrash }: NotesViewProps) {
+export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onTogglePin, onLockNote, onUnlockNote, onVerifyPin, onAddAppointment, onRefresh, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, trashedNotes, onRestoreNote, onPermanentDeleteNote, onEmptyTrash }: NotesViewProps) {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
@@ -272,6 +273,16 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
           <button onClick={() => setShowBackupMenu(!showBackupMenu)} className="flex items-center gap-1 transition-opacity hover:opacity-70" title={syncStatus === "synced" ? "Sincronizado" : syncStatus === "syncing" ? "Sincronizando..." : "Sem conexão"}>
             {syncIcon()}
           </button>
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              disabled={syncStatus === "syncing"}
+              className="flex items-center justify-center p-1 rounded-full transition-opacity hover:opacity-70 disabled:opacity-40"
+              title="Atualizar notas"
+            >
+              <RefreshCw size={14} className={syncStatus === "syncing" ? "animate-spin" : ""} style={{ color: "#9E9E9E" }} />
+            </button>
+          )}
           {draftCount > 0 && (
             <span className="text-[11px] font-semibold" style={{ color: "#F9A825" }}>
               ✏️ {draftCount} rascunho{draftCount > 1 ? "s" : ""} pendente{draftCount > 1 ? "s" : ""}
