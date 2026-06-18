@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,17 @@ export function EditAddressModal({ deviceId, deviceName, currentAddress, lat, ln
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [savedAddress, setSavedAddress] = useState<string | null>(null);
+
+  // Interceptar botão voltar do Android para fechar o modal
+  useEffect(() => {
+    window.history.pushState({ modal: "edit-address" }, "");
+    const handlePopState = () => {
+      onClose();
+      window.history.pushState({ page: "app" }, "");
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [onClose]);
 
   const set = (k: keyof typeof fields) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setFields((p) => ({ ...p, [k]: e.target.value }));
