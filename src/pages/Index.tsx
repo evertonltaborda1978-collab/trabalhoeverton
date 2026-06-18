@@ -50,6 +50,27 @@ const Index = () => {
     };
   }, []);
 
+  // Interceptar botão físico de voltar do Android
+  useEffect(() => {
+    // Adiciona uma entrada no histórico para capturar o evento popstate
+    window.history.pushState({ page: "app" }, "");
+
+    const handlePopState = () => {
+      if (tab !== "notes") {
+        // Se não estiver nas notas, volta para notas
+        setTab("notes");
+        // Reempurra o estado para continuar capturando
+        window.history.pushState({ page: "app" }, "");
+      } else {
+        // Se já estiver nas notas, minimiza o app (comportamento padrão do Android)
+        window.history.pushState({ page: "app" }, "");
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [tab]);
+
   useEffect(() => {
     const dismissedId = localStorage.getItem(DEVICE_LABEL_PROMPT_KEY);
     if (currentDevice && !currentDevice.custom_label && dismissedId !== currentDevice.id) {
