@@ -473,7 +473,10 @@ export function LocationView() {
           deviceName={editingDevice.name}
           currentAddress={editingDevice.address}
           onClose={() => setEditingDevice(null)}
-          onSaved={fetchDevices}
+          onSaved={(savedAddress?: string) => {
+            fetchDevices();
+            if (savedAddress) setCurrentAddress(savedAddress);
+          }}
         />
       )}
     </div>
