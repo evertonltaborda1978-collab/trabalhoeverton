@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { MoonPhaseWidget } from "@/components/MoonPhaseWidget";
 import { BottomNav } from "@/components/BottomNav";
 import { NotesView } from "@/components/NotesView";
@@ -32,7 +32,8 @@ const DEVICE_LABEL_PROMPT_KEY = "device_label_prompt_dismissed";
 
 const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
-  const [tabHistory, setTabHistory] = useState<Tab[]>([]);
+  const tabHistoryRef = useRef<Tab[]>([]);
+  const tabRef = useRef<Tab>("notes");
   const { notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes, refreshNotes } = useNotes();
   const { appointments, trashedAppointments, addAppointment, updateAppointment, deleteAppointment, restoreAppointment, permanentDeleteAppointment, emptyAppointmentTrash, activeAlert, dismissAlert, snoozeAlert } = useAppointments();
   const { signOut } = useAuth();
@@ -54,25 +55,27 @@ const Index = () => {
   // Interceptar botão físico de voltar do Android
   useEffect(() => {
     window.history.pushState({ page: "app" }, "");
+    window.history.pushState({ page: "app" }, "");
 
     const handlePopState = () => {
-      if (tabHistory.length > 0) {
-        // Volta para a aba anterior
-        const prev = tabHistory[tabHistory.length - 1];
-        setTabHistory((h) => h.slice(0, -1));
+      const history = tabHistoryRef.current;
+      if (history.length > 0) {
+        const prev = history[history.length - 1];
+        tabHistoryRef.current = history.slice(0, -1);
+        tabRef.current = prev;
         setTab(prev);
       }
-      // Sempre reempurra para continuar capturando
       window.history.pushState({ page: "app" }, "");
     };
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [tabHistory]);
+  }, []);
 
   // Função para trocar de aba guardando histórico
   const changeTab = (newTab: Tab) => {
-    setTabHistory((h) => [...h, tab]);
+    tabHistoryRef.current = [...tabHistoryRef.current, tabRef.current];
+    tabRef.current = newTab;
     setTab(newTab);
   };
 
