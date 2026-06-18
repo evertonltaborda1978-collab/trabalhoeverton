@@ -16,8 +16,6 @@ export interface UserDevice {
   manual_address_updated_at?: string | null;
 }
 
-const FINGERPRINT_KEY = "sv_device_fp_v2";
-
 function getDeviceInfo() {
   const ua = navigator.userAgent;
   let browser = "Desconhecido";
@@ -35,19 +33,18 @@ function getDeviceInfo() {
   else if (ua.includes("Linux")) os = "Linux";
 
   const deviceName = /Mobile|Android|iPhone|iPad/.test(ua) ? "Celular/Tablet" : "Computador";
-  const device_name = `${deviceName} - ${browser}/${os}`;
 
-  // Fingerprint estável: salvo no localStorage, nunca recalculado
-  let fingerprint = "";
-  try { fingerprint = localStorage.getItem(FINGERPRINT_KEY) || ""; } catch {}
-  if (!fingerprint) {
-    // Chave baseada em características fixas do aparelho
-    fingerprint = btoa(`${device_name}|${(navigator as any).platform || ""}|${(navigator as any).hardwareConcurrency || ""}`)
-      .replace(/[^a-zA-Z0-9]/g, "").slice(0, 32);
-    try { localStorage.setItem(FINGERPRINT_KEY, fingerprint); } catch {}
-  }
+  // Stable fingerprint — only uses values that don't change between sessions
+  const fingerprint = btoa([
+    navigator.language,
+    screen.width,
+    screen.height,
+    screen.colorDepth,
+    (navigator as any).hardwareConcurrency,
+    (navigator as any).platform,
+  ].join('-')).slice(0, 32);
 
-  return { browser, os, device_name, fingerprint };
+  return { browser, os, device_name: `${deviceName} - ${browser}/${os}`, fingerprint };
 }
 
 export function useDeviceTracking() {
@@ -59,28 +56,6 @@ export function useDeviceTracking() {
     if (!user) return;
 
     const info = getDeviceInfo();
-
-    // Limpar duplicatas: manter apenas 1 por device_name (o mais recente)
-    const { data: allDevices } = await supabase
-      .from("user_devices")
-      .select("id, device_name, last_seen_at")
-      .eq("user_id", user.id)
-      .order("last_seen_at", { ascending: false });
-
-    if (allDevices && allDevices.length > 0) {
-      const seen = new Set<string>();
-      const toDelete: string[] = [];
-      for (const d of allDevices) {
-        if (seen.has(d.device_name)) {
-          toDelete.push(d.id);
-        } else {
-          seen.add(d.device_name);
-        }
-      }
-      if (toDelete.length > 0) {
-        await supabase.from("user_devices").delete().in("id", toDelete);
-      }
-    }
 
     // Check if device already exists
     const { data: existing } = await supabase
