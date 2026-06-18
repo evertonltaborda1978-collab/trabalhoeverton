@@ -36,6 +36,8 @@ function buildAddress(f: ReturnType<typeof parseAddress>) {
 export function EditAddressModal({ deviceId, deviceName, currentAddress, lat, lng, onClose, onSaved, onShare }: Props) {
   const [fields, setFields] = useState(parseAddress(currentAddress));
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [savedAddress, setSavedAddress] = useState<string | null>(null);
 
   const set = (k: keyof typeof fields) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setFields((p) => ({ ...p, [k]: e.target.value }));
@@ -58,7 +60,8 @@ export function EditAddressModal({ deviceId, deviceName, currentAddress, lat, ln
     }
     toast({ title: "✏️ Endereço corrigido", description: deviceName });
     onSaved(formatted);
-    onClose();
+    setSaved(true);
+    setSavedAddress(formatted);
   };
 
   const clear = async () => {
@@ -127,11 +130,11 @@ export function EditAddressModal({ deviceId, deviceName, currentAddress, lat, ln
           <Button onClick={save} disabled={saving} className="rounded-xl flex-1">Salvar</Button>
         </div>
 
-        {onShare && lat && lng && (
+        {saved && savedAddress && onShare && lat && lng && (
           <button
             onClick={() => {
-              const formatted = buildAddress(fields);
-              onShare(formatted || currentAddress || "");
+              onShare(savedAddress);
+              onClose();
             }}
             className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
             style={{ background: "rgba(45,158,127,0.10)", color: "#2D9E7F", border: "1.5px solid rgba(45,158,127,0.3)" }}
