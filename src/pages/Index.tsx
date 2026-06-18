@@ -34,6 +34,9 @@ const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
   const tabHistoryRef = useRef<Tab[]>([]);
   const tabRef = useRef<Tab>("notes");
+  const [activeModal, setActiveModal] = useState<string | null>(null);
+  const activeModalRef = useRef<string | null>(null);
+  const onModalCloseRef = useRef<(() => void) | null>(null);
   const { notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes, refreshNotes } = useNotes();
   const { appointments, trashedAppointments, addAppointment, updateAppointment, deleteAppointment, restoreAppointment, permanentDeleteAppointment, emptyAppointmentTrash, activeAlert, dismissAlert, snoozeAlert } = useAppointments();
   const { signOut } = useAuth();
@@ -58,6 +61,15 @@ const Index = () => {
     window.history.pushState({ page: "app" }, "");
 
     const handlePopState = () => {
+      // Se há modal aberto, fecha o modal
+      if (activeModalRef.current && onModalCloseRef.current) {
+        onModalCloseRef.current();
+        activeModalRef.current = null;
+        setActiveModal(null);
+        window.history.pushState({ page: "app" }, "");
+        return;
+      }
+      // Senão, volta para aba anterior
       const history = tabHistoryRef.current;
       if (history.length > 0) {
         const prev = history[history.length - 1];
@@ -78,6 +90,25 @@ const Index = () => {
     tabRef.current = newTab;
     setTab(newTab);
   };
+
+  // Registrar/desregistrar modais para o botão voltar
+  useEffect(() => {
+    (window as any).__registerModal = (id: string, onClose: () => void) => {
+      activeModalRef.current = id;
+      onModalCloseRef.current = onClose;
+      setActiveModal(id);
+      window.history.pushState({ modal: id }, "");
+    };
+    (window as any).__unregisterModal = () => {
+      activeModalRef.current = null;
+      onModalCloseRef.current = null;
+      setActiveModal(null);
+    };
+    return () => {
+      delete (window as any).__registerModal;
+      delete (window as any).__unregisterModal;
+    };
+  }, []);
 
   useEffect(() => {
     const dismissedId = localStorage.getItem(DEVICE_LABEL_PROMPT_KEY);
