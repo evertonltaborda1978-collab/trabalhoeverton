@@ -16,6 +16,33 @@ export interface UserDevice {
   manual_address_updated_at?: string | null;
 }
 
+const FINGERPRINT_KEY = "sv_device_fingerprint";
+
+function getStableFingerprint(): string {
+  // Reutiliza o fingerprint salvo no localStorage — nunca muda entre sessões
+  try {
+    const saved = localStorage.getItem(FINGERPRINT_KEY);
+    if (saved) return saved;
+  } catch {}
+
+  // Gera um novo fingerprint estável baseado em características fixas do dispositivo
+  const ua = navigator.userAgent;
+  const raw = [
+    ua.replace(/\d+/g, "X"), // remove versões (que mudam com updates)
+    (navigator as any).platform || "",
+    (navigator as any).hardwareConcurrency || "",
+    screen.colorDepth || "",
+  ].join("|");
+
+  const fingerprint = btoa(raw).replace(/[^a-zA-Z0-9]/g, "").slice(0, 32);
+
+  try {
+    localStorage.setItem(FINGERPRINT_KEY, fingerprint);
+  } catch {}
+
+  return fingerprint;
+}
+
 function getDeviceInfo() {
   const ua = navigator.userAgent;
   let browser = "Desconhecido";
@@ -33,16 +60,7 @@ function getDeviceInfo() {
   else if (ua.includes("Linux")) os = "Linux";
 
   const deviceName = /Mobile|Android|iPhone|iPad/.test(ua) ? "Celular/Tablet" : "Computador";
-
-  // Stable fingerprint — only uses values that don't change between sessions
-  const fingerprint = btoa([
-    navigator.language,
-    screen.width,
-    screen.height,
-    screen.colorDepth,
-    (navigator as any).hardwareConcurrency,
-    (navigator as any).platform,
-  ].join('-')).slice(0, 32);
+  const fingerprint = getStableFingerprint();
 
   return { browser, os, device_name: `${deviceName} - ${browser}/${os}`, fingerprint };
 }
@@ -56,6 +74,28 @@ export function useDeviceTracking() {
     if (!user) return;
 
     const info = getDeviceInfo();
+
+    // Limpar duplicatas automaticamente — manter apenas o mais recente por fingerprint
+    const { data: allDevices } = await supabase
+      .from("user_devices")
+      .select("id, device_fingerprint, last_seen_at")
+      .eq("user_id", user.id)
+      .order("last_seen_at", { ascending: false });
+
+    if (allDevices && allDevices.length > 0) {
+      const seen = new Map<string, string>();
+      const toDelete: string[] = [];
+      for (const d of allDevices) {
+        if (seen.has(d.device_fingerprint)) {
+          toDelete.push(d.id); // duplicata — apagar
+        } else {
+          seen.set(d.device_fingerprint, d.id); // primeiro (mais recente) — manter
+        }
+      }
+      if (toDelete.length > 0) {
+        await supabase.from("user_devices").delete().in("id", toDelete);
+      }
+    }
 
     // Check if device already exists
     const { data: existing } = await supabase
