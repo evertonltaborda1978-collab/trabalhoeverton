@@ -43,6 +43,7 @@ const Index = () => {
   const { currentDevice, fetchDevices } = useDeviceTracking();
   const [showLabelModal, setShowLabelModal] = useState(false);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [showMoon, setShowMoon] = useState(false);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -172,20 +173,27 @@ const Index = () => {
               />
             </div>
             <div className="flex items-center gap-3">
-              <div
-                className="flex items-center justify-center"
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: "50%",
-                  background: "#FFFFFF",
-                  border: "1px solid #EBEBEB",
-                  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-                }}
-              >
-                <div style={{ transform: "scale(0.75)", transformOrigin: "center center" }}>
-                  <MoonPhaseWidget />
-                </div>
+              <div style={{ position: "relative" }}>
+                <button
+                  onClick={() => setShowMoon((v) => !v)}
+                  className="flex items-center justify-center"
+                  style={{
+                    width: 34, height: 34,
+                    borderRadius: "50%",
+                    background: "#FFFFFF",
+                    border: "1px solid #EBEBEB",
+                    boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+                    fontSize: 18,
+                  }}
+                  title="Fase da lua"
+                >
+                  🌙
+                </button>
+                {showMoon && (
+                  <div style={{ position: "absolute", top: 40, right: 0, zIndex: 100 }}>
+                    <MoonPhaseWidget />
+                  </div>
+                )}
               </div>
               <button
                 onClick={signOut}
