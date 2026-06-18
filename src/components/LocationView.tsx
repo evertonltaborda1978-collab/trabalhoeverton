@@ -38,7 +38,7 @@ export function LocationView() {
   const [lastUpdateAt, setLastUpdateAt] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now());
   const [showAlertModal, setShowAlertModal] = useState<{ deviceId: string; name: string } | null>(null);
-  const [showShareModal, setShowShareModal] = useState<{ lat: number; lng: number } | null>(null);
+  const [showShareModal, setShowShareModal] = useState<{ lat: number; lng: number; address?: string | null } | null>(null);
   const [capturing, setCapturing] = useState(false);
   const [captureProgress, setCaptureProgress] = useState(0);
   const [captureAccuracy, setCaptureAccuracy] = useState<number | null>(null);
@@ -309,7 +309,7 @@ export function LocationView() {
           {capturing ? "Capturando GPS..." : "Localizar agora"}
         </Button>
         <Button
-          onClick={() => position && setShowShareModal({ lat: position.lat, lng: position.lng })}
+          onClick={() => position && setShowShareModal({ lat: position.lat, lng: position.lng, address: currentAddress })}
           disabled={!position}
           variant="outline"
           className="rounded-xl"
@@ -462,7 +462,7 @@ export function LocationView() {
         <ShareLocationModal
           lat={showShareModal.lat}
           lng={showShareModal.lng}
-          address={currentAddress}
+          address={showShareModal.address ?? currentAddress}
           deviceId={currentDevice?.id ?? null}
           onClose={() => setShowShareModal(null)}
         />
@@ -472,10 +472,19 @@ export function LocationView() {
           deviceId={editingDevice.id}
           deviceName={editingDevice.name}
           currentAddress={editingDevice.address}
+          lat={position?.lat}
+          lng={position?.lng}
           onClose={() => setEditingDevice(null)}
           onSaved={(savedAddress?: string) => {
             fetchDevices();
-            if (savedAddress) setCurrentAddress(savedAddress);
+            if (savedAddress) {
+              setCurrentAddress(savedAddress);
+              if (showShareModal) setShowShareModal((prev) => prev ? { ...prev, address: savedAddress } : null);
+            }
+          }}
+          onShare={(address) => {
+            setEditingDevice(null);
+            if (position) setShowShareModal({ lat: position.lat, lng: position.lng, address });
           }}
         />
       )}
