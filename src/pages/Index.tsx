@@ -57,6 +57,8 @@ const Index = () => {
 
   // Interceptar botão físico de voltar do Android
   useEffect(() => {
+    // Empurra 3 estados para garantir que nunca fecha ao voltar
+    window.history.pushState({ page: "app" }, "");
     window.history.pushState({ page: "app" }, "");
     window.history.pushState({ page: "app" }, "");
 
