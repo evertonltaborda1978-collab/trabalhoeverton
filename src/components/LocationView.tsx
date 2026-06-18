@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { MapPin, Navigation, AlertTriangle, Share2, Loader2, MapPinOff, Bell, Lock, Volume2, History, Battery, Globe, Pencil } from "lucide-react";
+import { MapPin, Navigation, AlertTriangle, Share2, Loader2, MapPinOff, Bell, Lock, Volume2, History, Battery, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { UpdateIndicator } from "./local/UpdateIndicator";
@@ -47,8 +47,6 @@ export function LocationView() {
 
   const watchIdRef = useRef<number | null>(null);
   const intervalRef = useRef<number | null>(null);
-  const isBrowser = !/(android|iphone|ipad|ipod).*mobile/i.test(navigator.userAgent) || !window.matchMedia("(display-mode: standalone)").matches;
-
   // Receive remote commands
   useDeviceCommands(currentDevice?.id ?? null, async (cmd) => {
     if (cmd.command === "update_now") {
@@ -238,14 +236,7 @@ export function LocationView() {
 
   return (
     <div className="animate-fade-in space-y-4">
-      {isBrowser && (
-        <div className="rounded-xl p-3 flex gap-2 items-start" style={{ background: "#FFF8E1", border: "1px solid #FFE082" }}>
-          <Globe size={16} style={{ color: "#F57C00" }} className="mt-0.5" />
-          <p className="text-xs leading-snug" style={{ color: "#5D4037" }}>
-            Você está acessando pelo navegador. Para rastreamento contínuo em segundo plano, use o app instalado no dispositivo.
-          </p>
-        </div>
-      )}
+
 
       {/* Map */}
       <div
