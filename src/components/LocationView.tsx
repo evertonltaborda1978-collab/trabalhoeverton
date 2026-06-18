@@ -462,6 +462,7 @@ export function LocationView() {
         <ShareLocationModal
           lat={showShareModal.lat}
           lng={showShareModal.lng}
+          address={currentAddress}
           deviceId={currentDevice?.id ?? null}
           onClose={() => setShowShareModal(null)}
         />
