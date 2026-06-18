@@ -131,7 +131,7 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, on
             style={{
               width: 30, height: 30,
               color: note.isPinned ? "#F9A825" : "#9E9E9E",
-              background: note.isPinned ? "rgba(249,168,37,0.14)" : "transparent",
+              background: note.isPinned ? "rgba(249,168,37,0.14)" : "rgba(158,158,158,0.10)",
             }}
             title={note.isPinned ? "Desafixar nota" : "Fixar nota"}
           >
@@ -143,7 +143,7 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, on
             style={{
               width: 30, height: 30,
               color: hasReminder ? "#F9A825" : "#9E9E9E",
-              background: hasReminder ? "rgba(249,168,37,0.14)" : "transparent",
+              background: hasReminder ? "rgba(249,168,37,0.14)" : "rgba(158,158,158,0.10)",
             }}
             title={hasReminder ? "Editar lembrete" : "Adicionar lembrete"}
           >
@@ -155,7 +155,7 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, on
             style={{
               width: 30, height: 30,
               color: note.isLocked ? "#F9A825" : "#9E9E9E",
-              background: note.isLocked ? "rgba(249,168,37,0.14)" : "transparent",
+              background: note.isLocked ? "rgba(249,168,37,0.14)" : "rgba(158,158,158,0.10)",
             }}
             title={note.isLocked ? "Gerenciar bloqueio" : "Bloquear nota"}
           >
