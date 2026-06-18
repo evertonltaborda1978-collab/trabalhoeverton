@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 interface Props {
   lat: number;
   lng: number;
+  address?: string | null;
   deviceId?: string | null;
   onClose: () => void;
 }
@@ -18,14 +19,16 @@ const durations: { label: string; hours: number | null }[] = [
   { label: "Sempre", hours: null },
 ];
 
-export function ShareLocationModal({ lat, lng, deviceId, onClose }: Props) {
+export function ShareLocationModal({ lat, lng, address, deviceId, onClose }: Props) {
   const { user } = useAuth();
   const [copied, setCopied] = useState(false);
   const [duration, setDuration] = useState<{ label: string; hours: number | null }>(durations[0]);
   const [publicLink, setPublicLink] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const mapLink = `https://www.google.com/maps?q=${lat},${lng}`;
+  const mapLink = address
+    ? `https://www.google.com/maps?q=${encodeURIComponent(address)}&ll=${lat},${lng}`
+    : `https://www.google.com/maps?q=${lat},${lng}`;
 
   const createPublicLink = async () => {
     if (!user) return;
@@ -49,8 +52,8 @@ export function ShareLocationModal({ lat, lng, deviceId, onClose }: Props) {
   };
 
   const text = publicLink
-    ? `📍 Minha localização (${duration.label}):\n${publicLink}`
-    : `📍 Minha localização:\n${mapLink}`;
+    ? `📍 Minha localização (${duration.label}):\n${address ? address + "\n" : ""}${publicLink}`
+    : `📍 Minha localização:\n${address ? address + "\n" : ""}${mapLink}`;
 
   const copy = async () => {
     await navigator.clipboard.writeText(text);
