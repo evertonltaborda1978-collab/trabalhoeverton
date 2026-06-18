@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X } from "lucide-react";
+import { X, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,8 +10,11 @@ interface Props {
   deviceId: string;
   deviceName: string;
   currentAddress?: string | null;
+  lat?: number | null;
+  lng?: number | null;
   onClose: () => void;
   onSaved: (savedAddress?: string) => void;
+  onShare?: (address: string) => void;
 }
 
 // Try to parse "Rua, Número — Bairro — Cidade — Estado" back into fields
@@ -30,7 +33,7 @@ function buildAddress(f: ReturnType<typeof parseAddress>) {
   return [head, f.bairro, f.cidade, f.estado].filter(Boolean).join(" — ");
 }
 
-export function EditAddressModal({ deviceId, deviceName, currentAddress, onClose, onSaved }: Props) {
+export function EditAddressModal({ deviceId, deviceName, currentAddress, lat, lng, onClose, onSaved, onShare }: Props) {
   const [fields, setFields] = useState(parseAddress(currentAddress));
   const [saving, setSaving] = useState(false);
 
@@ -123,6 +126,19 @@ export function EditAddressModal({ deviceId, deviceName, currentAddress, onClose
           <Button variant="outline" onClick={onClose} disabled={saving} className="rounded-xl flex-1">Cancelar</Button>
           <Button onClick={save} disabled={saving} className="rounded-xl flex-1">Salvar</Button>
         </div>
+
+        {onShare && lat && lng && (
+          <button
+            onClick={() => {
+              const formatted = buildAddress(fields);
+              onShare(formatted || currentAddress || "");
+            }}
+            className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
+            style={{ background: "rgba(45,158,127,0.10)", color: "#2D9E7F", border: "1.5px solid rgba(45,158,127,0.3)" }}
+          >
+            <Share2 size={16} /> Compartilhar este endereço
+          </button>
+        )}
       </div>
     </div>
   );
