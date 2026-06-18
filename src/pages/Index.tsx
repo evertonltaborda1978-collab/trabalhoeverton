@@ -162,10 +162,11 @@ const Index = () => {
               <span
                 className="inline-block rounded-full shrink-0"
                 style={{
-                  width: 8,
-                  height: 8,
+                  width: 12,
+                  height: 12,
                   background: isOnline ? "#43A047" : "#BDBDBD",
                   transition: "background 0.3s",
+                  boxShadow: isOnline ? "0 0 6px rgba(67,160,71,0.6)" : "none",
                 }}
                 title={isOnline ? "Online" : "Offline"}
               />
