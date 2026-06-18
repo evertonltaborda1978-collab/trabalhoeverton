@@ -42,6 +42,8 @@ export function LocationView() {
   const [capturing, setCapturing] = useState(false);
   const [captureProgress, setCaptureProgress] = useState(0);
   const [captureAccuracy, setCaptureAccuracy] = useState<number | null>(null);
+  const [currentAddress, setCurrentAddress] = useState<string | null>(null);
+  const [loadingAddress, setLoadingAddress] = useState(false);
 
   const watchIdRef = useRef<number | null>(null);
   const intervalRef = useRef<number | null>(null);
@@ -142,13 +144,18 @@ export function LocationView() {
       setCapturing(false);
     };
 
-    const finish = () => {
+    const finish = async () => {
       cleanup();
       if (best) {
         setPosition(best);
         setLastUpdateAt(Date.now());
         setTracking(true);
         if (currentDevice) recordLocation(currentDevice.id, best.lat, best.lng, best.accuracy, "manual");
+        setLoadingAddress(true);
+        setCurrentAddress(null);
+        const addr = await reverseGeocodeFetch(best.lat, best.lng);
+        setCurrentAddress(addr || "Endereço não encontrado");
+        setLoadingAddress(false);
       }
     };
   }, [currentDevice, recordLocation]);
@@ -302,17 +309,64 @@ export function LocationView() {
       )}
 
       <div className="flex gap-2">
-        <Button onClick={() => captureNow(true)} disabled={loading || capturing} className="flex-1 gap-2 rounded-xl">
+        <Button
+          onClick={() => { setCurrentAddress(null); captureNow(true); }}
+          disabled={loading || capturing}
+          className="flex-1 gap-2 rounded-xl"
+        >
           <Navigation size={16} className={capturing ? "animate-pulse" : ""} />
-          {capturing ? "Capturando..." : "Localizar agora"}
+          {capturing ? "Capturando GPS..." : "Localizar agora"}
         </Button>
-        <Button onClick={tracking ? stopTracking : startTracking} variant="outline" className="rounded-xl text-xs">
-          {tracking ? "Parar" : "Iniciar"}
-        </Button>
-        <Button onClick={() => position && setShowShareModal({ lat: position.lat, lng: position.lng })} disabled={!position} variant="outline" className="rounded-xl">
+        <Button
+          onClick={() => position && setShowShareModal({ lat: position.lat, lng: position.lng })}
+          disabled={!position}
+          variant="outline"
+          className="rounded-xl"
+        >
           <Share2 size={16} />
         </Button>
       </div>
+
+      {/* Box endereço após localizar */}
+      {(loadingAddress || currentAddress) && (
+        <div className="rounded-2xl p-4 flex items-start gap-3" style={{ background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
+          <div className="flex items-center justify-center rounded-full shrink-0" style={{ width: 40, height: 40, background: "rgba(45,158,127,0.15)" }}>
+            {loadingAddress
+              ? <Loader2 size={18} className="animate-spin" style={{ color: "#2D9E7F" }} />
+              : <MapPin size={18} style={{ color: "#2D9E7F" }} />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-bold mb-1" style={{ color: "#2D9E7F" }}>
+              {loadingAddress ? "Buscando endereço..." : "📍 Endereço encontrado"}
+            </p>
+            {!loadingAddress && (
+              <>
+                <p className="text-sm font-semibold break-words leading-snug" style={{ color: "#1A1A2E" }}>
+                  {currentAddress}
+                </p>
+                {position && (
+                  <p className="text-[10px] mt-1" style={{ color: "#9E9E9E" }}>
+                    ±{Math.round(position.accuracy)}m · {new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+          {!loadingAddress && currentDevice && currentAddress && currentAddress !== "Endereço não encontrado" && (
+            <button
+              onClick={() => {
+                const name = currentDevice.custom_label || currentDevice.device_name;
+                setEditingDevice({ id: currentDevice.id, name, address: currentAddress });
+              }}
+              className="flex items-center justify-center rounded-full shrink-0 transition-all active:scale-95"
+              style={{ width: 36, height: 36, background: "rgba(45,158,127,0.15)", color: "#2D9E7F", border: "1.5px solid rgba(45,158,127,0.3)" }}
+              title="Editar endereço"
+            >
+              <Pencil size={16} />
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Devices list */}
       <div>
