@@ -1409,7 +1409,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                 </button>
               </div>
 
-              {/* Salvar ✓ — direita */}
+              {/* Salvar ✓ — centro */}
               <button
                 onClick={editingNote ? handleSaveAndBackToView : () => doSaveAndClose("publicada")}
                 disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
@@ -1419,6 +1419,9 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
               >
                 <Check size={22} color="#FFF" strokeWidth={2.5} />
               </button>
+
+              {/* Espaço vazio — direita (para centralizar o botão salvar) */}
+              <div style={{ width: 48, height: 48 }} />
             </div>
           ) : (
             <div
