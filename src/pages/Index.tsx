@@ -57,21 +57,23 @@ const Index = () => {
 
   // Interceptar botão físico de voltar do Android
   useEffect(() => {
-    // Empurra 3 estados para garantir que nunca fecha ao voltar
-    window.history.pushState({ page: "app" }, "");
-    window.history.pushState({ page: "app" }, "");
-    window.history.pushState({ page: "app" }, "");
+    const SENTINEL = { page: "app-sentinel" };
+    window.history.replaceState(SENTINEL, "");
+    window.history.pushState(SENTINEL, "");
 
     const handlePopState = () => {
+      // Reempurra IMEDIATAMENTE para nunca fechar o app
+      window.history.pushState(SENTINEL, "");
+
       // Se há modal aberto, fecha o modal
       if (activeModalRef.current && onModalCloseRef.current) {
         onModalCloseRef.current();
         activeModalRef.current = null;
         setActiveModal(null);
-        window.history.pushState({ page: "app" }, "");
         return;
       }
-      // Senão, volta para aba anterior
+
+      // Volta para aba anterior se houver histórico
       const history = tabHistoryRef.current;
       if (history.length > 0) {
         const prev = history[history.length - 1];
@@ -79,7 +81,6 @@ const Index = () => {
         tabRef.current = prev;
         setTab(prev);
       }
-      window.history.pushState({ page: "app" }, "");
     };
 
     window.addEventListener("popstate", handlePopState);
