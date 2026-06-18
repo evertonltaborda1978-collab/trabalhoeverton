@@ -11,7 +11,7 @@ interface Props {
   deviceName: string;
   currentAddress?: string | null;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (savedAddress?: string) => void;
 }
 
 // Try to parse "Rua, Número — Bairro — Cidade — Estado" back into fields
@@ -54,7 +54,7 @@ export function EditAddressModal({ deviceId, deviceName, currentAddress, onClose
       return;
     }
     toast({ title: "✏️ Endereço corrigido", description: deviceName });
-    onSaved();
+    onSaved(formatted);
     onClose();
   };
 
