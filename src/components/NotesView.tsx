@@ -269,15 +269,19 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
     <div>
       {/* Sync indicator + draft counter + trash */}
       <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <button onClick={() => setShowBackupMenu(!showBackupMenu)} className="flex items-center gap-1 transition-opacity hover:opacity-70" title={syncStatus === "synced" ? "Sincronizado" : syncStatus === "syncing" ? "Sincronizando..." : "Sem conexão"}>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowBackupMenu(!showBackupMenu)}
+            className="flex items-center justify-center w-8 h-8 rounded-full bg-white border border-[#EBEBEB] shadow-sm transition-opacity hover:opacity-70"
+            title={syncStatus === "synced" ? "Sincronizado" : syncStatus === "syncing" ? "Sincronizando..." : "Sem conexão"}
+          >
             {syncIcon()}
           </button>
           {onRefresh && (
             <button
               onClick={onRefresh}
               disabled={syncStatus === "syncing"}
-              className="flex items-center justify-center p-1 rounded-full transition-opacity hover:opacity-70 disabled:opacity-40"
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-white border border-[#EBEBEB] shadow-sm transition-opacity hover:opacity-70 disabled:opacity-40"
               title="Atualizar notas"
             >
               <RefreshCw size={14} className={syncStatus === "syncing" ? "animate-spin" : ""} style={{ color: "#9E9E9E" }} />
@@ -291,13 +295,13 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
         </div>
         <button
           onClick={() => setShowTrash(true)}
-          className="relative p-2 rounded-lg transition-colors hover:bg-black/5"
+          className="relative flex items-center justify-center w-9 h-9 rounded-full bg-white border border-[#EBEBEB] shadow-sm transition-colors hover:bg-black/5"
           title="Lixeira"
         >
           <Trash2 size={18} style={{ color: "#999" }} />
           {trashedNotes.length > 0 && (
             <span
-              className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-white text-[10px] font-bold"
+              className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-white text-[10px] font-bold"
               style={{ background: "#E53935" }}
             >
               {trashedNotes.length}
