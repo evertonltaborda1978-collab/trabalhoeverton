@@ -107,16 +107,28 @@ const Index = () => {
                 title={isOnline ? "Online" : "Offline"}
               />
             </div>
-            <div className="flex items-center gap-2">
-              <div style={{ transform: "scale(0.8)", transformOrigin: "right center" }}>
-                <MoonPhaseWidget />
+            <div className="flex items-center gap-3">
+              <div
+                className="flex items-center justify-center"
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: "50%",
+                  background: "#FFFFFF",
+                  border: "1px solid #EBEBEB",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+                }}
+              >
+                <div style={{ transform: "scale(0.75)", transformOrigin: "center center" }}>
+                  <MoonPhaseWidget />
+                </div>
               </div>
               <button
                 onClick={signOut}
                 className="flex items-center justify-center transition-all duration-200 hover:scale-105"
                 style={{
-                  width: 30,
-                  height: 30,
+                  width: 34,
+                  height: 34,
                   borderRadius: "50%",
                   background: "#FFFFFF",
                   border: "1px solid #EBEBEB",
@@ -124,7 +136,7 @@ const Index = () => {
                 }}
                 title="Sair"
               >
-                <LogOut size={14} style={{ color: "#1A1A2E" }} />
+                <LogOut size={15} style={{ color: "#1A1A2E" }} />
               </button>
             </div>
           </div>
