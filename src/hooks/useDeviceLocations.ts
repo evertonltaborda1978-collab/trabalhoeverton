@@ -29,12 +29,19 @@ async function getBattery(): Promise<number | null> {
 
 export async function reverseGeocodeFetch(lat: number, lng: number): Promise<string | null> {
   try {
-    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-geocode?mode=reverse&lat=${lat}&lng=${lng}`;
-    const resp = await fetch(url, {
-      headers: { Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
-    });
+    const resp = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=pt-BR`,
+      { headers: { "User-Agent": "SecretariaVirtualApp/1.0" } }
+    );
     const j = await resp.json();
-    return j.results?.[0]?.formatted ?? null;
+    if (!j.address) return null;
+    const a = j.address;
+    const rua = a.road || a.pedestrian || a.footway || a.street || "";
+    const numero = a.house_number ? `, ${a.house_number}` : "";
+    const bairro = a.suburb || a.neighbourhood || a.quarter || a.district || "";
+    const cidade = a.city || a.town || a.village || a.municipality || "";
+    const estado = a.state || "";
+    return [rua + numero, bairro, cidade, estado].filter(Boolean).join(" — ");
   } catch {
     return null;
   }
@@ -42,12 +49,16 @@ export async function reverseGeocodeFetch(lat: number, lng: number): Promise<str
 
 export async function forwardGeocodeFetch(query: string): Promise<{ formatted: string; lat: number; lng: number }[]> {
   try {
-    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-geocode?mode=forward&q=${encodeURIComponent(query)}`;
-    const resp = await fetch(url, {
-      headers: { Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
-    });
+    const resp = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&accept-language=pt-BR&limit=5`,
+      { headers: { "User-Agent": "SecretariaVirtualApp/1.0" } }
+    );
     const j = await resp.json();
-    return j.results || [];
+    return (j || []).map((r: any) => ({
+      formatted: r.display_name,
+      lat: parseFloat(r.lat),
+      lng: parseFloat(r.lon),
+    }));
   } catch {
     return [];
   }
