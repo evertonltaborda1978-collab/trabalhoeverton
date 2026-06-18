@@ -32,6 +32,7 @@ const DEVICE_LABEL_PROMPT_KEY = "device_label_prompt_dismissed";
 
 const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
+  const [tabHistory, setTabHistory] = useState<Tab[]>([]);
   const { notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes, refreshNotes } = useNotes();
   const { appointments, trashedAppointments, addAppointment, updateAppointment, deleteAppointment, restoreAppointment, permanentDeleteAppointment, emptyAppointmentTrash, activeAlert, dismissAlert, snoozeAlert } = useAppointments();
   const { signOut } = useAuth();
@@ -52,24 +53,28 @@ const Index = () => {
 
   // Interceptar botão físico de voltar do Android
   useEffect(() => {
-    // Adiciona uma entrada no histórico para capturar o evento popstate
     window.history.pushState({ page: "app" }, "");
 
     const handlePopState = () => {
-      if (tab !== "notes") {
-        // Se não estiver nas notas, volta para notas
-        setTab("notes");
-        // Reempurra o estado para continuar capturando
-        window.history.pushState({ page: "app" }, "");
-      } else {
-        // Se já estiver nas notas, minimiza o app (comportamento padrão do Android)
-        window.history.pushState({ page: "app" }, "");
+      if (tabHistory.length > 0) {
+        // Volta para a aba anterior
+        const prev = tabHistory[tabHistory.length - 1];
+        setTabHistory((h) => h.slice(0, -1));
+        setTab(prev);
       }
+      // Sempre reempurra para continuar capturando
+      window.history.pushState({ page: "app" }, "");
     };
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [tab]);
+  }, [tabHistory]);
+
+  // Função para trocar de aba guardando histórico
+  const changeTab = (newTab: Tab) => {
+    setTabHistory((h) => [...h, tab]);
+    setTab(newTab);
+  };
 
   useEffect(() => {
     const dismissedId = localStorage.getItem(DEVICE_LABEL_PROMPT_KEY);
@@ -210,7 +215,7 @@ const Index = () => {
       </main>
 
       {/* Bottom Navigation */}
-      <BottomNav active={tab} onChange={setTab} />
+      <BottomNav active={tab} onChange={changeTab} />
       <SnoozeAlert alert={activeAlert || reminderAlert} onDismiss={(id) => { dismissAlert(id); dismissReminderAlert(id); }} onSnooze={(id, min) => { snoozeAlert(id, min); snoozeReminderAlert(id, min); }} />
       {showLabelModal && currentDevice && (
         <DeviceLabelModal
