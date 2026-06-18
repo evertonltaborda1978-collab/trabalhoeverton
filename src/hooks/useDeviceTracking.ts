@@ -16,32 +16,7 @@ export interface UserDevice {
   manual_address_updated_at?: string | null;
 }
 
-const FINGERPRINT_KEY = "sv_device_fingerprint";
-
-function getStableFingerprint(): string {
-  // Reutiliza o fingerprint salvo no localStorage — nunca muda entre sessões
-  try {
-    const saved = localStorage.getItem(FINGERPRINT_KEY);
-    if (saved) return saved;
-  } catch {}
-
-  // Gera um novo fingerprint estável baseado em características fixas do dispositivo
-  const ua = navigator.userAgent;
-  const raw = [
-    ua.replace(/\d+/g, "X"), // remove versões (que mudam com updates)
-    (navigator as any).platform || "",
-    (navigator as any).hardwareConcurrency || "",
-    screen.colorDepth || "",
-  ].join("|");
-
-  const fingerprint = btoa(raw).replace(/[^a-zA-Z0-9]/g, "").slice(0, 32);
-
-  try {
-    localStorage.setItem(FINGERPRINT_KEY, fingerprint);
-  } catch {}
-
-  return fingerprint;
-}
+const FINGERPRINT_KEY = "sv_device_fp_v2";
 
 function getDeviceInfo() {
   const ua = navigator.userAgent;
@@ -60,9 +35,19 @@ function getDeviceInfo() {
   else if (ua.includes("Linux")) os = "Linux";
 
   const deviceName = /Mobile|Android|iPhone|iPad/.test(ua) ? "Celular/Tablet" : "Computador";
-  const fingerprint = getStableFingerprint();
+  const device_name = `${deviceName} - ${browser}/${os}`;
 
-  return { browser, os, device_name: `${deviceName} - ${browser}/${os}`, fingerprint };
+  // Fingerprint estável: salvo no localStorage, nunca recalculado
+  let fingerprint = "";
+  try { fingerprint = localStorage.getItem(FINGERPRINT_KEY) || ""; } catch {}
+  if (!fingerprint) {
+    // Chave baseada em características fixas do aparelho
+    fingerprint = btoa(`${device_name}|${(navigator as any).platform || ""}|${(navigator as any).hardwareConcurrency || ""}`)
+      .replace(/[^a-zA-Z0-9]/g, "").slice(0, 32);
+    try { localStorage.setItem(FINGERPRINT_KEY, fingerprint); } catch {}
+  }
+
+  return { browser, os, device_name, fingerprint };
 }
 
 export function useDeviceTracking() {
@@ -75,21 +60,21 @@ export function useDeviceTracking() {
 
     const info = getDeviceInfo();
 
-    // Limpar duplicatas automaticamente — manter apenas o mais recente por fingerprint
+    // Limpar duplicatas: manter apenas 1 por device_name (o mais recente)
     const { data: allDevices } = await supabase
       .from("user_devices")
-      .select("id, device_fingerprint, last_seen_at")
+      .select("id, device_name, last_seen_at")
       .eq("user_id", user.id)
       .order("last_seen_at", { ascending: false });
 
     if (allDevices && allDevices.length > 0) {
-      const seen = new Map<string, string>();
+      const seen = new Set<string>();
       const toDelete: string[] = [];
       for (const d of allDevices) {
-        if (seen.has(d.device_fingerprint)) {
-          toDelete.push(d.id); // duplicata — apagar
+        if (seen.has(d.device_name)) {
+          toDelete.push(d.id);
         } else {
-          seen.set(d.device_fingerprint, d.id); // primeiro (mais recente) — manter
+          seen.add(d.device_name);
         }
       }
       if (toDelete.length > 0) {
