@@ -1339,7 +1339,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
             </>
           )}
 
-          {/* ── FOOTER COMPACTO: ← | ⋮ | ✓ ── */}
+          {/* ── FOOTER COMPACTO: ⋮ | ✓ ── */}
           {!readOnly ? (
             <div
               className="flex items-center justify-between px-5 shrink-0"
@@ -1351,35 +1351,14 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                 gap: 16,
               }}
             >
-              {/* Voltar */}
-              <button
-                onClick={handleClose}
-                className="flex items-center justify-center rounded-full transition-all active:scale-95"
-                style={{ background: "transparent", border: `2px solid ${theme.borderAccent}`, width: 48, height: 48, color: theme.textMuted }}
-                title="Voltar"
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
-              </button>
-
-              {/* Salvar ✓ — centro */}
-              <button
-                onClick={editingNote ? handleSaveAndBackToView : () => doSaveAndClose("publicada")}
-                disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
-                className="flex items-center justify-center rounded-full transition-all active:scale-95 disabled:opacity-50"
-                style={{ background: "#2D9E7F", width: 48, height: 48, boxShadow: "0 4px 14px rgba(45,158,127,0.4)" }}
-                title="Salvar"
-              >
-                <Check size={22} color="#FFF" strokeWidth={2.5} />
-              </button>
-
-              {/* FAB ⋮ — direita */}
+              {/* FAB ⋮ — esquerda */}
               <div className="relative">
                 {showFab && (
                   <>
                     <div className="fixed inset-0 z-[60]" onClick={() => setShowFab(false)} />
                     <div
                       className="absolute z-[70] flex flex-col gap-2"
-                      style={{ bottom: 60, right: 0, minWidth: 180 }}
+                      style={{ bottom: 60, left: 0, minWidth: 180 }}
                     >
                       {[
                         { icon: <Camera size={18} />, label: "Câmera", action: () => { cameraInputRef.current?.click(); setShowFab(false); } },
@@ -1429,6 +1408,17 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                   )}
                 </button>
               </div>
+
+              {/* Salvar ✓ — direita */}
+              <button
+                onClick={editingNote ? handleSaveAndBackToView : () => doSaveAndClose("publicada")}
+                disabled={!title.trim() && !blocksToPlainText(blocks).trim()}
+                className="flex items-center justify-center rounded-full transition-all active:scale-95 disabled:opacity-50"
+                style={{ background: "#2D9E7F", width: 48, height: 48, boxShadow: "0 4px 14px rgba(45,158,127,0.4)" }}
+                title="Salvar"
+              >
+                <Check size={22} color="#FFF" strokeWidth={2.5} />
+              </button>
             </div>
           ) : (
             <div
