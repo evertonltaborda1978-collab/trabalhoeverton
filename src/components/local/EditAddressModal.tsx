@@ -39,15 +39,10 @@ export function EditAddressModal({ deviceId, deviceName, currentAddress, lat, ln
   const [saved, setSaved] = useState(false);
   const [savedAddress, setSavedAddress] = useState<string | null>(null);
 
-  // Interceptar botão voltar do Android para fechar o modal
+  // Registrar modal no sistema global de voltar do Android
   useEffect(() => {
-    window.history.pushState({ modal: "edit-address" }, "");
-    const handlePopState = () => {
-      onClose();
-      window.history.pushState({ page: "app" }, "");
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
+    (window as any).__registerModal?.("edit-address", onClose);
+    return () => { (window as any).__unregisterModal?.(); };
   }, [onClose]);
 
   const set = (k: keyof typeof fields) => (e: React.ChangeEvent<HTMLInputElement>) =>
