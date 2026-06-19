@@ -77,6 +77,35 @@ export function getSizeClass(_f: string) { return "text-sm"; }
 // Detect mobile browser
 const isMobileBrowser = () => /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
+// Renderiza texto com links clicáveis
+function renderTextWithLinks(text: string, textColor: string, fontSize: number) {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  return parts.map((part, i) => {
+    if (urlRegex.test(part)) {
+      urlRegex.lastIndex = 0;
+      return (
+        <a
+          key={i}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            color: "#2D9E7F",
+            textDecoration: "underline",
+            fontSize: `${fontSize}px`,
+            wordBreak: "break-all",
+          }}
+        >
+          {part}
+        </a>
+      );
+    }
+    return <span key={i} style={{ color: textColor, fontSize: `${fontSize}px` }}>{part}</span>;
+  });
+}
+
 // Sanitize pasted text on mobile — strip HTML, invisible chars, incompatible line breaks
 function handleMobilePaste(e: React.ClipboardEvent<HTMLInputElement | HTMLTextAreaElement>) {
   if (!isMobileBrowser()) return; // Don't interfere on desktop
@@ -1110,7 +1139,9 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                           WebkitUserSelect: "text",
                         }}
                       >
-                        {block.content || (idx === 0 && blocks.length === 1 ? "Comece a escrever sua nota..." : "")}
+                        {block.content
+                          ? renderTextWithLinks(block.content, block.content ? textColor : placeholderColor, editorFontSize)
+                          : (idx === 0 && blocks.length === 1 ? "Comece a escrever sua nota..." : "")}
                       </div>
                     );
                   }
