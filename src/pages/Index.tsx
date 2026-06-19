@@ -152,7 +152,8 @@ const Index = () => {
       >
         <div className="max-w-lg mx-auto px-4 pt-2 pb-2">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            {/* Esquerda — título + bolinha */}
+            <div className="flex items-center gap-2" style={{ minWidth: 0, flex: 1 }}>
               <h1
                 className="font-display"
                 style={{ fontWeight: 800, fontSize: 19, color: "#1A1A2E" }}
@@ -171,8 +172,12 @@ const Index = () => {
                 title={isOnline ? "Online" : "Offline"}
               />
             </div>
-            <div className="flex items-center gap-3">
+            {/* Centro — fase da lua */}
+            <div className="flex items-center justify-center" style={{ flex: 1 }}>
               <MoonPhaseWidget />
+            </div>
+            {/* Direita — botão sair */}
+            <div className="flex items-center justify-end" style={{ flex: 1 }}>
               <button
                 onClick={signOut}
                 className="flex items-center justify-center transition-all duration-200 hover:scale-105"
