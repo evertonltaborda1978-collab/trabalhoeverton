@@ -7,15 +7,7 @@ export function MoonPhaseWidget() {
   const today = new Date();
 
   return (
-    <div
-      className="flex items-center gap-2 px-3 py-1.5"
-      style={{
-        background: "#FFFFFF",
-        border: "1px solid #EBEBEB",
-        borderRadius: 50,
-        boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-      }}
-    >
+    <div className="flex items-center gap-2">
       <span className="text-xl">{moon.emoji}</span>
       <div className="flex flex-col">
         <span
