@@ -13,6 +13,8 @@ import { DeviceLabelModal } from "@/components/local/DeviceLabelModal";
 import { useNotes } from "@/hooks/useNotes";
 import { useAppointments } from "@/hooks/useAppointments";
 import { useDeviceTracking } from "@/hooks/useDeviceTracking";
+import { useDeviceCommands } from "@/hooks/useDeviceCommands";
+import { useDeviceLocations, reverseGeocodeFetch } from "@/hooks/useDeviceLocations";
 import { useAuth } from "@/contexts/AuthContext";
 import { LogOut } from "lucide-react";
 
@@ -41,8 +43,25 @@ const Index = () => {
   const { appointments, trashedAppointments, addAppointment, updateAppointment, deleteAppointment, restoreAppointment, permanentDeleteAppointment, emptyAppointmentTrash, activeAlert, dismissAlert, snoozeAlert } = useAppointments();
   const { signOut } = useAuth();
   const { currentDevice, fetchDevices } = useDeviceTracking();
+  const { recordLocation } = useDeviceLocations();
   const [showLabelModal, setShowLabelModal] = useState(false);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+
+  // Escuta global de comandos remotos — funciona em qualquer aba, não só na Local
+  useDeviceCommands(currentDevice?.id ?? null, async (cmd) => {
+    if (cmd.command === "update_now") {
+      if (!navigator.geolocation || !currentDevice) return;
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          await recordLocation(currentDevice.id, pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, "remote");
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      );
+    } else if (cmd.command === "ring") {
+      if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500, 200, 500]);
+    }
+  });
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -152,7 +171,7 @@ const Index = () => {
       >
         <div className="max-w-lg mx-auto px-4 pt-2 pb-2">
           <div className="flex items-center justify-between">
-            {/* Esquerda — título + bolinha */}
+            {/* Esquerda — título + pílula online */}
             <div className="flex items-center gap-2" style={{ minWidth: 0, flex: 1 }}>
               <h1
                 className="font-display"
@@ -161,16 +180,33 @@ const Index = () => {
                 {titles[tab]}
               </h1>
               <span
-                className="inline-block rounded-full shrink-0"
+                className="inline-flex items-center gap-1 shrink-0"
                 style={{
-                  width: 12,
-                  height: 12,
-                  background: isOnline ? "#43A047" : "#BDBDBD",
+                  padding: "2px 8px 2px 6px",
+                  borderRadius: 999,
+                  background: isOnline ? "#E8F5E9" : "#F5F5F5",
                   transition: "background 0.3s",
-                  boxShadow: isOnline ? "0 0 6px rgba(67,160,71,0.6)" : "none",
                 }}
-                title={isOnline ? "Online" : "Offline"}
-              />
+              >
+                <span
+                  className="inline-block rounded-full"
+                  style={{
+                    width: 6,
+                    height: 6,
+                    background: isOnline ? "#43A047" : "#9E9E9E",
+                  }}
+                />
+                <span
+                  className="font-bold"
+                  style={{
+                    fontSize: 10,
+                    color: isOnline ? "#2E7D32" : "#757575",
+                    letterSpacing: 0.2,
+                  }}
+                >
+                  {isOnline ? "Online" : "Offline"}
+                </span>
+              </span>
             </div>
             {/* Centro — fase da lua */}
             <div className="flex items-center justify-center" style={{ flex: 1 }}>
