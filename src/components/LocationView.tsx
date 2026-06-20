@@ -47,11 +47,15 @@ export function LocationView() {
 
   const watchIdRef = useRef<number | null>(null);
   const intervalRef = useRef<number | null>(null);
+  const [lostMode, setLostMode] = useState(false);
+  const [trail, setTrail] = useState<Position[]>([]);
+  const lowBatterySavedRef = useRef(false);
+  const captureNowRef = useRef<(accurate?: boolean) => void>(() => {});
   // Receive remote commands
   useDeviceCommands(currentDevice?.id ?? null, async (cmd) => {
     if (cmd.command === "update_now") {
       toast({ title: "📍 Comando recebido", description: "Atualizando localização..." });
-      captureNow(false);
+      captureNowRef.current(false);
     } else if (cmd.command === "ring") {
       toast({ title: "🔔 Alarme remoto", description: "Tocando alarme..." });
       if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500, 200, 500]);
@@ -158,6 +162,11 @@ export function LocationView() {
     };
   }, [currentDevice, recordLocation]);
 
+  // Mantém a ref sempre apontando para a versão mais atual de captureNow
+  useEffect(() => {
+    captureNowRef.current = captureNow;
+  }, [captureNow]);
+
   const startTracking = useCallback(() => {
     if (!navigator.geolocation) {
       setError("Geolocalização não suportada");
@@ -229,6 +238,62 @@ export function LocationView() {
       toast({ title: "Modo emergência desativado" });
     }
   }, [emergencyMode, tracking, startTracking]);
+
+  // Monitorar bateria e salvar localização se estiver crítica
+  useEffect(() => {
+    if (!lostMode) return;
+    let battery: any;
+    const checkBattery = async () => {
+      try {
+        // @ts-ignore
+        if (!navigator.getBattery) return;
+        // @ts-ignore
+        battery = await navigator.getBattery();
+        const handleLevelChange = () => {
+          const pct = Math.round(battery.level * 100);
+          if (pct <= 20 && !lowBatterySavedRef.current && currentDevice && position) {
+            lowBatterySavedRef.current = true;
+            recordLocation(currentDevice.id, position.lat, position.lng, position.accuracy, "low_battery");
+            toast({ title: "🔋 Bateria crítica", description: "Última localização salva automaticamente." });
+          }
+        };
+        battery.addEventListener("levelchange", handleLevelChange);
+        handleLevelChange();
+        return () => battery.removeEventListener("levelchange", handleLevelChange);
+      } catch {}
+    };
+    checkBattery();
+  }, [lostMode, currentDevice, position, recordLocation]);
+
+  // Acumular trilha de localizações durante o modo "perdi meu aparelho"
+  useEffect(() => {
+    if (!lostMode || !position) return;
+    setTrail((prev) => {
+      const last = prev[prev.length - 1];
+      if (last && last.lat === position.lat && last.lng === position.lng) return prev;
+      return [...prev, position].slice(-50); // mantém últimas 50 posições
+    });
+  }, [lostMode, position]);
+
+  const toggleLostMode = useCallback(() => {
+    if (!lostMode) {
+      setLostMode(true);
+      lowBatterySavedRef.current = false;
+      setTrail(position ? [position] : []);
+      if (!emergencyMode) {
+        setEmergencyMode(true);
+        if (!tracking) startTracking();
+      }
+      toast({ title: "🚨 Modo \"Perdi meu aparelho\" ativado", description: "Rastreamento contínuo, trilha e monitor de bateria ativos." });
+      if (position) {
+        setTimeout(() => setShowShareModal({ lat: position.lat, lng: position.lng, address: currentAddress }), 600);
+      }
+    } else {
+      setLostMode(false);
+      setEmergencyMode(false);
+      toast({ title: "Modo \"Perdi meu aparelho\" desativado" });
+    }
+  }, [lostMode, emergencyMode, tracking, startTracking, position, currentAddress]);
 
   const mapSrc = position
     ? `https://maps.google.com/maps?q=${position.lat},${position.lng}&z=17&output=embed`
@@ -318,6 +383,36 @@ export function LocationView() {
           <Share2 size={16} />
         </Button>
       </div>
+
+      {/* Botão discreto: Perdi meu aparelho */}
+      <button
+        onClick={toggleLostMode}
+        className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold transition-colors"
+        style={{ color: lostMode ? "#E53935" : "#9E9E9E" }}
+      >
+        {lostMode ? "🔴 Modo \"Perdi meu aparelho\" ativo — toque para desativar" : "🚨 Perdi meu aparelho"}
+      </button>
+
+      {lostMode && trail.length > 1 && (
+        <div className="rounded-2xl p-3 flex items-center justify-between" style={{ background: "#FFF5F5", border: "1px solid #FFCDD2" }}>
+          <div className="flex items-center gap-2">
+            <History size={14} style={{ color: "#E53935" }} />
+            <span className="text-[11px] font-semibold" style={{ color: "#C62828" }}>
+              {trail.length} pontos registrados na trilha
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              const path = trail.map((p) => `${p.lat},${p.lng}`).join("/");
+              window.open(`https://www.google.com/maps/dir/${path}`, "_blank");
+            }}
+            className="text-[11px] font-bold underline"
+            style={{ color: "#E53935" }}
+          >
+            Ver trilha
+          </button>
+        </div>
+      )}
 
       {/* Box endereço após localizar */}
       {(loadingAddress || currentAddress) && (
