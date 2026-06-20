@@ -53,18 +53,9 @@ export function LocationView() {
   const [trail, setTrail] = useState<Position[]>([]);
   const lowBatterySavedRef = useRef(false);
   const captureNowRef = useRef<(accurate?: boolean) => void>(() => {});
-  // Receive remote commands
-  useDeviceCommands(currentDevice?.id ?? null, async (cmd) => {
-    if (cmd.command === "update_now") {
-      toast({ title: "📍 Comando recebido", description: "Atualizando localização..." });
-      captureNowRef.current(false);
-    } else if (cmd.command === "ring") {
-      toast({ title: "🔔 Alarme remoto", description: "Tocando alarme..." });
-      if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500, 200, 500]);
-    } else if (cmd.command === "lock") {
-      toast({ title: "🔒 Bloqueio remoto recebido", variant: "destructive" });
-    }
-  });
+  // Comandos remotos agora são escutados globalmente em Index.tsx (funciona em qualquer aba).
+  // Aqui apenas refletimos: se uma localização nova chegar via Supabase Realtime (latestByDevice),
+  // a tela atualiza sozinha através do hook useDeviceLocations já usado abaixo.
 
   useEffect(() => {
     if (!tracking) return;
