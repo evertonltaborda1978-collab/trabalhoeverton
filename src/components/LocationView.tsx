@@ -50,6 +50,7 @@ export function LocationView() {
   const [lostMode, setLostMode] = useState(false);
   const [showLostDevicePicker, setShowLostDevicePicker] = useState(false);
   const [lostDeviceId, setLostDeviceId] = useState<string | null>(null);
+  const [waitingRemoteLocation, setWaitingRemoteLocation] = useState(false);
   const [trail, setTrail] = useState<Position[]>([]);
   const lowBatterySavedRef = useRef(false);
   const captureNowRef = useRef<(accurate?: boolean) => void>(() => {});
@@ -286,14 +287,39 @@ export function LocationView() {
         setTimeout(() => setShowShareModal({ lat: position.lat, lng: position.lng, address: currentAddress }), 600);
       }
     } else {
-      // É outro aparelho — envia comando remoto para ele se rastrear
+      // É outro aparelho — guarda o timestamp atual para detectar quando a NOVA localização chegar
+      lostDeviceWaitSinceRef.current = Date.now();
+      setWaitingRemoteLocation(true);
       sendCommand(deviceId, "update_now");
     }
 
     const device = devices.find((d) => d.id === deviceId);
     const name = device?.custom_label || device?.device_name || "aparelho";
-    toast({ title: "🚨 Buscando: " + name, description: isCurrentDevice ? "Rastreamento contínuo ativo neste aparelho." : "Comando de localização enviado ao aparelho." });
+    toast({ title: "🚨 Buscando: " + name, description: isCurrentDevice ? "Rastreamento contínuo ativo neste aparelho." : "Aguardando o aparelho responder..." });
   }, [currentDevice, emergencyMode, tracking, startTracking, position, currentAddress, devices, sendCommand]);
+
+  // Quando o aparelho remoto responder com uma localização nova, abre o mapa automaticamente
+  const lostDeviceWaitSinceRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!lostMode || !lostDeviceId) return;
+    if (currentDevice?.id === lostDeviceId) return; // local já trata via position acima
+
+    const loc = latestByDevice[lostDeviceId];
+    if (!loc) return;
+    const recordedAt = new Date(loc.recorded_at).getTime();
+    if (lostDeviceWaitSinceRef.current && recordedAt >= lostDeviceWaitSinceRef.current) {
+      lostDeviceWaitSinceRef.current = null;
+      setWaitingRemoteLocation(false);
+      const device = devices.find((d) => d.id === lostDeviceId);
+      const name = device?.custom_label || device?.device_name || "aparelho";
+      const displayAddress = device?.manual_address || loc.address;
+      const href = displayAddress
+        ? `https://www.google.com/maps?q=${encodeURIComponent(displayAddress)}&ll=${loc.latitude},${loc.longitude}`
+        : `https://www.google.com/maps?q=${loc.latitude},${loc.longitude}`;
+      toast({ title: "📍 Localização encontrada!", description: name });
+      window.open(href, "_blank");
+    }
+  }, [lostMode, lostDeviceId, currentDevice, latestByDevice, devices]);
 
   const toggleLostMode = useCallback(() => {
     if (!lostMode) {
@@ -302,6 +328,8 @@ export function LocationView() {
       setLostMode(false);
       setLostDeviceId(null);
       setEmergencyMode(false);
+      setWaitingRemoteLocation(false);
+      lostDeviceWaitSinceRef.current = null;
       toast({ title: "Modo \"Perdi meu aparelho\" desativado" });
     }
   }, [lostMode]);
@@ -535,10 +563,14 @@ export function LocationView() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-bold text-[15px]" style={{ color: "#C62828" }}>
-              {lostMode ? "🔴 Buscando aparelho..." : "Perdi meu aparelho"}
+              {waitingRemoteLocation ? "🔄 Aguardando aparelho..." : lostMode ? "🔴 Buscando aparelho..." : "Perdi meu aparelho"}
             </p>
             <p className="text-[12px]" style={{ color: "#C62828", opacity: 0.85 }}>
-              {lostMode ? "Rastreio contínuo, trilha e bateria ativos" : "Rastreia, salva trilha e monitora bateria"}
+              {waitingRemoteLocation
+                ? "O mapa abrirá automaticamente quando localizado"
+                : lostMode
+                ? "Rastreio contínuo, trilha e bateria ativos"
+                : "Rastreia, salva trilha e monitora bateria"}
             </p>
           </div>
         </div>
@@ -547,7 +579,11 @@ export function LocationView() {
           className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
           style={{ background: "#E53935", color: "#FFF" }}
         >
-          {lostMode ? (
+          {waitingRemoteLocation ? (
+            <>
+              <Loader2 size={16} className="animate-spin" /> Aguardando resposta...
+            </>
+          ) : lostMode ? (
             <>
               <X size={16} /> Desativar busca
             </>
