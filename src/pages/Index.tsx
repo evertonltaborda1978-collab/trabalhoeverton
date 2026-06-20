@@ -183,22 +183,23 @@ const Index = () => {
         }}
       >
         <div className="max-w-lg mx-auto px-4 pt-2 pb-2">
-          <div className="flex items-center justify-between">
-            {/* Esquerda — título + pílula online */}
-            <div className="flex items-center gap-2" style={{ minWidth: 0, flex: "0 1 auto" }}>
+          <div className="flex items-center justify-between" style={{ gap: 8 }}>
+            {/* Esquerda — título + pílula online (pode encolher e truncar o título se faltar espaço) */}
+            <div className="flex items-center gap-1.5" style={{ minWidth: 0, flex: "1 1 auto", overflow: "hidden" }}>
               <h1
-                className="font-display"
-                style={{ fontWeight: 800, fontSize: 19, color: "#1A1A2E", whiteSpace: "nowrap" }}
+                className="font-display truncate"
+                style={{ fontWeight: 800, fontSize: 19, color: "#1A1A2E", minWidth: 0 }}
               >
                 {titles[tab]}
               </h1>
               <span
-                className="inline-flex items-center gap-1 shrink-0"
+                className="inline-flex items-center gap-1"
                 style={{
                   padding: "2px 8px 2px 6px",
                   borderRadius: 999,
                   background: isOnline ? "#E8F5E9" : "#F5F5F5",
                   transition: "background 0.3s",
+                  flexShrink: 0,
                 }}
               >
                 <span
@@ -207,6 +208,7 @@ const Index = () => {
                     width: 6,
                     height: 6,
                     background: isOnline ? "#43A047" : "#9E9E9E",
+                    flexShrink: 0,
                   }}
                 />
                 <span
@@ -222,8 +224,8 @@ const Index = () => {
                 </span>
               </span>
             </div>
-            {/* Centro/direita — fase da lua + botão sair, agrupados e próximos */}
-            <div className="flex items-center gap-2 shrink-0" style={{ marginLeft: 8 }}>
+            {/* Direita — fase da lua + botão sair, nunca encolhe */}
+            <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
               <MoonPhaseWidget />
               <button
                 onClick={signOut}
@@ -235,6 +237,7 @@ const Index = () => {
                   background: "#FFFFFF",
                   border: "1px solid #EBEBEB",
                   boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+                  flexShrink: 0,
                 }}
                 title="Sair"
               >
