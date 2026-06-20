@@ -20,6 +20,14 @@ interface Props {
   nextUpdateSecs: number;
   isUpdating: boolean;
   emergency: boolean;
+  accuracy?: number | null;
+}
+
+function getSignalQuality(accuracy: number | null | undefined) {
+  if (accuracy == null) return null;
+  if (accuracy <= 20) return { emoji: "🟢", label: "Ótimo", color: "#2D9E7F" };
+  if (accuracy <= 50) return { emoji: "🟡", label: "Bom", color: "#F9A825" };
+  return { emoji: "🔴", label: "Fraco", color: "#E53935" };
 }
 
 export function UpdateIndicator({
@@ -27,7 +35,9 @@ export function UpdateIndicator({
   nextUpdateSecs,
   isUpdating,
   emergency,
+  accuracy,
 }: Props) {
+  const signal = getSignalQuality(accuracy);
   const interval = emergency ? INTERVAL_EMERGENCY : INTERVAL_NORMAL;
   const progress = nextUpdateSecs > 0 ? Math.max(0, Math.min(1, 1 - nextUpdateSecs / interval)) : 1;
 
@@ -87,6 +97,20 @@ export function UpdateIndicator({
         <span>{emergency ? "⚡ Emergência: 30s" : "🔋 Normal: 10 min"}</span>
         <span>{isUpdating ? "🔄 GPS ativo" : "📍 última posição"}</span>
       </div>
+
+      {signal && !isUpdating && (
+        <div className="flex items-center gap-1.5 pt-1" style={{ borderTop: "1px solid #F5F5F5" }}>
+          <span style={{ fontSize: 12 }}>{signal.emoji}</span>
+          <span className="text-[11px] font-semibold" style={{ color: signal.color }}>
+            Sinal {signal.label}
+          </span>
+          {accuracy != null && (
+            <span className="text-[10px]" style={{ color: "#BDBDBD" }}>
+              (±{Math.round(accuracy)}m)
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
