@@ -296,6 +296,7 @@ export function LocationView() {
           nextUpdateSecs={nextUpdateSecs}
           isUpdating={isUpdating}
           emergency={emergencyMode}
+          accuracy={position?.accuracy ?? null}
         />
       )}
 
@@ -411,7 +412,7 @@ export function LocationView() {
                     <ActionBtn icon={<MapPin size={14} />} label="Mapa" onClick={() => mapsHref && window.open(mapsHref, "_blank")} disabled={!mapsHref} />
                     <ActionBtn icon={<Volume2 size={14} />} label="Alarme" onClick={() => { sendCommand(d.id, "ring"); toast({ title: "🔔 Alarme enviado" }); }} />
                     <ActionBtn icon={<Lock size={14} />} label="Bloquear" onClick={() => { sendCommand(d.id, "lock"); toast({ title: "🔒 Comando enviado" }); }} />
-                    <ActionBtn icon={<Navigation size={14} />} label="Atualizar" onClick={() => { sendCommand(d.id, "update_now"); toast({ title: "📍 Solicitado" }); }} />
+                    <ActionBtn icon={<Navigation size={14} />} label="Rastrear agora" onClick={() => { sendCommand(d.id, "update_now"); toast({ title: "📍 Solicitado" }); }} />
                   </div>
                 </div>
               );
