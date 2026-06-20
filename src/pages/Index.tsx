@@ -172,10 +172,10 @@ const Index = () => {
         <div className="max-w-lg mx-auto px-4 pt-2 pb-2">
           <div className="flex items-center justify-between">
             {/* Esquerda — título + pílula online */}
-            <div className="flex items-center gap-2" style={{ minWidth: 0, flex: 1 }}>
+            <div className="flex items-center gap-2" style={{ minWidth: 0, flex: "0 1 auto" }}>
               <h1
                 className="font-display"
-                style={{ fontWeight: 800, fontSize: 19, color: "#1A1A2E" }}
+                style={{ fontWeight: 800, fontSize: 19, color: "#1A1A2E", whiteSpace: "nowrap" }}
               >
                 {titles[tab]}
               </h1>
@@ -202,18 +202,16 @@ const Index = () => {
                     fontSize: 10,
                     color: isOnline ? "#2E7D32" : "#757575",
                     letterSpacing: 0.2,
+                    whiteSpace: "nowrap",
                   }}
                 >
                   {isOnline ? "Online" : "Offline"}
                 </span>
               </span>
             </div>
-            {/* Centro — fase da lua */}
-            <div className="flex items-center justify-center" style={{ flex: 1 }}>
+            {/* Centro/direita — fase da lua + botão sair, agrupados e próximos */}
+            <div className="flex items-center gap-2 shrink-0" style={{ marginLeft: 8 }}>
               <MoonPhaseWidget />
-            </div>
-            {/* Direita — botão sair */}
-            <div className="flex items-center justify-end" style={{ flex: 1 }}>
               <button
                 onClick={signOut}
                 className="flex items-center justify-center transition-all duration-200 hover:scale-105"
