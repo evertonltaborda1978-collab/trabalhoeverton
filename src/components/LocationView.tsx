@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { MapPin, Navigation, AlertTriangle, Share2, Loader2, MapPinOff, Bell, Lock, Volume2, History, Battery, Pencil } from "lucide-react";
+import { MapPin, Navigation, AlertTriangle, Share2, Loader2, MapPinOff, Bell, Lock, Volume2, History, Battery, Pencil, X, Smartphone, Monitor } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { UpdateIndicator } from "./local/UpdateIndicator";
@@ -48,6 +48,8 @@ export function LocationView() {
   const watchIdRef = useRef<number | null>(null);
   const intervalRef = useRef<number | null>(null);
   const [lostMode, setLostMode] = useState(false);
+  const [showLostDevicePicker, setShowLostDevicePicker] = useState(false);
+  const [lostDeviceId, setLostDeviceId] = useState<string | null>(null);
   const [trail, setTrail] = useState<Position[]>([]);
   const lowBatterySavedRef = useRef(false);
   const captureNowRef = useRef<(accurate?: boolean) => void>(() => {});
@@ -275,25 +277,43 @@ export function LocationView() {
     });
   }, [lostMode, position]);
 
-  const toggleLostMode = useCallback(() => {
-    if (!lostMode) {
-      setLostMode(true);
-      lowBatterySavedRef.current = false;
-      setTrail(position ? [position] : []);
+  const activateLostMode = useCallback((deviceId: string) => {
+    setLostDeviceId(deviceId);
+    setLostMode(true);
+    setShowLostDevicePicker(false);
+    lowBatterySavedRef.current = false;
+    setTrail(position ? [position] : []);
+
+    const isCurrentDevice = currentDevice?.id === deviceId;
+    if (isCurrentDevice) {
+      // É o aparelho que estou usando agora — ativa rastreamento local
       if (!emergencyMode) {
         setEmergencyMode(true);
         if (!tracking) startTracking();
       }
-      toast({ title: "🚨 Modo \"Perdi meu aparelho\" ativado", description: "Rastreamento contínuo, trilha e monitor de bateria ativos." });
       if (position) {
         setTimeout(() => setShowShareModal({ lat: position.lat, lng: position.lng, address: currentAddress }), 600);
       }
     } else {
+      // É outro aparelho — envia comando remoto para ele se rastrear
+      sendCommand(deviceId, "update_now");
+    }
+
+    const device = devices.find((d) => d.id === deviceId);
+    const name = device?.custom_label || device?.device_name || "aparelho";
+    toast({ title: "🚨 Buscando: " + name, description: isCurrentDevice ? "Rastreamento contínuo ativo neste aparelho." : "Comando de localização enviado ao aparelho." });
+  }, [currentDevice, emergencyMode, tracking, startTracking, position, currentAddress, devices, sendCommand]);
+
+  const toggleLostMode = useCallback(() => {
+    if (!lostMode) {
+      setShowLostDevicePicker(true);
+    } else {
       setLostMode(false);
+      setLostDeviceId(null);
       setEmergencyMode(false);
       toast({ title: "Modo \"Perdi meu aparelho\" desativado" });
     }
-  }, [lostMode, emergencyMode, tracking, startTracking, position, currentAddress]);
+  }, [lostMode]);
 
   const mapSrc = position
     ? `https://maps.google.com/maps?q=${position.lat},${position.lng}&z=17&output=embed`
@@ -383,15 +403,6 @@ export function LocationView() {
           <Share2 size={16} />
         </Button>
       </div>
-
-      {/* Botão discreto: Perdi meu aparelho */}
-      <button
-        onClick={toggleLostMode}
-        className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold transition-colors"
-        style={{ color: lostMode ? "#E53935" : "#9E9E9E" }}
-      >
-        {lostMode ? "🔴 Modo \"Perdi meu aparelho\" ativo — toque para desativar" : "🚨 Perdi meu aparelho"}
-      </button>
 
       {lostMode && trail.length > 1 && (
         <div className="rounded-2xl p-3 flex items-center justify-between" style={{ background: "#FFF5F5", border: "1px solid #FFCDD2" }}>
@@ -519,6 +530,44 @@ export function LocationView() {
       {/* Geofence section */}
       <GeofenceSection currentPosition={position} />
 
+      {/* Perdi meu aparelho — card grande e destacado */}
+      <div
+        className="rounded-2xl p-4"
+        style={{
+          background: lostMode ? "#FFF5F5" : "#FFEBEE",
+          border: lostMode ? "1.5px solid #E53935" : "1.5px solid #FFCDD2",
+        }}
+      >
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: "#FFFFFF" }}>
+            <MapPinOff size={22} style={{ color: "#E53935" }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-[15px]" style={{ color: "#C62828" }}>
+              {lostMode ? "🔴 Buscando aparelho..." : "Perdi meu aparelho"}
+            </p>
+            <p className="text-[12px]" style={{ color: "#C62828", opacity: 0.85 }}>
+              {lostMode ? "Rastreio contínuo, trilha e bateria ativos" : "Rastreia, salva trilha e monitora bateria"}
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={toggleLostMode}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
+          style={{ background: "#E53935", color: "#FFF" }}
+        >
+          {lostMode ? (
+            <>
+              <X size={16} /> Desativar busca
+            </>
+          ) : (
+            <>
+              <Navigation size={16} /> Ativar busca de aparelho
+            </>
+          )}
+        </button>
+      </div>
+
       {/* Emergency */}
       <div className="rounded-2xl p-4" style={{ background: emergencyMode ? "#FFF5F5" : "#FFF", border: emergencyMode ? "1px solid #FFCDD2" : "1px solid #F0F0F0" }}>
         <div className="flex items-center gap-3 mb-3">
@@ -554,6 +603,52 @@ export function LocationView() {
       </div>
 
       {showAlertModal && <AlertModal deviceName={showAlertModal.name} onClose={() => setShowAlertModal(null)} />}
+
+      {showLostDevicePicker && (
+        <div
+          className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-3"
+          style={{ background: "rgba(0,0,0,0.5)" }}
+          onClick={() => setShowLostDevicePicker(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl p-5"
+            style={{ background: "#FFF" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-bold text-base" style={{ color: "#1A1A2E" }}>Qual aparelho está perdido?</h3>
+              <button onClick={() => setShowLostDevicePicker(false)} className="p-1"><X size={18} /></button>
+            </div>
+            <p className="text-[12px] mb-4" style={{ color: "#9E9E9E" }}>
+              Selecione o dispositivo para ativar o rastreamento de busca.
+            </p>
+            <div className="space-y-2">
+              {devices.map((d) => {
+                const name = d.custom_label || d.device_name;
+                const isPhone = d.os === "Android" || d.os === "iOS";
+                return (
+                  <button
+                    key={d.id}
+                    onClick={() => activateLostMode(d.id)}
+                    className="w-full flex items-center gap-3 p-3 rounded-xl transition-all active:scale-95"
+                    style={{ background: "#FFF5F5", border: "1px solid #FFCDD2" }}
+                  >
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#FFFFFF" }}>
+                      {isPhone ? <Smartphone size={18} style={{ color: "#E53935" }} /> : <Monitor size={18} style={{ color: "#E53935" }} />}
+                    </div>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="font-semibold text-sm truncate" style={{ color: "#1A1A2E" }}>{name}</p>
+                      <p className="text-[11px]" style={{ color: "#9E9E9E" }}>
+                        {d.is_current ? "Este aparelho" : "Rastreamento remoto"}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
       {showShareModal && (
         <ShareLocationModal
           lat={showShareModal.lat}
