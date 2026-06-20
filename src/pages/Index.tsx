@@ -16,6 +16,7 @@ import { useDeviceTracking } from "@/hooks/useDeviceTracking";
 import { useDeviceCommands } from "@/hooks/useDeviceCommands";
 import { useDeviceLocations, reverseGeocodeFetch } from "@/hooks/useDeviceLocations";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/hooks/use-toast";
 import { LogOut } from "lucide-react";
 
 type Tab = "notes" | "calendar" | "weather" | "location" | "devices" | "fuel" | "medication";
@@ -50,12 +51,24 @@ const Index = () => {
   // Escuta global de comandos remotos — funciona em qualquer aba, não só na Local
   useDeviceCommands(currentDevice?.id ?? null, async (cmd) => {
     if (cmd.command === "update_now") {
-      if (!navigator.geolocation || !currentDevice) return;
+      if (!navigator.geolocation || !currentDevice) {
+        toast({ title: "⚠️ Não foi possível localizar", description: "Geolocalização indisponível neste navegador.", variant: "destructive" });
+        return;
+      }
+      toast({ title: "📍 Comando recebido", description: "Capturando sua localização..." });
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
           await recordLocation(currentDevice.id, pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, "remote");
+          toast({ title: "✅ Localização enviada", description: "Posição registrada com sucesso." });
         },
-        () => {},
+        (err) => {
+          const msg = err.code === 1
+            ? "Permissão de localização negada para este site."
+            : err.code === 2
+            ? "Não foi possível obter a posição (GPS indisponível)."
+            : "Tempo esgotado ao tentar localizar.";
+          toast({ title: "⚠️ Falha ao localizar", description: msg, variant: "destructive" });
+        },
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
       );
     } else if (cmd.command === "ring") {
