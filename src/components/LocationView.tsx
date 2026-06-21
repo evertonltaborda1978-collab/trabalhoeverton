@@ -51,6 +51,7 @@ export function LocationView() {
   const [showLostDevicePicker, setShowLostDevicePicker] = useState(false);
   const [lostDeviceId, setLostDeviceId] = useState<string | null>(null);
   const [waitingRemoteLocation, setWaitingRemoteLocation] = useState(false);
+  const lostDeviceWaitSinceRef = useRef<number | null>(null);
   const [trail, setTrail] = useState<Position[]>([]);
   const lowBatterySavedRef = useRef(false);
   const captureNowRef = useRef<(accurate?: boolean) => void>(() => {});
@@ -299,7 +300,6 @@ export function LocationView() {
   }, [currentDevice, emergencyMode, tracking, startTracking, position, currentAddress, devices, sendCommand]);
 
   // Quando o aparelho remoto responder com uma localização nova, abre o mapa automaticamente
-  const lostDeviceWaitSinceRef = useRef<number | null>(null);
   useEffect(() => {
     if (!lostMode || !lostDeviceId) return;
     if (currentDevice?.id === lostDeviceId) return; // local já trata via position acima
@@ -307,7 +307,8 @@ export function LocationView() {
     const loc = latestByDevice[lostDeviceId];
     if (!loc) return;
     const recordedAt = new Date(loc.recorded_at).getTime();
-    if (lostDeviceWaitSinceRef.current && recordedAt >= lostDeviceWaitSinceRef.current) {
+    // Tolerância de 60s para diferenças de relógio entre cliente e servidor
+    if (lostDeviceWaitSinceRef.current && recordedAt >= lostDeviceWaitSinceRef.current - 60000) {
       lostDeviceWaitSinceRef.current = null;
       setWaitingRemoteLocation(false);
       const device = devices.find((d) => d.id === lostDeviceId);
