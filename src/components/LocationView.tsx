@@ -299,7 +299,9 @@ export function LocationView() {
     toast({ title: "🚨 Buscando: " + name, description: isCurrentDevice ? "Rastreamento contínuo ativo neste aparelho." : "Aguardando o aparelho responder..." });
   }, [currentDevice, emergencyMode, tracking, startTracking, position, currentAddress, devices, sendCommand]);
 
-  // Quando o aparelho remoto responder com uma localização nova, abre o mapa automaticamente
+  // Quando o aparelho remoto responder com uma localização nova, prepara o link do mapa
+  const [foundDeviceMapHref, setFoundDeviceMapHref] = useState<string | null>(null);
+  const [foundDeviceName, setFoundDeviceName] = useState<string | null>(null);
   useEffect(() => {
     if (!lostMode || !lostDeviceId) return;
     if (currentDevice?.id === lostDeviceId) return; // local já trata via position acima
@@ -317,8 +319,11 @@ export function LocationView() {
       const href = displayAddress
         ? `https://www.google.com/maps?q=${encodeURIComponent(displayAddress)}&ll=${loc.latitude},${loc.longitude}`
         : `https://www.google.com/maps?q=${loc.latitude},${loc.longitude}`;
-      toast({ title: "📍 Localização encontrada!", description: name });
-      window.open(href, "_blank");
+      // Navegadores bloqueiam window.open() fora de um clique direto do usuário,
+      // então mostramos um botão para o usuário abrir manualmente.
+      setFoundDeviceMapHref(href);
+      setFoundDeviceName(name);
+      toast({ title: "📍 Localização encontrada!", description: `${name} — toque para ver no mapa` });
     }
   }, [lostMode, lostDeviceId, currentDevice, latestByDevice, devices]);
 
@@ -330,6 +335,8 @@ export function LocationView() {
       setLostDeviceId(null);
       setEmergencyMode(false);
       setWaitingRemoteLocation(false);
+      setFoundDeviceMapHref(null);
+      setFoundDeviceName(null);
       lostDeviceWaitSinceRef.current = null;
       toast({ title: "Modo \"Perdi meu aparelho\" desativado" });
     }
@@ -564,17 +571,33 @@ export function LocationView() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-bold text-[15px]" style={{ color: "#C62828" }}>
-              {waitingRemoteLocation ? "🔄 Aguardando aparelho..." : lostMode ? "🔴 Buscando aparelho..." : "Perdi meu aparelho"}
+              {foundDeviceMapHref ? "✅ Aparelho localizado!" : waitingRemoteLocation ? "🔄 Aguardando aparelho..." : lostMode ? "🔴 Buscando aparelho..." : "Perdi meu aparelho"}
             </p>
             <p className="text-[12px]" style={{ color: "#C62828", opacity: 0.85 }}>
-              {waitingRemoteLocation
-                ? "O mapa abrirá automaticamente quando localizado"
+              {foundDeviceMapHref
+                ? `${foundDeviceName} — toque para ver no mapa`
+                : waitingRemoteLocation
+                ? "Aguardando o aparelho responder..."
                 : lostMode
                 ? "Rastreio contínuo, trilha e bateria ativos"
                 : "Rastreia, salva trilha e monitora bateria"}
             </p>
           </div>
         </div>
+
+        {foundDeviceMapHref && (
+          <a
+            href={foundDeviceMapHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setFoundDeviceMapHref(null)}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 mb-2"
+            style={{ background: "#2D9E7F", color: "#FFF" }}
+          >
+            <MapPin size={16} /> Ver localização no mapa
+          </a>
+        )}
+
         <button
           onClick={toggleLostMode}
           className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
