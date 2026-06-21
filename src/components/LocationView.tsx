@@ -51,7 +51,7 @@ export function LocationView() {
   const [showLostDevicePicker, setShowLostDevicePicker] = useState(false);
   const [lostDeviceId, setLostDeviceId] = useState<string | null>(null);
   const [waitingRemoteLocation, setWaitingRemoteLocation] = useState(false);
-  const lostDeviceWaitSinceRef = useRef<number | null>(null);
+  const lostDeviceStartCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
   const [trail, setTrail] = useState<Position[]>([]);
   const lowBatterySavedRef = useRef(false);
   const captureNowRef = useRef<(accurate?: boolean) => void>(() => {});
@@ -288,8 +288,9 @@ export function LocationView() {
         setTimeout(() => setShowShareModal({ lat: position.lat, lng: position.lng, address: currentAddress }), 600);
       }
     } else {
-      // É outro aparelho — guarda o timestamp atual para detectar quando a NOVA localização chegar
-      lostDeviceWaitSinceRef.current = Date.now();
+      // É outro aparelho — guarda a posição atual (se já houver) para detectar quando a NOVA localização chegar
+      const existingLoc = latestByDevice[deviceId];
+      lostDeviceStartCoordsRef.current = existingLoc ? { lat: existingLoc.latitude, lng: existingLoc.longitude } : null;
       setWaitingRemoteLocation(true);
       sendCommand(deviceId, "update_now");
     }
@@ -297,35 +298,36 @@ export function LocationView() {
     const device = devices.find((d) => d.id === deviceId);
     const name = device?.custom_label || device?.device_name || "aparelho";
     toast({ title: "🚨 Buscando: " + name, description: isCurrentDevice ? "Rastreamento contínuo ativo neste aparelho." : "Aguardando o aparelho responder..." });
-  }, [currentDevice, emergencyMode, tracking, startTracking, position, currentAddress, devices, sendCommand]);
+  }, [currentDevice, emergencyMode, tracking, startTracking, position, currentAddress, devices, sendCommand, latestByDevice]);
 
   // Quando o aparelho remoto responder com uma localização nova, prepara o link do mapa
   const [foundDeviceMapHref, setFoundDeviceMapHref] = useState<string | null>(null);
   const [foundDeviceName, setFoundDeviceName] = useState<string | null>(null);
   useEffect(() => {
-    if (!lostMode || !lostDeviceId) return;
+    if (!lostMode || !lostDeviceId || !waitingRemoteLocation) return;
     if (currentDevice?.id === lostDeviceId) return; // local já trata via position acima
 
     const loc = latestByDevice[lostDeviceId];
     if (!loc) return;
-    const recordedAt = new Date(loc.recorded_at).getTime();
-    // Tolerância de 60s para diferenças de relógio entre cliente e servidor
-    if (lostDeviceWaitSinceRef.current && recordedAt >= lostDeviceWaitSinceRef.current - 60000) {
-      lostDeviceWaitSinceRef.current = null;
-      setWaitingRemoteLocation(false);
-      const device = devices.find((d) => d.id === lostDeviceId);
-      const name = device?.custom_label || device?.device_name || "aparelho";
-      const displayAddress = device?.manual_address || loc.address;
-      const href = displayAddress
-        ? `https://www.google.com/maps?q=${encodeURIComponent(displayAddress)}&ll=${loc.latitude},${loc.longitude}`
-        : `https://www.google.com/maps?q=${loc.latitude},${loc.longitude}`;
-      // Navegadores bloqueiam window.open() fora de um clique direto do usuário,
-      // então mostramos um botão para o usuário abrir manualmente.
-      setFoundDeviceMapHref(href);
-      setFoundDeviceName(name);
-      toast({ title: "📍 Localização encontrada!", description: `${name} — toque para ver no mapa` });
-    }
-  }, [lostMode, lostDeviceId, currentDevice, latestByDevice, devices]);
+
+    const start = lostDeviceStartCoordsRef.current;
+    const isSameAsStart = start && Math.abs(start.lat - loc.latitude) < 0.00001 && Math.abs(start.lng - loc.longitude) < 0.00001;
+    // Se a localização é diferente da que já tínhamos quando começamos a esperar (ou não havia nenhuma antes), consideramos nova
+    if (isSameAsStart) return;
+
+    setWaitingRemoteLocation(false);
+    const device = devices.find((d) => d.id === lostDeviceId);
+    const name = device?.custom_label || device?.device_name || "aparelho";
+    const displayAddress = device?.manual_address || loc.address;
+    const href = displayAddress
+      ? `https://www.google.com/maps?q=${encodeURIComponent(displayAddress)}&ll=${loc.latitude},${loc.longitude}`
+      : `https://www.google.com/maps?q=${loc.latitude},${loc.longitude}`;
+    // Navegadores bloqueiam window.open() fora de um clique direto do usuário,
+    // então mostramos um botão para o usuário abrir manualmente.
+    setFoundDeviceMapHref(href);
+    setFoundDeviceName(name);
+    toast({ title: "📍 Localização encontrada!", description: `${name} — toque para ver no mapa` });
+  }, [lostMode, lostDeviceId, currentDevice, latestByDevice, devices, waitingRemoteLocation]);
 
   const toggleLostMode = useCallback(() => {
     if (!lostMode) {
@@ -337,7 +339,7 @@ export function LocationView() {
       setWaitingRemoteLocation(false);
       setFoundDeviceMapHref(null);
       setFoundDeviceName(null);
-      lostDeviceWaitSinceRef.current = null;
+      lostDeviceStartCoordsRef.current = null;
       toast({ title: "Modo \"Perdi meu aparelho\" desativado" });
     }
   }, [lostMode]);
