@@ -12,6 +12,7 @@ import { useDeviceCommands } from "@/hooks/useDeviceCommands";
 import { GeofenceSection } from "./local/GeofenceSection";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { supabase } from "@/integrations/supabase/client";
 
 const INTERVAL_NORMAL = 600;
 const INTERVAL_EMERGENCY = 30;
@@ -303,31 +304,40 @@ export function LocationView() {
   // Quando o aparelho remoto responder com uma localização nova, prepara o link do mapa
   const [foundDeviceMapHref, setFoundDeviceMapHref] = useState<string | null>(null);
   const [foundDeviceName, setFoundDeviceName] = useState<string | null>(null);
-  useEffect(() => {
-    if (!lostMode || !lostDeviceId || !waitingRemoteLocation) return;
-    if (currentDevice?.id === lostDeviceId) return; // local já trata via position acima
 
-    const loc = latestByDevice[lostDeviceId];
-    if (!loc) return;
+  const checkRemoteDeviceLocation = useCallback(async () => {
+    if (!lostDeviceId || currentDevice?.id === lostDeviceId) return;
+    const { data } = await supabase
+      .from("device_locations")
+      .select("*")
+      .eq("device_id", lostDeviceId)
+      .order("recorded_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
+    if (!data) return;
     const start = lostDeviceStartCoordsRef.current;
-    const isSameAsStart = start && loc.id === start;
-    // Se o registro é o mesmo que já tínhamos quando começamos a esperar, ainda não chegou nada novo
-    if (isSameAsStart) return;
+    if (start && data.id === start) return; // ainda é o mesmo registro de antes — nada novo chegou
 
     setWaitingRemoteLocation(false);
     const device = devices.find((d) => d.id === lostDeviceId);
     const name = device?.custom_label || device?.device_name || "aparelho";
-    const displayAddress = device?.manual_address || loc.address;
+    const displayAddress = device?.manual_address || data.address;
     const href = displayAddress
-      ? `https://www.google.com/maps?q=${encodeURIComponent(displayAddress)}&ll=${loc.latitude},${loc.longitude}`
-      : `https://www.google.com/maps?q=${loc.latitude},${loc.longitude}`;
-    // Navegadores bloqueiam window.open() fora de um clique direto do usuário,
-    // então mostramos um botão para o usuário abrir manualmente.
+      ? `https://www.google.com/maps?q=${encodeURIComponent(displayAddress)}&ll=${data.latitude},${data.longitude}`
+      : `https://www.google.com/maps?q=${data.latitude},${data.longitude}`;
     setFoundDeviceMapHref(href);
     setFoundDeviceName(name);
     toast({ title: "📍 Localização encontrada!", description: `${name} — toque para ver no mapa` });
-  }, [lostMode, lostDeviceId, currentDevice, latestByDevice, devices, waitingRemoteLocation]);
+  }, [lostDeviceId, currentDevice, devices]);
+
+  // Polling direto ao Supabase a cada 3s enquanto aguarda — não depende do Realtime nem do hook de estado
+  useEffect(() => {
+    if (!waitingRemoteLocation || !lostDeviceId) return;
+    checkRemoteDeviceLocation(); // verifica imediatamente também
+    const interval = window.setInterval(checkRemoteDeviceLocation, 3000);
+    return () => window.clearInterval(interval);
+  }, [waitingRemoteLocation, lostDeviceId, checkRemoteDeviceLocation]);
 
   const toggleLostMode = useCallback(() => {
     if (!lostMode) {
@@ -598,6 +608,16 @@ export function LocationView() {
           >
             <MapPin size={16} /> Ver localização no mapa
           </a>
+        )}
+
+        {waitingRemoteLocation && (
+          <button
+            onClick={() => checkRemoteDeviceLocation()}
+            className="w-full flex items-center justify-center gap-2 py-2 rounded-xl font-semibold text-xs transition-all active:scale-95 mb-2"
+            style={{ background: "rgba(229,57,53,0.10)", color: "#C62828", border: "1px solid rgba(229,57,53,0.3)" }}
+          >
+            <Navigation size={13} /> Verificar agora
+          </button>
         )}
 
         <button
