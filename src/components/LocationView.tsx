@@ -51,7 +51,7 @@ export function LocationView() {
   const [showLostDevicePicker, setShowLostDevicePicker] = useState(false);
   const [lostDeviceId, setLostDeviceId] = useState<string | null>(null);
   const [waitingRemoteLocation, setWaitingRemoteLocation] = useState(false);
-  const lostDeviceStartCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
+  const lostDeviceStartCoordsRef = useRef<string | null>(null);
   const [trail, setTrail] = useState<Position[]>([]);
   const lowBatterySavedRef = useRef(false);
   const captureNowRef = useRef<(accurate?: boolean) => void>(() => {});
@@ -288,9 +288,9 @@ export function LocationView() {
         setTimeout(() => setShowShareModal({ lat: position.lat, lng: position.lng, address: currentAddress }), 600);
       }
     } else {
-      // É outro aparelho — guarda a posição atual (se já houver) para detectar quando a NOVA localização chegar
+      // É outro aparelho — guarda o ID do último registro conhecido (se houver) para detectar quando um NOVO registro chegar
       const existingLoc = latestByDevice[deviceId];
-      lostDeviceStartCoordsRef.current = existingLoc ? { lat: existingLoc.latitude, lng: existingLoc.longitude } : null;
+      lostDeviceStartCoordsRef.current = existingLoc ? existingLoc.id : "__none__";
       setWaitingRemoteLocation(true);
       sendCommand(deviceId, "update_now");
     }
@@ -311,8 +311,8 @@ export function LocationView() {
     if (!loc) return;
 
     const start = lostDeviceStartCoordsRef.current;
-    const isSameAsStart = start && Math.abs(start.lat - loc.latitude) < 0.00001 && Math.abs(start.lng - loc.longitude) < 0.00001;
-    // Se a localização é diferente da que já tínhamos quando começamos a esperar (ou não havia nenhuma antes), consideramos nova
+    const isSameAsStart = start && loc.id === start;
+    // Se o registro é o mesmo que já tínhamos quando começamos a esperar, ainda não chegou nada novo
     if (isSameAsStart) return;
 
     setWaitingRemoteLocation(false);
