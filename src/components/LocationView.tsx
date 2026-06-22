@@ -322,7 +322,6 @@ export function LocationView() {
     if (!data) return;
 
     const start = lostDeviceStartCoordsRef.current;
-    toast({ title: "🔍 Diagnóstico", description: `Registro encontrado: ${data.id.slice(0,8)}... | Hora: ${new Date(data.recorded_at).toLocaleTimeString('pt-BR')} | Esperando diferente de: ${start ? start.slice(0,8) + '...' : 'nenhum'}` });
     if (start && data.id === start) return; // ainda é o mesmo registro de antes — nada novo chegou
 
     setWaitingRemoteLocation(false);
