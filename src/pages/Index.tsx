@@ -49,30 +49,22 @@ const Index = () => {
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
 
   // Escuta global de comandos remotos — funciona em qualquer aba, não só na Local
-  useDeviceCommands(currentDevice?.id ?? null, async (cmd) => {
+  const { markExecuted } = useDeviceCommands(currentDevice?.id ?? null, async (cmd) => {
     if (cmd.command === "update_now") {
-      if (!navigator.geolocation || !currentDevice) {
-        toast({ title: "⚠️ Não foi possível localizar", description: "Geolocalização indisponível neste navegador.", variant: "destructive" });
-        return;
-      }
+      if (!navigator.geolocation || !currentDevice) return;
       toast({ title: "📍 Comando recebido", description: "Capturando sua localização..." });
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
           await recordLocation(currentDevice.id, pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, "remote");
+          await markExecuted(cmd.id);
           toast({ title: "✅ Localização enviada", description: "Posição registrada com sucesso." });
         },
-        (err) => {
-          const msg = err.code === 1
-            ? "Permissão de localização negada para este site."
-            : err.code === 2
-            ? "Não foi possível obter a posição (GPS indisponível)."
-            : "Tempo esgotado ao tentar localizar.";
-          toast({ title: "⚠️ Falha ao localizar", description: msg, variant: "destructive" });
-        },
+        () => { markExecuted(cmd.id); },
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
       );
     } else if (cmd.command === "ring") {
       if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500, 200, 500]);
+      markExecuted(cmd.id);
     }
   });
 
@@ -183,49 +175,47 @@ const Index = () => {
         }}
       >
         <div className="max-w-lg mx-auto px-4 pt-2 pb-2">
-          <div className="flex items-center justify-between" style={{ gap: 8 }}>
-            {/* Esquerda — título + pílula online (pode encolher e truncar o título se faltar espaço) */}
-            <div className="flex items-center gap-1.5" style={{ minWidth: 0, flex: "1 1 auto", overflow: "hidden" }}>
-              <h1
-                className="font-display truncate"
-                style={{ fontWeight: 800, fontSize: 19, color: "#1A1A2E", minWidth: 0 }}
-              >
-                {titles[tab]}
-              </h1>
+          {/* Linha 1 — título centralizado */}
+          <h1
+            className="font-display text-center"
+            style={{ fontWeight: 800, fontSize: 19, color: "#1A1A2E", marginBottom: 6 }}
+          >
+            {titles[tab]}
+          </h1>
+
+          {/* Linha 2 — online à esquerda, lua + sair à direita */}
+          <div className="flex items-center justify-between">
+            <span
+              className="inline-flex items-center gap-1"
+              style={{
+                padding: "2px 8px 2px 6px",
+                borderRadius: 999,
+                background: isOnline ? "#E8F5E9" : "#F5F5F5",
+                transition: "background 0.3s",
+              }}
+            >
               <span
-                className="inline-flex items-center gap-1"
+                className="inline-block rounded-full"
                 style={{
-                  padding: "2px 8px 2px 6px",
-                  borderRadius: 999,
-                  background: isOnline ? "#E8F5E9" : "#F5F5F5",
-                  transition: "background 0.3s",
-                  flexShrink: 0,
+                  width: 6,
+                  height: 6,
+                  background: isOnline ? "#43A047" : "#9E9E9E",
+                }}
+              />
+              <span
+                className="font-bold"
+                style={{
+                  fontSize: 10,
+                  color: isOnline ? "#2E7D32" : "#757575",
+                  letterSpacing: 0.2,
+                  whiteSpace: "nowrap",
                 }}
               >
-                <span
-                  className="inline-block rounded-full"
-                  style={{
-                    width: 6,
-                    height: 6,
-                    background: isOnline ? "#43A047" : "#9E9E9E",
-                    flexShrink: 0,
-                  }}
-                />
-                <span
-                  className="font-bold"
-                  style={{
-                    fontSize: 10,
-                    color: isOnline ? "#2E7D32" : "#757575",
-                    letterSpacing: 0.2,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {isOnline ? "Online" : "Offline"}
-                </span>
+                {isOnline ? "Online" : "Offline"}
               </span>
-            </div>
-            {/* Direita — fase da lua + botão sair, nunca encolhe */}
-            <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+            </span>
+
+            <div className="flex items-center gap-2">
               <MoonPhaseWidget />
               <button
                 onClick={signOut}
@@ -237,7 +227,6 @@ const Index = () => {
                   background: "#FFFFFF",
                   border: "1px solid #EBEBEB",
                   boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-                  flexShrink: 0,
                 }}
                 title="Sair"
               >
