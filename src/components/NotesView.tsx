@@ -16,6 +16,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { RelatorioTurno } from "./RelatorioTurno";
+import { ClipboardList } from "lucide-react";
 
 export { getFontClass, getSizeClass } from "./NoteEditor";
 
@@ -49,6 +51,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
   const [searchFocused, setSearchFocused] = useState(false);
   const [showBackupMenu, setShowBackupMenu] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
+  const [showRelatorio, setShowRelatorio] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteTitle, setConfirmDeleteTitle] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
@@ -361,6 +364,14 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
             </button>
           )}
         </div>
+        <button
+          onClick={() => setShowRelatorio(true)}
+          className="shrink-0 flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95"
+          style={{ width: 46, height: 46, borderRadius: 14, background: "#F57C00", boxShadow: "0 4px 14px -2px rgba(245,124,0,0.35)" }}
+          title="Relatório de Turno"
+        >
+          <ClipboardList size={20} color="white" />
+        </button>
         <button
           onClick={openNew}
           className="shrink-0 flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95"
