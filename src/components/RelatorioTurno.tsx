@@ -2,6 +2,220 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { X, FileText, Camera } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
+// ── Modal de scanner com stream de vídeo em tempo real ──
+function BarcodeScannerModal({ onScan, onClose }: { onScan: (val: string) => void; onClose: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const rafRef = useRef<number>(0);
+  const [status, setStatus] = useState<"loading" | "scanning" | "error">("loading");
+  const [errorMsg, setErrorMsg] = useState("");
+  const detectorRef = useRef<any>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    const start = async () => {
+      // 1. Iniciar câmera traseira
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+        if (!active) { stream.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+      } catch (e) {
+        setStatus("error");
+        setErrorMsg("Sem acesso à câmera. Verifique as permissões.");
+        return;
+      }
+
+      // 2. Preparar detector (BarcodeDetector nativo ou fallback via ZXing CDN)
+      if ("BarcodeDetector" in window) {
+        detectorRef.current = new (window as any).BarcodeDetector({
+          formats: ["code_128","code_39","ean_13","ean_8","qr_code","data_matrix","itf","upc_a","upc_e","pdf417","aztec"]
+        });
+        setStatus("scanning");
+        scanLoop();
+      } else {
+        // Carregar ZXing via CDN
+        setStatus("loading");
+        const script = document.createElement("script");
+        script.src = "https://cdn.jsdelivr.net/npm/@zxing/library@0.21.0/umd/index.min.js";
+        script.onload = () => {
+          if (!active) return;
+          try {
+            const ZXing = (window as any).ZXing;
+            const hints = new Map();
+            hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+            detectorRef.current = new ZXing.BrowserMultiFormatReader(hints);
+            setStatus("scanning");
+            scanLoopZXing();
+          } catch {
+            setStatus("error");
+            setErrorMsg("Erro ao carregar leitor. Tente digitar o código.");
+          }
+        };
+        script.onerror = () => {
+          setStatus("error");
+          setErrorMsg("Sem conexão para carregar o leitor.");
+        };
+        document.head.appendChild(script);
+      }
+    };
+
+    // Loop para BarcodeDetector nativo
+    const scanLoop = async () => {
+      if (!active || !videoRef.current || !canvasRef.current || !detectorRef.current) return;
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(video, 0, 0);
+        try {
+          const codes = await detectorRef.current.detect(canvas);
+          if (codes.length > 0 && active) {
+            handleFound(codes[0].rawValue);
+            return;
+          }
+        } catch {}
+      }
+      rafRef.current = requestAnimationFrame(scanLoop);
+    };
+
+    // Loop para ZXing
+    const scanLoopZXing = () => {
+      if (!active || !videoRef.current || !canvasRef.current || !detectorRef.current) return;
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(video, 0, 0);
+        try {
+          const ZXing = (window as any).ZXing;
+          const imgData = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height);
+          const luminance = new ZXing.RGBLuminanceSource(imgData.data, canvas.width, canvas.height);
+          const bitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminance));
+          const result = detectorRef.current.decodeBitmap(bitmap);
+          if (result && active) {
+            handleFound(result.getText());
+            return;
+          }
+        } catch {}
+      }
+      rafRef.current = requestAnimationFrame(scanLoopZXing);
+    };
+
+    const handleFound = (value: string) => {
+      active = false;
+      streamRef.current?.getTracks().forEach(t => t.stop());
+      cancelAnimationFrame(rafRef.current);
+      onScan(value);
+      toast({ title: "✅ Código lido!", description: value });
+      onClose();
+    };
+
+    start();
+
+    return () => {
+      active = false;
+      streamRef.current?.getTracks().forEach(t => t.stop());
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
+  const handleManual = () => {
+    const val = prompt("Digite o código manualmente:");
+    if (val?.trim()) {
+      streamRef.current?.getTracks().forEach(t => t.stop());
+      onScan(val.trim());
+      onClose();
+    }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.92)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+      {/* Header */}
+      <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", position: "absolute", top: 0 }}>
+        <span style={{ color: "#FFF", fontWeight: 700, fontSize: 16 }}>📷 Escanear código</span>
+        <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.15)", border: "none", color: "#FFF", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+      </div>
+
+      {/* Vídeo */}
+      <div style={{ position: "relative", width: "min(90vw, 380px)", aspectRatio: "1", borderRadius: 20, overflow: "hidden", background: "#111" }}>
+        <video ref={videoRef} playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        <canvas ref={canvasRef} style={{ display: "none" }} />
+
+        {/* Mira de escaneamento */}
+        {status === "scanning" && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+            <div style={{ width: "65%", aspectRatio: "1", position: "relative" }}>
+              {/* Cantos da mira */}
+              {[{top:0,left:0},{top:0,right:0},{bottom:0,left:0},{bottom:0,right:0}].map((pos, i) => (
+                <div key={i} style={{
+                  position: "absolute", width: 28, height: 28,
+                  borderTop: (pos as any).top === 0 ? "3px solid #2D9E7F" : "none",
+                  borderBottom: (pos as any).bottom === 0 ? "3px solid #2D9E7F" : "none",
+                  borderLeft: (pos as any).left === 0 ? "3px solid #2D9E7F" : "none",
+                  borderRight: (pos as any).right === 0 ? "3px solid #2D9E7F" : "none",
+                  ...pos
+                }} />
+              ))}
+              {/* Linha de scan animada */}
+              <div style={{
+                position: "absolute", left: 4, right: 4, height: 2,
+                background: "linear-gradient(90deg, transparent, #2D9E7F, transparent)",
+                animation: "scanline 1.5s ease-in-out infinite",
+                top: "50%"
+              }} />
+            </div>
+          </div>
+        )}
+
+        {/* Loading overlay */}
+        {status === "loading" && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)" }}>
+            <div style={{ width: 36, height: 36, border: "3px solid rgba(255,255,255,0.2)", borderTop: "3px solid #2D9E7F", borderRadius: "50%", animation: "spin 0.8s linear infinite", marginBottom: 12 }} />
+            <span style={{ color: "#FFF", fontSize: 13 }}>Iniciando câmera...</span>
+          </div>
+        )}
+
+        {/* Erro overlay */}
+        {status === "error" && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.7)", padding: 20, textAlign: "center" }}>
+            <span style={{ fontSize: 32, marginBottom: 8 }}>⚠️</span>
+            <span style={{ color: "#FFF", fontSize: 13, marginBottom: 16 }}>{errorMsg}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Instrução */}
+      {status === "scanning" && (
+        <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 20, textAlign: "center" }}>
+          Aponte a câmera para o código de barras
+        </p>
+      )}
+
+      {/* Botão digitar manualmente */}
+      <button onClick={handleManual} style={{ marginTop: 20, padding: "10px 28px", borderRadius: 12, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", color: "#FFF", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+        ⌨️ Digitar manualmente
+      </button>
+
+      <style>{`
+        @keyframes scanline { 0%,100% { top: 10%; } 50% { top: 85%; } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
+    </div>
+  );
+}
+
 const HORARIOS: Record<string, string> = {
   "1": "00:20 x 08:20 hr",
   "2": "08:20 x 16:20 hr",
@@ -67,43 +281,26 @@ interface Props {
   onSaveAsNote: (title: string, content: string) => void;
 }
 
-// ── Scanner de câmera simples via input file (funciona em Android/iOS) ──
+// ── Botão que abre o modal de scanner ──
 function BarcodeScannerBtn({ onScan }: { onScan: (val: string) => void }) {
-  const ref = useRef<HTMLInputElement>(null);
-
-  const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = "";
-    // Tenta usar BarcodeDetector (Chrome Android 83+)
-    if ("BarcodeDetector" in window) {
-      try {
-        const bd = new (window as any).BarcodeDetector();
-        const bitmap = await createImageBitmap(file);
-        const codes = await bd.detect(bitmap);
-        if (codes.length > 0) {
-          onScan(codes[0].rawValue);
-          toast({ title: "✅ Código lido!", description: codes[0].rawValue });
-          return;
-        }
-      } catch {}
-    }
-    // Fallback: pede digitação manual
-    const manual = prompt("Não foi possível ler automaticamente. Digite o código:");
-    if (manual?.trim()) onScan(manual.trim());
-  };
+  const [open, setOpen] = useState(false);
 
   return (
     <>
-      <input ref={ref} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleChange} />
       <button
         type="button"
-        onClick={() => ref.current?.click()}
+        onClick={() => setOpen(true)}
         style={{ width: 36, height: 36, borderRadius: 8, background: "#1A1A2E", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
         title="Escanear código"
       >
         <Camera size={16} color="white" />
       </button>
+      {open && (
+        <BarcodeScannerModal
+          onScan={onScan}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </>
   );
 }
