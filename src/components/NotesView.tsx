@@ -496,6 +496,17 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Relatório de Turno */}
+      {showRelatorio && (
+        <RelatorioTurno
+          onClose={() => setShowRelatorio(false)}
+          onSaveAsNote={(title, content) => {
+            onAdd(title, content);
+            setShowRelatorio(false);
+          }}
+        />
+      )}
     </div>
   );
 }
