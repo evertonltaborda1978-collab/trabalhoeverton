@@ -343,6 +343,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
   const [showPrevia, setShowPrevia] = useState(false);
 
   const [retrabalhadas, setRetrabalhadas] = useState<BobinaTombador[]>(saved?.retrabalhadas ?? []);
+  const [editandoBobina, setEditandoBobina] = useState<{id: string; lista: "ret"|"rej"} | null>(null);
   const [rejeitadas, setRejeitadas] = useState<BobinaTombador[]>(saved?.rejeitadas ?? []);
   const [labels, setLabels] = useState<LabelImpresso[]>(saved?.labels ?? []);
   const [novoLabel, setNovoLabel] = useState("");
@@ -592,83 +593,119 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
   );
 
   // ── Render bobinas do Tombador ──
-  const renderBobinas = (lista: BobinaTombador[], setLista: React.Dispatch<React.SetStateAction<BobinaTombador[]>>, titulo: string, cor: string) => (
+  const renderBobinaForm = (b: BobinaTombador, setLista: React.Dispatch<React.SetStateAction<BobinaTombador[]>>, cor: string) => {
+    const motivosDisponiveis = b.origem ? (db.motivos[b.origem] || []) : [];
+    const causasDisponiveis = b.motivo ? (db.causas[b.motivo] || []) : [];
+    return (
+      <div style={{ position: "fixed", inset: 0, zIndex: 160, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end" }} onClick={() => setEditandoBobina(null)}>
+        <div style={{ background: "#FFF", borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "85vh", overflowY: "auto", padding: "20px 16px 32px" }} onClick={e => e.stopPropagation()}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: cor }}>Editar Bobina</span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => { removeBobina(setLista, b.id); setEditandoBobina(null); }} style={{ fontSize: 12, color: "#E53935", background: "rgba(229,57,53,0.1)", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontWeight: 600 }}>🗑 Remover</button>
+              <button onClick={() => setEditandoBobina(null)} style={{ width: 32, height: 32, borderRadius: "50%", background: "#F0F0F0", border: "none", cursor: "pointer" }}>✕</button>
+            </div>
+          </div>
+
+          <label style={{ fontSize: 11, color: "#9E9E9E" }}>ID Unit</label>
+          <div style={{ display: "flex", gap: 6, marginTop: 4, marginBottom: 12 }}>
+            <input type="text" placeholder="Ex: 266F282614" value={b.idUnit} onChange={e => updateBobina(setLista, b.id, "idUnit", e.target.value)} style={{ ...inputStyle, marginTop: 0, flex: 1, fontWeight: 700, letterSpacing: 1 }} />
+            <BarcodeScannerBtn onScan={val => updateBobina(setLista, b.id, "idUnit", val)} />
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <label style={{ fontSize: 11, color: "#9E9E9E" }}>Origem</label>
+            <button onClick={openManageOrigens} style={manageBtn}>✎ Gerenciar</button>
+          </div>
+          <div style={{ display: "flex", gap: 4, marginTop: 4, marginBottom: 12 }}>
+            <select value={b.origem} onChange={e => updateBobina(setLista, b.id, "origem", e.target.value)} style={{ ...selectStyle, marginTop: 0, flex: 1 }}>
+              <option value="">Selecionar origem</option>
+              {db.origens.map(o => <option key={o}>{o}</option>)}
+            </select>
+            <button onClick={addOrigem} style={{ ...btnStyle, fontSize: 14, color: "#2D9E7F" }}>+</button>
+          </div>
+
+          {b.origem && (<>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <label style={{ fontSize: 11, color: "#9E9E9E" }}>Motivo</label>
+              <button onClick={() => openManageMotivos(b.origem)} style={manageBtn}>✎ Gerenciar</button>
+            </div>
+            <div style={{ display: "flex", gap: 4, marginTop: 4, marginBottom: 12 }}>
+              <select value={b.motivo} onChange={e => updateBobina(setLista, b.id, "motivo", e.target.value)} style={{ ...selectStyle, marginTop: 0, flex: 1 }}>
+                <option value="">Selecionar motivo</option>
+                {motivosDisponiveis.map(m => <option key={m}>{m}</option>)}
+              </select>
+              <button onClick={() => addMotivo(b.origem)} style={{ ...btnStyle, fontSize: 14, color: "#2D9E7F" }}>+</button>
+            </div>
+          </>)}
+
+          {b.motivo && (<>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <label style={{ fontSize: 11, color: "#9E9E9E" }}>Causa</label>
+              <button onClick={() => openManageCausas(b.motivo)} style={manageBtn}>✎ Gerenciar</button>
+            </div>
+            <div style={{ display: "flex", gap: 4, marginTop: 4, marginBottom: 12 }}>
+              <select value={b.causa} onChange={e => updateBobina(setLista, b.id, "causa", e.target.value)} style={{ ...selectStyle, marginTop: 0, flex: 1 }}>
+                <option value="">Selecionar causa</option>
+                {causasDisponiveis.map(c => <option key={c}>{c}</option>)}
+              </select>
+              <button onClick={() => addCausa(b.motivo)} style={{ ...btnStyle, fontSize: 14, color: "#2D9E7F" }}>+</button>
+            </div>
+          </>)}
+
+          <label style={{ fontSize: 11, color: "#9E9E9E" }}>Observações</label>
+          <textarea value={b.obs} onChange={e => updateBobina(setLista, b.id, "obs", e.target.value)} rows={2} placeholder="Observações..." style={{ ...inputStyle, resize: "vertical", marginTop: 4, marginBottom: 16 }} />
+
+          <button onClick={() => setEditandoBobina(null)} style={{ width: "100%", padding: "12px 0", borderRadius: 12, background: cor, color: "#FFF", fontWeight: 700, fontSize: 14, border: "none", cursor: "pointer" }}>✓ Confirmar</button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderBobinas = (lista: BobinaTombador[], setLista: React.Dispatch<React.SetStateAction<BobinaTombador[]>>, titulo: string, cor: string, listaKey: "ret"|"rej") => (
     <div style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: cor }}>{titulo}</span>
-        <button onClick={() => setLista(prev => [...prev, newBobina()])} style={{ fontSize: 12, color: cor, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar bobina</button>
+        <button
+          onClick={() => {
+            const nova = newBobina();
+            setLista(prev => [...prev, nova]);
+            setEditandoBobina({ id: nova.id, lista: listaKey });
+          }}
+          style={{ fontSize: 12, color: cor, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}
+        >+ Adicionar bobina</button>
       </div>
+
       {lista.length === 0 && <p style={{ fontSize: 12, color: "#BDBDBD", fontStyle: "italic", marginBottom: 4 }}>Nenhuma bobina registrada.</p>}
-      {lista.map((b) => {
-        const motivosDisponiveis = b.origem ? (db.motivos[b.origem] || []) : [];
-        const causasDisponiveis = b.motivo ? (db.causas[b.motivo] || []) : [];
-        return (
-          <div key={b.id} style={{ border: "1px solid #F0F0F0", borderRadius: 12, padding: 12, marginBottom: 8, background: "#FAFAFA" }}>
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
-              <button onClick={() => removeBobina(setLista, b.id)} style={{ fontSize: 12, color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕ Remover</button>
-            </div>
 
-            <label style={{ fontSize: 11, color: "#9E9E9E" }}>ID Unit</label>
-            <div style={{ display: "flex", gap: 6, marginTop: 4, marginBottom: 10 }}>
-              <input type="text" placeholder="Ex: 266F282614" value={b.idUnit} onChange={e => updateBobina(setLista, b.id, "idUnit", e.target.value)} style={{ ...inputStyle, marginTop: 0, flex: 1, fontWeight: 700, letterSpacing: 1 }} />
-              <BarcodeScannerBtn onScan={val => updateBobina(setLista, b.id, "idUnit", val)} />
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <label style={{ fontSize: 11, color: "#9E9E9E" }}>Origem</label>
-              <button onClick={openManageOrigens} style={manageBtn}>✎ Gerenciar</button>
-            </div>
-            <div style={{ display: "flex", gap: 4, marginTop: 4, marginBottom: 10 }}>
-              <select value={b.origem} onChange={e => updateBobina(setLista, b.id, "origem", e.target.value)} style={{ ...selectStyle, marginTop: 0, flex: 1 }}>
-                <option value="">Selecionar origem</option>
-                {db.origens.map(o => <option key={o}>{o}</option>)}
-              </select>
-              <button onClick={addOrigem} style={{ ...btnStyle, fontSize: 14, color: "#2D9E7F" }} title="Nova origem">+</button>
-            </div>
-
-            {b.origem && (
-              <>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <label style={{ fontSize: 11, color: "#9E9E9E" }}>Motivo</label>
-                  <button onClick={() => openManageMotivos(b.origem)} style={manageBtn}>✎ Gerenciar</button>
-                </div>
-                <div style={{ display: "flex", gap: 4, marginTop: 4, marginBottom: 10 }}>
-                  <select value={b.motivo} onChange={e => updateBobina(setLista, b.id, "motivo", e.target.value)} style={{ ...selectStyle, marginTop: 0, flex: 1 }}>
-                    <option value="">Selecionar motivo</option>
-                    {motivosDisponiveis.map(m => <option key={m}>{m}</option>)}
-                  </select>
-                  <button onClick={() => addMotivo(b.origem)} style={{ ...btnStyle, fontSize: 14, color: "#2D9E7F" }} title="Novo motivo">+</button>
-                </div>
-              </>
-            )}
-
-            {b.motivo && (
-              <>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <label style={{ fontSize: 11, color: "#9E9E9E" }}>Causa</label>
-                  <button onClick={() => openManageCausas(b.motivo)} style={manageBtn}>✎ Gerenciar</button>
-                </div>
-                <div style={{ display: "flex", gap: 4, marginTop: 4, marginBottom: 10 }}>
-                  <select value={b.causa} onChange={e => updateBobina(setLista, b.id, "causa", e.target.value)} style={{ ...selectStyle, marginTop: 0, flex: 1 }}>
-                    <option value="">Selecionar causa</option>
-                    {causasDisponiveis.map(c => <option key={c}>{c}</option>)}
-                  </select>
-                  <button onClick={() => addCausa(b.motivo)} style={{ ...btnStyle, fontSize: 14, color: "#2D9E7F" }} title="Nova causa">+</button>
-                </div>
-              </>
-            )}
-
-            <label style={{ fontSize: 11, color: "#9E9E9E" }}>Observações</label>
-            <textarea value={b.obs} onChange={e => updateBobina(setLista, b.id, "obs", e.target.value)} rows={2} placeholder="Observações..." style={{ ...inputStyle, resize: "vertical", marginTop: 4 }} />
-
-            {b.idUnit && (
-              <div style={{ marginTop: 8, padding: "6px 10px", background: `${cor}15`, borderRadius: 8, fontSize: 12, fontWeight: 600, color: cor }}>
-                {b.idUnit}{b.motivo ? ` - ${b.motivo}` : ""}{b.causa ? `/${b.causa}` : ""}{b.origem ? `/ ${b.origem}` : ""}
+      {/* Lista compacta */}
+      {lista.map((b, idx) => (
+        <div
+          key={b.id}
+          onClick={() => setEditandoBobina({ id: b.id, lista: listaKey })}
+          style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", marginBottom: 6, borderRadius: 12, background: "#FAFAFA", border: "1px solid #F0F0F0", cursor: "pointer" }}
+        >
+          <span style={{ fontSize: 12, fontWeight: 700, color: "#BDBDBD", minWidth: 20 }}>{idx + 1}.</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1A1A2E", letterSpacing: 0.5 }}>{b.idUnit || <span style={{ color: "#BDBDBD", fontWeight: 400 }}>Sem código</span>}</div>
+            {(b.motivo || b.origem) && (
+              <div style={{ fontSize: 11, color: "#9E9E9E", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {b.motivo}{b.causa ? `/${b.causa}` : ""}{b.origem ? ` · ${b.origem}` : ""}
               </div>
             )}
           </div>
-        );
-      })}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+            {b.idUnit && <span style={{ fontSize: 10, fontWeight: 700, color: cor, background: `${cor}15`, padding: "2px 8px", borderRadius: 10 }}>✓</span>}
+            <span style={{ fontSize: 12, color: "#BDBDBD" }}>›</span>
+          </div>
+        </div>
+      ))}
+
+      {/* Modal de edição */}
+      {editandoBobina?.lista === listaKey && (() => {
+        const b = lista.find(x => x.id === editandoBobina.id);
+        return b ? renderBobinaForm(b, setLista, cor) : null;
+      })()}
     </div>
   );
 
@@ -706,9 +743,10 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
             {db.destinatarios.length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
                 {db.destinatarios.map(d => (
-                  <button key={d} onClick={() => setDest(d)} style={{ fontSize: 11, padding: "4px 12px", borderRadius: 20, border: d === dest ? "1.5px solid #2D9E7F" : "1px solid #EBEBEB", background: d === dest ? "rgba(45,158,127,0.1)" : "#FAFAFA", color: d === dest ? "#2D9E7F" : "#9E9E9E", fontWeight: 600, cursor: "pointer" }}>
-                    {d}
-                  </button>
+                  <div key={d} style={{ display: "flex", alignItems: "center", borderRadius: 20, border: d === dest ? "1.5px solid #2D9E7F" : "1px solid #EBEBEB", background: d === dest ? "rgba(45,158,127,0.1)" : "#FAFAFA", overflow: "hidden" }}>
+                    <button onClick={() => setDest(d)} style={{ fontSize: 11, padding: "4px 10px", background: "none", border: "none", color: d === dest ? "#2D9E7F" : "#9E9E9E", fontWeight: 600, cursor: "pointer" }}>{d}</button>
+                    <button onClick={() => setDb(prev => ({ ...prev, destinatarios: prev.destinatarios.filter(x => x !== d) }))} style={{ fontSize: 11, padding: "4px 8px 4px 0", background: "none", border: "none", color: "#E53935", cursor: "pointer" }}>✕</button>
+                  </div>
                 ))}
               </div>
             )}
@@ -838,9 +876,9 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
             <button onClick={() => setTombCollapsed(!tombCollapsed)} style={sectionBtn}>{tombCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
           </div>
           {!tombCollapsed && <>
-            {renderBobinas(retrabalhadas, setRetrabalhadas, "♻️ Bobinas Retrabalhadas", "#F57C00")}
+            {renderBobinas(retrabalhadas, setRetrabalhadas, "♻️ Bobinas Retrabalhadas", "#F57C00", "ret")}
             <div style={{ height: 1, background: "#F0F0F0", margin: "8px 0 16px" }} />
-            {renderBobinas(rejeitadas, setRejeitadas, "❌ Bobinas Rejeitadas", "#E53935")}
+            {renderBobinas(rejeitadas, setRejeitadas, "❌ Bobinas Rejeitadas", "#E53935", "rej")}
             <div style={{ height: 1, background: "#F0F0F0", margin: "8px 0 16px" }} />
 
             {/* Impressão de Label */}
