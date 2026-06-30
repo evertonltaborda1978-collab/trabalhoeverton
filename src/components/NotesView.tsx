@@ -137,7 +137,20 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
       setLockMode("unlock");
       return;
     }
-    // Detectar se é uma nota de Relatório de Turno
+    // Detectar se é uma nota de Relatório de Turno pelo título
+    if (note.title && note.title.includes("Relatório")) {
+      const stateKey = `relatorio_state_${note.title.replace(/\s/g, "_")}`;
+      const raw = localStorage.getItem(stateKey);
+      if (raw) {
+        try {
+          const state = JSON.parse(raw);
+          setRelatorioInitialState(state);
+          setShowRelatorio(true);
+          return;
+        } catch {}
+      }
+    }
+    // Compatibilidade com notas antigas que ainda têm o comentário HTML
     const match = note.content.match(/<!--relatorio-turno-state:([\s\S]*?)-->/);
     if (match) {
       try {
