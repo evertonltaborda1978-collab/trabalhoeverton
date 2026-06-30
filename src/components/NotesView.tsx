@@ -52,6 +52,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
   const [showBackupMenu, setShowBackupMenu] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
   const [showRelatorio, setShowRelatorio] = useState(false);
+  const [relatorioInitialState, setRelatorioInitialState] = useState<any>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteTitle, setConfirmDeleteTitle] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
@@ -135,6 +136,16 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
       setLockNote(note);
       setLockMode("unlock");
       return;
+    }
+    // Detectar se é uma nota de Relatório de Turno
+    const match = note.content.match(/<!--relatorio-turno-state:([\s\S]*?)-->/);
+    if (match) {
+      try {
+        const state = JSON.parse(match[1]);
+        setRelatorioInitialState(state);
+        setShowRelatorio(true);
+        return;
+      } catch {}
     }
     // Always open in read-only mode
     setEditorReadOnly(true);
@@ -500,10 +511,12 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
       {/* Relatório de Turno */}
       {showRelatorio && (
         <RelatorioTurno
-          onClose={() => setShowRelatorio(false)}
+          initialState={relatorioInitialState}
+          onClose={() => { setShowRelatorio(false); setRelatorioInitialState(null); }}
           onSaveAsNote={(title, content) => {
             onAdd(title, content);
             setShowRelatorio(false);
+            setRelatorioInitialState(null);
           }}
         />
       )}
