@@ -481,14 +481,17 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
     if (retrabalhadas.length > 0) {
       txt += "Bobinas Retrabalhadas\n";
       retrabalhadas.forEach(b => { if (b.idUnit) txt += `${b.idUnit}${b.motivo ? " - " + b.motivo : ""}${b.causa ? "/" + b.causa : ""}${b.origem ? "/ " + b.origem : ""}\n`; });
+      txt += "\n";
     }
     if (rejeitadas.length > 0) {
       txt += "Bobinas Rejeitadas\n";
       rejeitadas.forEach(b => { if (b.idUnit) txt += `${b.idUnit}${b.motivo ? " - " + b.motivo : ""}${b.causa ? "/" + b.causa : ""}${b.origem ? "/ " + b.origem : ""}\n`; });
+      txt += "\n";
     }
     if (labels.length > 0) {
       txt += "Impressão de Label\n";
       labels.forEach(l => { if (l.codigo) txt += `${l.codigo}\n`; });
+      txt += "\n";
     }
     if (obsTomb) txt += `Obs: ${obsTomb}\n`;
     const paradasTombTxt = buildParadasTxt(paradasTomb);
@@ -532,10 +535,13 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
   };
   const handleSaveNote = () => {
     const text = gerarTexto();
+    const title = `Turno ${turno} Relatório - Letra ${letra}`;
     const state = { dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, rcId, rcSid, obsCL, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, modoTombador, embaladeiraNum };
-    // Marca a nota como vinculada ao formulário de Relatório de Turno
-    const payload = `<!--relatorio-turno-state:${JSON.stringify(state)}-->\n${text}`;
-    onSaveAsNote(`Turno ${turno} Relatório - Letra ${letra}`, payload);
+    // Salva o estado no localStorage com chave baseada no título
+    const stateKey = `relatorio_state_${title.replace(/\s/g, "_")}`;
+    localStorage.setItem(stateKey, JSON.stringify(state));
+    // Salva na nota apenas o texto limpo + marcador invisível no título
+    onSaveAsNote(title, text);
     toast({ title: "✅ Salvo nas notas!" });
     localStorage.removeItem(RASCUNHO_KEY);
     onClose();
