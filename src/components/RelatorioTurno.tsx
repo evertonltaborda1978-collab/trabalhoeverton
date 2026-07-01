@@ -8,6 +8,7 @@ interface TombadorDB {
   motivos: Record<string, string[]>;
   causas: Record<string, string[]>;
   destinatarios: string[];
+  responsaveis: string[];
 }
 
 const DB_KEY = "tombador_db";
@@ -19,6 +20,7 @@ function loadDB(): TombadorDB {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (!parsed.destinatarios) parsed.destinatarios = ["Phablo"];
+    if (!parsed.responsaveis) parsed.responsaveis = ["Everton Luis Taborda", "Luis", "Karlla"];
       return parsed;
     }
   } catch {}
@@ -27,6 +29,7 @@ function loadDB(): TombadorDB {
     motivos: { "Linha de Bobinas 1": ["Danificada"], "Linha de Bobinas 2": ["Danificada"], "Rebobinadeira 1": [], "Rebobinadeira 2": [] },
     causas: { "Danificada": ["Transportador"] },
     destinatarios: ["Phablo"],
+    responsaveis: ["Everton Luis Taborda", "Luis", "Karlla"],
   };
 }
 
@@ -323,7 +326,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
   const [turno, setTurno] = useState(saved?.turno ?? "2");
   const [letra, setLetra] = useState(saved?.letra ?? "D");
   const [horario, setHorario] = useState(saved?.horario ?? "08:20 x 16:20 hr");
-  const [resps, setResps] = useState<string[]>(saved?.resps ?? ["Everton Luis Taborda", "Luis", "Karlla"]);
+  const [resps, setResps] = useState<string[]>(saved?.resps ?? loadDB().responsaveis);
   const [modoTombador, setModoTombador] = useState(saved?.modoTombador ?? false);
   const [darkMode, setDarkMode] = useState(false);
   const [fontSize, setFontSize] = useState<"sm"|"md"|"lg">(saved?.fontSize ?? "md");
@@ -430,10 +433,54 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
     onDelete: (val) => setDb(prev => ({ ...prev, causas: { ...prev.causas, [motivo]: (prev.causas[motivo] || []).filter(c => c !== val) } })),
   });
 
+  const handleNovoRelatorio = () => {
+    localStorage.removeItem(RASCUNHO_KEY);
+    setDest("Phablo");
+    setTurno("2");
+    setLetra("D");
+    setHorario("08:20 x 16:20 hr");
+    setResps(loadDB().responsaveis);
+    setItens(ITENS_BASE.map(l => ({ label: l, trocas: [], collapsed: false })));
+    setObsEmb("");
+    setParadasMap({ emb: [], cl: [], rc: [] });
+    setClQtd(0);
+    setRcId(0);
+    setRcSid(0);
+    setObsCL("");
+    setObsRC("");
+    setRetrabalhadas([]);
+    setRejeitadas([]);
+    setLabels([]);
+    setObsTomb("");
+    setParadasTomb([]);
+    setModoTombador(false);
+    setEmbaladeiraNum("2");
+    setShowPrevia(false);
+    toast({ title: "✅ Novo relatório iniciado!" });
+  };
+
   const onTurnoChange = (v: string) => { setTurno(v); setHorario(HORARIOS[v] || ""); };
-  const addResp = () => setResps(r => [...r, ""]);
-  const updateResp = (i: number, v: string) => setResps(r => r.map((x, j) => j === i ? v : x));
-  const removeResp = (i: number) => setResps(r => r.filter((_, j) => j !== i));
+  const addResp = () => {
+    setResps(r => {
+      const novo = [...r, ""];
+      setDb(prev => ({ ...prev, responsaveis: novo.filter(Boolean) }));
+      return novo;
+    });
+  };
+  const updateResp = (i: number, v: string) => {
+    setResps(r => {
+      const novo = r.map((x, j) => j === i ? v : x);
+      setDb(prev => ({ ...prev, responsaveis: novo.filter(Boolean) }));
+      return novo;
+    });
+  };
+  const removeResp = (i: number) => {
+    setResps(r => {
+      const novo = r.filter((_, j) => j !== i);
+      setDb(prev => ({ ...prev, responsaveis: novo.filter(Boolean) }));
+      return novo;
+    });
+  };
   const calcTotalEmb = () => itens.reduce((s, i) => s + i.trocas.reduce((a, t) => a + (t.min || 0), 0), 0);
 
   const addTroca = (idx: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: [...item.trocas, { min: null }] } : item));
@@ -743,6 +790,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
         <FileText size={18} style={{ color: "#1A1A2E" }} />
         <span style={{ fontWeight: 800, fontSize: 16, color: theme.text, flex: 1 }}>Relatório de Turno</span>
         <button onClick={() => setModoTombador(!modoTombador)} style={{ fontSize: 11, padding: "5px 10px", borderRadius: 20, border: modoTombador ? "1.5px solid #F57C00" : `1px solid ${theme.sectionBtnBorder}`, background: modoTombador ? "rgba(245,124,0,0.12)" : theme.sectionBtnBg, color: modoTombador ? "#F57C00" : theme.textSub, fontWeight: 700, cursor: "pointer", marginRight: 4, whiteSpace: "nowrap" }} title="Modo Tombador">🔁</button>
+        <button onClick={handleNovoRelatorio} style={{ fontSize: 11, padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: "#E53935", fontWeight: 700, cursor: "pointer", marginRight: 2, whiteSpace: "nowrap" }} title="Novo relatório">🗑 Novo</button>
         <button onClick={() => setDarkMode(!darkMode)} style={{ fontSize: 14, width: 30, height: 30, borderRadius: "50%", border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, cursor: "pointer", marginRight: 2 }} title={darkMode ? "Modo claro" : "Modo escuro"}>{darkMode ? "☀️" : "🌙"}</button>
         <button onClick={() => setFontSize(f => f === "sm" ? "md" : f === "md" ? "lg" : "sm")} style={{ fontSize: 11, padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, fontWeight: 700, cursor: "pointer", marginRight: 4 }} title="Tamanho da fonte">{fontSize === "sm" ? "A" : fontSize === "md" ? "A+" : "A++"}</button>
         <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: "50%", background: theme.sectionBtnBg, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: theme.text }}>
