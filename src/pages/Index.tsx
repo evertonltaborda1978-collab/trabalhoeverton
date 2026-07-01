@@ -46,6 +46,7 @@ const Index = () => {
   const { currentDevice, fetchDevices } = useDeviceTracking();
   const { recordLocation } = useDeviceLocations();
   const [showLabelModal, setShowLabelModal] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
 
   // Escuta global de comandos remotos — funciona em qualquer aba, não só na Local
