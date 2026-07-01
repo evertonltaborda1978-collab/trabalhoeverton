@@ -352,7 +352,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
   const [db, setDb] = useState<TombadorDB>(loadDB);
 
   // Modais
-  const [inputModal, setInputModal] = useState<{ title: string; subtitle?: string; onConfirm: (v: string) => void } | null>(null);
+  const [inputModal, setInputModal] = useState<{ title: string; subtitle?: string; placeholder?: string; onConfirm: (v: string) => void } | null>(null);
   const [manageModal, setManageModal] = useState<{ title: string; items: string[]; onEdit: (o: string, n: string) => void; onDelete: (v: string) => void } | null>(null);
 
   useEffect(() => { saveDB(db); }, [db]);
