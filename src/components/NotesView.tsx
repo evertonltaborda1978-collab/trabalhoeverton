@@ -56,6 +56,15 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteTitle, setConfirmDeleteTitle] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    if (!onRefresh || isRefreshing) return;
+    setIsRefreshing(true);
+    try { await onRefresh(); } finally {
+      setTimeout(() => setIsRefreshing(false), 600);
+    }
+  };
 
   // Editor always opens in read-only mode; user toggles to edit via pencil icon
   const [editorReadOnly, setEditorReadOnly] = useState(true);
