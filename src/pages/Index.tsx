@@ -119,6 +119,24 @@ const Index = () => {
     setTab(newTab);
   };
 
+  // Botão de refresh global: recarrega notas, agenda e dispositivos
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await Promise.allSettled([
+        refreshNotes(),
+        fetchDevices(),
+        fetchAppointments(),
+      ]);
+      toast({ title: "🔄 Atualizado", description: "Notas, agenda e dispositivos sincronizados." });
+    } catch {
+      toast({ title: "Erro ao atualizar", description: "Verifique sua conexão." });
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 600);
+    }
+  };
+
   // Registrar/desregistrar modais para o botão voltar
   useEffect(() => {
     (window as any).__registerModal = (id: string, onClose: () => void) => {
