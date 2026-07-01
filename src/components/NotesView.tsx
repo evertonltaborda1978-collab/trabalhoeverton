@@ -406,7 +406,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
           )}
         </div>
         <button
-          onClick={() => setShowRelatorio(true)}
+          onClick={() => { localStorage.removeItem("relatorio_turno_rascunho"); setRelatorioInitialState(null); setShowRelatorio(true); }}
           className="shrink-0 flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95"
           style={{ width: 46, height: 46, borderRadius: 14, background: "#F57C00", boxShadow: "0 4px 14px -2px rgba(245,124,0,0.35)" }}
           title="Relatório de Turno"
