@@ -594,7 +594,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
   };
   const handleSaveNote = () => {
     const text = gerarTexto();
-    const title = `Turno ${turno} Relatório - Letra ${letra}`;
+    const title = modoTombador ? `Turno ${turno} Relatório Tombador - Letra ${letra}` : `Turno ${turno} Relatório - Letra ${letra}`;
     const state = { dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, rcId, rcSid, obsCL, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, modoTombador, embaladeiraNum, fontSize };
     // Salva o estado no localStorage com chave baseada no título
     const stateKey = `relatorio_state_${title.replace(/\s/g, "_")}`;
