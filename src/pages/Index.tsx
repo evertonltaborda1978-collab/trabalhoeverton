@@ -17,7 +17,7 @@ import { useDeviceCommands } from "@/hooks/useDeviceCommands";
 import { useDeviceLocations, reverseGeocodeFetch } from "@/hooks/useDeviceLocations";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { LogOut } from "lucide-react";
+import { LogOut, RefreshCw } from "lucide-react";
 
 type Tab = "notes" | "calendar" | "weather" | "location" | "devices" | "fuel" | "medication";
 
@@ -41,11 +41,12 @@ const Index = () => {
   const activeModalRef = useRef<string | null>(null);
   const onModalCloseRef = useRef<(() => void) | null>(null);
   const { notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes, refreshNotes } = useNotes();
-  const { appointments, trashedAppointments, addAppointment, updateAppointment, deleteAppointment, restoreAppointment, permanentDeleteAppointment, emptyAppointmentTrash, activeAlert, dismissAlert, snoozeAlert } = useAppointments();
+  const { appointments, trashedAppointments, addAppointment, updateAppointment, deleteAppointment, restoreAppointment, permanentDeleteAppointment, emptyAppointmentTrash, activeAlert, dismissAlert, snoozeAlert, fetchAppointments } = useAppointments();
   const { signOut } = useAuth();
   const { currentDevice, fetchDevices } = useDeviceTracking();
   const { recordLocation } = useDeviceLocations();
   const [showLabelModal, setShowLabelModal] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
 
   // Escuta global de comandos remotos — funciona em qualquer aba, não só na Local
@@ -116,6 +117,24 @@ const Index = () => {
     tabHistoryRef.current = [...tabHistoryRef.current, tabRef.current];
     tabRef.current = newTab;
     setTab(newTab);
+  };
+
+  // Botão de refresh global: recarrega notas, agenda e dispositivos
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await Promise.allSettled([
+        refreshNotes(),
+        fetchDevices(),
+        fetchAppointments(),
+      ]);
+      toast({ title: "🔄 Atualizado", description: "Notas, agenda e dispositivos sincronizados." });
+    } catch {
+      toast({ title: "Erro ao atualizar", description: "Verifique sua conexão." });
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 600);
+    }
   };
 
   // Registrar/desregistrar modais para o botão voltar
@@ -215,7 +234,27 @@ const Index = () => {
               </span>
             </span>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="flex items-center justify-center transition-all duration-200 hover:scale-105 disabled:opacity-100"
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: "50%",
+                  background: isRefreshing ? "#2D9E7F" : "#FFFFFF",
+                  border: isRefreshing ? "1px solid #2D9E7F" : "1px solid #EBEBEB",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+                }}
+                title={isRefreshing ? "Atualizando..." : "Atualizar dados"}
+              >
+                <RefreshCw
+                  size={15}
+                  className={isRefreshing ? "animate-spin" : ""}
+                  style={{ color: isRefreshing ? "#FFFFFF" : "#1A1A2E" }}
+                />
+              </button>
               <MoonPhaseWidget />
               <button
                 onClick={signOut}
