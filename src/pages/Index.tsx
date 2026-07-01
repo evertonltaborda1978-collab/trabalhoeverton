@@ -234,7 +234,27 @@ const Index = () => {
               </span>
             </span>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="flex items-center justify-center transition-all duration-200 hover:scale-105 disabled:opacity-100"
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: "50%",
+                  background: isRefreshing ? "#2D9E7F" : "#FFFFFF",
+                  border: isRefreshing ? "1px solid #2D9E7F" : "1px solid #EBEBEB",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+                }}
+                title={isRefreshing ? "Atualizando..." : "Atualizar dados"}
+              >
+                <RefreshCw
+                  size={15}
+                  className={isRefreshing ? "animate-spin" : ""}
+                  style={{ color: isRefreshing ? "#FFFFFF" : "#1A1A2E" }}
+                />
+              </button>
               <MoonPhaseWidget />
               <button
                 onClick={signOut}
