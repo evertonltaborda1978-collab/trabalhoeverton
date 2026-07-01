@@ -544,7 +544,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
           initialState={relatorioInitialState}
           onClose={() => { setShowRelatorio(false); setRelatorioInitialState(null); }}
           onSaveAsNote={(title, content) => {
-            onAdd(title, content);
+            onAdd(title, content, [], "bg-blue-100", "default", "medium", "publicada");
             setShowRelatorio(false);
             setRelatorioInitialState(null);
           }}
