@@ -544,7 +544,13 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
           initialState={relatorioInitialState}
           onClose={() => { setShowRelatorio(false); setRelatorioInitialState(null); }}
           onSaveAsNote={(title, content) => {
-            onAdd(title, content, [], "bg-blue-100", "default", "medium", "publicada");
+            // Atualiza nota existente se título já existe, senão cria nova
+            const existing = notes.find(n => n.title === title);
+            if (existing) {
+              onUpdate(existing.id, title, content, [], existing.color || "bg-blue-100", "default", "medium", "publicada");
+            } else {
+              onAdd(title, content, [], "bg-blue-100", "default", "medium", "publicada");
+            }
             setShowRelatorio(false);
             setRelatorioInitialState(null);
           }}
