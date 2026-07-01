@@ -17,7 +17,7 @@ import { useDeviceCommands } from "@/hooks/useDeviceCommands";
 import { useDeviceLocations, reverseGeocodeFetch } from "@/hooks/useDeviceLocations";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { LogOut } from "lucide-react";
+import { LogOut, RefreshCw } from "lucide-react";
 
 type Tab = "notes" | "calendar" | "weather" | "location" | "devices" | "fuel" | "medication";
 
