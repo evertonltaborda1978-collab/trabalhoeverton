@@ -315,12 +315,20 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
           </button>
           {onRefresh && (
             <button
-              onClick={onRefresh}
-              disabled={syncStatus === "syncing"}
-              className="flex items-center justify-center w-8 h-8 rounded-full bg-white border border-[#EBEBEB] shadow-sm transition-opacity hover:opacity-70 disabled:opacity-40"
-              title="Atualizar notas"
+              onClick={handleRefresh}
+              disabled={syncStatus === "syncing" || isRefreshing}
+              className="flex items-center justify-center w-8 h-8 rounded-full shadow-sm transition-all disabled:opacity-100"
+              style={{
+                background: isRefreshing ? "#2D9E7F" : "#FFFFFF",
+                border: isRefreshing ? "1px solid #2D9E7F" : "1px solid #EBEBEB",
+              }}
+              title={isRefreshing ? "Atualizando notas..." : "Atualizar notas"}
             >
-              <RefreshCw size={14} className={syncStatus === "syncing" ? "animate-spin" : ""} style={{ color: "#9E9E9E" }} />
+              <RefreshCw
+                size={14}
+                className={isRefreshing || syncStatus === "syncing" ? "animate-spin" : ""}
+                style={{ color: isRefreshing ? "#FFFFFF" : "#9E9E9E" }}
+              />
             </button>
           )}
           {draftCount > 0 && (
