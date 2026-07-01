@@ -756,7 +756,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
         {/* Cabeçalho do turno */}
         <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: headerCollapsed ? 0 : 12 }}>
-            <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }>📋 Turno</span>
+            <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>📋 Turno</span>
             <button onClick={() => setHeaderCollapsed(!headerCollapsed)} style={sectionBtn}>{headerCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
           </div>
           {!headerCollapsed && <>
@@ -805,7 +805,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
         {!modoTombador && <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: embCollapsed ? 0 : 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }>• Embaladeira</span>
+              <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>• Embaladeira</span>
               <select value={embaladeiraNum} onChange={e => setEmbaladeiraNum(e.target.value as "1"|"2")} style={{ fontSize: 13, fontWeight: 700, border: "1px solid #EBEBEB", borderRadius: 8, padding: "2px 8px", background: "#FAFAFA" }}>
                 <option value="1">1</option>
                 <option value="2">2</option>
@@ -873,7 +873,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
         {/* Roll Cutter */}
         {!modoTombador && <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: rcCollapsed ? 0 : 10 }}>
-            <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }>• Roll Cutter</span>
+            <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>• Roll Cutter</span>
             <button onClick={() => setRcCollapsed(!rcCollapsed)} style={sectionBtn}>{rcCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
           </div>
           {!rcCollapsed && <>
@@ -897,7 +897,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
         {/* Tombador */}
         <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tombCollapsed ? 0 : 12 }}>
-            <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }>🔁 Tombador</span>
+            <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>🔁 Tombador</span>
             <button onClick={() => setTombCollapsed(!tombCollapsed)} style={sectionBtn}>{tombCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
           </div>
           {!tombCollapsed && <>
