@@ -325,6 +325,8 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
   const [horario, setHorario] = useState(saved?.horario ?? "08:20 x 16:20 hr");
   const [resps, setResps] = useState<string[]>(saved?.resps ?? ["Everton Luis Taborda", "Luis", "Karlla"]);
   const [modoTombador, setModoTombador] = useState(saved?.modoTombador ?? false);
+  const [darkMode, setDarkMode] = useState(false);
+  const [fontSize, setFontSize] = useState<"sm"|"md"|"lg">(saved?.fontSize ?? "md");
   const [embaladeiraNum, setEmbaladeiraNum] = useState<"1"|"2">(saved?.embaladeiraNum ?? "2");
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const [embCollapsed, setEmbCollapsed] = useState(false);
@@ -359,9 +361,9 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
 
   // Auto-salvar rascunho
   useEffect(() => {
-    const state = { dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, rcId, rcSid, obsCL, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, modoTombador, embaladeiraNum };
+    const state = { dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, rcId, rcSid, obsCL, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, modoTombador, embaladeiraNum, fontSize };
     localStorage.setItem(RASCUNHO_KEY, JSON.stringify(state));
-  }, [dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, rcId, rcSid, obsCL, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, modoTombador, embaladeiraNum]);
+  }, [dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, rcId, rcSid, obsCL, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, modoTombador, embaladeiraNum, fontSize]);
 
   const addOrigem = () => setInputModal({
     title: "Nova Origem", placeholder: "Ex: Linha de Bobinas 3",
@@ -524,6 +526,9 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
       if (obsRC) rollCutterSection += `Obs: ${obsRC}\n`;
       if (paradasRC) rollCutterSection += `\nObs:\n${paradasRC}Parada total: ${totalPRC}.\n`;
     }
+    if (modoTombador) {
+      return `${dest},\nSegue relatório do tombador.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}${buildTombadorTxt()}`.trim();
+    }
     return `${dest},\nSegue Relatório da linha de bobinas.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}\n\n• Embaladeira ${embaladeiraNum}\n✔ Consumidos:\n${consumidos || " (sem consumos)\n"}\n✔ Total de Tempo de Parada: ${totalEmb}.${obsEmb ? "\n\nObs:\n" + obsEmb : ""}${paradasEmb ? "\n\nObs:\n" + paradasEmb + "Parada total: " + totalPEmb + "." : ""}${coreLinkSection}${rollCutterSection}${buildTombadorTxt()}`.trim();
   }, [dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, obsCL, rcId, rcSid, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, embaladeiraNum, db]);
 
@@ -536,7 +541,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
   const handleSaveNote = () => {
     const text = gerarTexto();
     const title = `Turno ${turno} Relatório - Letra ${letra}`;
-    const state = { dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, rcId, rcSid, obsCL, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, modoTombador, embaladeiraNum };
+    const state = { dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, rcId, rcSid, obsCL, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, modoTombador, embaladeiraNum, fontSize };
     // Salva o estado no localStorage com chave baseada no título
     const stateKey = `relatorio_state_${title.replace(/\s/g, "_")}`;
     localStorage.setItem(stateKey, JSON.stringify(state));
@@ -547,12 +552,28 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
     onClose();
   };
 
+  // ── Tema ──
+  const fz = fontSize === "sm" ? 12 : fontSize === "lg" ? 16 : 14;
+  const theme = {
+    bg: darkMode ? "#1A1A2E" : "#F7F5F2",
+    card: darkMode ? "#252540" : "#FFF",
+    cardBorder: darkMode ? "#333355" : "#F0F0F0",
+    text: darkMode ? "#E8E8F0" : "#1A1A2E",
+    textSub: darkMode ? "#9090B0" : "#9E9E9E",
+    inputBg: darkMode ? "#1E1E38" : "#FAFAFA",
+    inputBorder: darkMode ? "#333355" : "#EBEBEB",
+    sectionBtnBg: darkMode ? "#2A2A45" : "#F5F5F5",
+    sectionBtnBorder: darkMode ? "#333355" : "#EBEBEB",
+    headerBg: darkMode ? "rgba(26,26,46,0.98)" : "rgba(247,245,242,0.98)",
+    footerBg: darkMode ? "rgba(26,26,46,0.98)" : "rgba(247,245,242,0.98)",
+  };
+
   // ── Estilos ──
-  const btnStyle: React.CSSProperties = { width: 36, height: 36, padding: 0, fontSize: 18, borderRadius: 10, border: "1px solid #EBEBEB", background: "#F5F5F5", cursor: "pointer" };
-  const sectionBtn: React.CSSProperties = { fontSize: 11, padding: "3px 10px", borderRadius: 20, border: "1px solid #EBEBEB", background: "#F5F5F5", cursor: "pointer" };
-  const manageBtn: React.CSSProperties = { fontSize: 10, padding: "2px 8px", borderRadius: 14, border: "1px solid #EBEBEB", background: "#FFF", color: "#9E9E9E", cursor: "pointer", whiteSpace: "nowrap" };
-  const inputStyle: React.CSSProperties = { width: "100%", marginTop: 4, boxSizing: "border-box", fontSize: 14, borderRadius: 8, padding: "6px 10px", border: "1px solid #EBEBEB", background: "#FAFAFA" };
-  const cardStyle: React.CSSProperties = { background: "#FFF", border: "1px solid #F0F0F0", borderRadius: 16, padding: "14px 16px", marginBottom: 12 };
+  const btnStyle: React.CSSProperties = { width: 36, height: 36, padding: 0, fontSize: 18, borderRadius: 10, border: `1px solid ${theme.inputBorder}`, background: theme.sectionBtnBg, cursor: "pointer", color: theme.text };
+  const sectionBtn: React.CSSProperties = { fontSize: 11, padding: "3px 10px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, cursor: "pointer", color: theme.text };
+  const manageBtn: React.CSSProperties = { fontSize: 10, padding: "2px 8px", borderRadius: 14, border: `1px solid ${theme.inputBorder}`, background: theme.card, color: theme.textSub, cursor: "pointer", whiteSpace: "nowrap" };
+  const inputStyle: React.CSSProperties = { width: "100%", marginTop: 4, boxSizing: "border-box", fontSize: fz, borderRadius: 8, padding: "6px 10px", border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text };
+  const cardStyle: React.CSSProperties = { background: theme.card, border: `1px solid ${theme.cardBorder}`, borderRadius: 16, padding: "14px 16px", marginBottom: 12 };
   const selectStyle: React.CSSProperties = { ...inputStyle, appearance: "none", WebkitAppearance: "none" };
 
   const renderParadas = (sec: keyof ParadasMap, label: string) => (
@@ -581,8 +602,8 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
             </div>
             <input type="text" placeholder="Descrição da parada" value={p.desc} onChange={e => updateParada(sec, i, "desc", e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-              <div><label style={{ fontSize: 11, color: "#9E9E9E" }}>Início</label><input type="time" value={p.ini} onChange={e => updateParada(sec, i, "ini", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
-              <div><label style={{ fontSize: 11, color: "#9E9E9E" }}>Fim</label><input type="time" value={p.fim} onChange={e => updateParada(sec, i, "fim", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
+              <div><label style={{ fontSize: 11, color: theme.textSub }}>Início</label><input type="time" value={p.ini} onChange={e => updateParada(sec, i, "ini", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
+              <div><label style={{ fontSize: 11, color: theme.textSub }}>Fim</label><input type="time" value={p.fim} onChange={e => updateParada(sec, i, "fim", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
             </div>
             {min > 0 && <div style={{ fontSize: 13, fontWeight: 600, color: "#2D9E7F", padding: "6px 10px", background: "rgba(45,158,127,0.08)", borderRadius: 8, marginBottom: 8 }}>⏱ Parada total: {min} minutos (das {p.ini} às {p.fim}).</div>}
             <input type="text" placeholder="Nota (ex: Aberto nota n° 1433966)" value={p.nota} onChange={e => updateParada(sec, i, "nota", e.target.value)} style={inputStyle} />
@@ -613,14 +634,14 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
             </div>
           </div>
 
-          <label style={{ fontSize: 11, color: "#9E9E9E" }}>ID Unit</label>
+          <label style={{ fontSize: 11, color: theme.textSub }}>ID Unit</label>
           <div style={{ display: "flex", gap: 6, marginTop: 4, marginBottom: 12 }}>
             <input type="text" placeholder="Ex: 266F282614" value={b.idUnit} onChange={e => updateBobina(setLista, b.id, "idUnit", e.target.value)} style={{ ...inputStyle, marginTop: 0, flex: 1, fontWeight: 700, letterSpacing: 1 }} />
             <BarcodeScannerBtn onScan={val => updateBobina(setLista, b.id, "idUnit", val)} />
           </div>
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <label style={{ fontSize: 11, color: "#9E9E9E" }}>Origem</label>
+            <label style={{ fontSize: 11, color: theme.textSub }}>Origem</label>
             <button onClick={openManageOrigens} style={manageBtn}>✎ Gerenciar</button>
           </div>
           <div style={{ display: "flex", gap: 4, marginTop: 4, marginBottom: 12 }}>
@@ -633,7 +654,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
 
           {b.origem && (<>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <label style={{ fontSize: 11, color: "#9E9E9E" }}>Motivo</label>
+              <label style={{ fontSize: 11, color: theme.textSub }}>Motivo</label>
               <button onClick={() => openManageMotivos(b.origem)} style={manageBtn}>✎ Gerenciar</button>
             </div>
             <div style={{ display: "flex", gap: 4, marginTop: 4, marginBottom: 12 }}>
@@ -647,7 +668,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
 
           {b.motivo && (<>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <label style={{ fontSize: 11, color: "#9E9E9E" }}>Causa</label>
+              <label style={{ fontSize: 11, color: theme.textSub }}>Causa</label>
               <button onClick={() => openManageCausas(b.motivo)} style={manageBtn}>✎ Gerenciar</button>
             </div>
             <div style={{ display: "flex", gap: 4, marginTop: 4, marginBottom: 12 }}>
@@ -659,7 +680,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
             </div>
           </>)}
 
-          <label style={{ fontSize: 11, color: "#9E9E9E" }}>Observações</label>
+          <label style={{ fontSize: 11, color: theme.textSub }}>Observações</label>
           <textarea value={b.obs} onChange={e => updateBobina(setLista, b.id, "obs", e.target.value)} rows={2} placeholder="Observações..." style={{ ...inputStyle, resize: "vertical", marginTop: 4, marginBottom: 16 }} />
 
           <button onClick={() => setEditandoBobina(null)} style={{ width: "100%", padding: "12px 0", borderRadius: 12, background: cor, color: "#FFF", fontWeight: 700, fontSize: 14, border: "none", cursor: "pointer" }}>✓ Confirmar</button>
@@ -716,17 +737,15 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
   );
 
   return (
-    <div className="fixed inset-0 z-[110] flex flex-col" style={{ background: "#F7F5F2" }}>
+    <div className="fixed inset-0 z-[110] flex flex-col" style={{ background: theme.bg }}>
       {/* Header fixo */}
-      <div style={{ background: "rgba(247,245,242,0.98)", borderBottom: "1px solid #F0F0F0", padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ background: theme.headerBg, borderBottom: `1px solid ${theme.cardBorder}`, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
         <FileText size={18} style={{ color: "#1A1A2E" }} />
-        <span style={{ fontWeight: 800, fontSize: 16, color: "#1A1A2E", flex: 1 }}>Relatório de Turno</span>
-        <button
-          onClick={() => setModoTombador(!modoTombador)}
-          style={{ fontSize: 11, padding: "5px 10px", borderRadius: 20, border: modoTombador ? "1.5px solid #F57C00" : "1px solid #EBEBEB", background: modoTombador ? "rgba(245,124,0,0.12)" : "#F0F0F0", color: modoTombador ? "#F57C00" : "#9E9E9E", fontWeight: 700, cursor: "pointer", marginRight: 4, whiteSpace: "nowrap" }}
-          title="Modo Tombador"
-        >🔁 {modoTombador ? "Modo Tombador" : "Modo Tombador"}</button>
-        <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: "50%", background: "#F0F0F0", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+        <span style={{ fontWeight: 800, fontSize: 16, color: theme.text, flex: 1 }}>Relatório de Turno</span>
+        <button onClick={() => setModoTombador(!modoTombador)} style={{ fontSize: 11, padding: "5px 10px", borderRadius: 20, border: modoTombador ? "1.5px solid #F57C00" : `1px solid ${theme.sectionBtnBorder}`, background: modoTombador ? "rgba(245,124,0,0.12)" : theme.sectionBtnBg, color: modoTombador ? "#F57C00" : theme.textSub, fontWeight: 700, cursor: "pointer", marginRight: 4, whiteSpace: "nowrap" }} title="Modo Tombador">🔁</button>
+        <button onClick={() => setDarkMode(!darkMode)} style={{ fontSize: 14, width: 30, height: 30, borderRadius: "50%", border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, cursor: "pointer", marginRight: 2 }} title={darkMode ? "Modo claro" : "Modo escuro"}>{darkMode ? "☀️" : "🌙"}</button>
+        <button onClick={() => setFontSize(f => f === "sm" ? "md" : f === "md" ? "lg" : "sm")} style={{ fontSize: 11, padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, fontWeight: 700, cursor: "pointer", marginRight: 4 }} title="Tamanho da fonte">{fontSize === "sm" ? "A" : fontSize === "md" ? "A+" : "A++"}</button>
+        <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: "50%", background: theme.sectionBtnBg, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: theme.text }}>
           <X size={16} />
         </button>
       </div>
@@ -737,11 +756,11 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
         {/* Cabeçalho do turno */}
         <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: headerCollapsed ? 0 : 12 }}>
-            <span style={{ fontSize: 13, fontWeight: 700 }}>📋 Turno</span>
+            <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }>📋 Turno</span>
             <button onClick={() => setHeaderCollapsed(!headerCollapsed)} style={sectionBtn}>{headerCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
           </div>
           {!headerCollapsed && <>
-            <label style={{ fontSize: 11, color: "#9E9E9E" }}>Destinatário</label>
+            <label style={{ fontSize: 11, color: theme.textSub }}>Destinatário</label>
             <div style={{ display: "flex", gap: 6, marginTop: 4, marginBottom: 8 }}>
               <input type="text" value={dest} onChange={e => setDest(e.target.value)} style={{ ...inputStyle, marginTop: 0, flex: 1 }} />
               <button onClick={addDestinatario} style={{ ...btnStyle, fontSize: 14, color: "#2D9E7F" }} title="Salvar como atalho">+</button>
@@ -757,19 +776,19 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
               </div>
             )}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-              <div><label style={{ fontSize: 11, color: "#9E9E9E" }}>Turno</label>
+              <div><label style={{ fontSize: 11, color: theme.textSub }}>Turno</label>
                 <select value={turno} onChange={e => onTurnoChange(e.target.value)} style={selectStyle}>
                   <option value="1">Turno 1</option><option value="2">Turno 2</option><option value="3">Turno 3</option>
                 </select>
               </div>
-              <div><label style={{ fontSize: 11, color: "#9E9E9E" }}>Letra</label>
+              <div><label style={{ fontSize: 11, color: theme.textSub }}>Letra</label>
                 <select value={letra} onChange={e => setLetra(e.target.value)} style={selectStyle}>
                   <option>A</option><option>B</option><option>C</option><option>D</option><option>E</option>
                 </select>
               </div>
-              <div style={{ gridColumn: "span 2" }}><label style={{ fontSize: 11, color: "#9E9E9E" }}>Horário</label><input type="text" value={horario} onChange={e => setHorario(e.target.value)} style={inputStyle} /></div>
+              <div style={{ gridColumn: "span 2" }}><label style={{ fontSize: 11, color: theme.textSub }}>Horário</label><input type="text" value={horario} onChange={e => setHorario(e.target.value)} style={inputStyle} /></div>
             </div>
-            <label style={{ fontSize: 11, color: "#9E9E9E" }}>Responsáveis</label>
+            <label style={{ fontSize: 11, color: theme.textSub }}>Responsáveis</label>
             <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6 }}>
               {resps.map((r, i) => (
                 <div key={i} style={{ display: "flex", gap: 6 }}>
@@ -786,7 +805,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
         {!modoTombador && <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: embCollapsed ? 0 : 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 13, fontWeight: 700 }}>• Embaladeira</span>
+              <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }>• Embaladeira</span>
               <select value={embaladeiraNum} onChange={e => setEmbaladeiraNum(e.target.value as "1"|"2")} style={{ fontSize: 13, fontWeight: 700, border: "1px solid #EBEBEB", borderRadius: 8, padding: "2px 8px", background: "#FAFAFA" }}>
                 <option value="1">1</option>
                 <option value="2">2</option>
@@ -826,7 +845,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
               <span style={{ fontSize: 17, fontWeight: 700 }}>{formatMin(calcTotalEmb())}</span>
             </div>
             <div style={{ marginTop: 10 }}>
-              <label style={{ fontSize: 11, color: "#9E9E9E" }}>Obs. Embaladeira</label>
+              <label style={{ fontSize: 11, color: theme.textSub }}>Obs. Embaladeira</label>
               <textarea value={obsEmb} onChange={e => setObsEmb(e.target.value)} rows={2} placeholder="Observações..." style={{ ...inputStyle, resize: "vertical", marginTop: 4 }} />
             </div>
             {renderParadas("emb", "Paradas Embaladeira")}
@@ -854,7 +873,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
         {/* Roll Cutter */}
         {!modoTombador && <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: rcCollapsed ? 0 : 10 }}>
-            <span style={{ fontSize: 13, fontWeight: 700 }}>• Roll Cutter</span>
+            <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }>• Roll Cutter</span>
             <button onClick={() => setRcCollapsed(!rcCollapsed)} style={sectionBtn}>{rcCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
           </div>
           {!rcCollapsed && <>
@@ -878,7 +897,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
         {/* Tombador */}
         <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tombCollapsed ? 0 : 12 }}>
-            <span style={{ fontSize: 13, fontWeight: 700 }}>🔁 Tombador</span>
+            <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }>🔁 Tombador</span>
             <button onClick={() => setTombCollapsed(!tombCollapsed)} style={sectionBtn}>{tombCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
           </div>
           {!tombCollapsed && <>
@@ -921,7 +940,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
 
             {/* Obs e Paradas Tombador */}
             <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #F0F0F0" }}>
-              <label style={{ fontSize: 11, color: "#9E9E9E" }}>Obs. Tombador</label>
+              <label style={{ fontSize: 11, color: theme.textSub }}>Obs. Tombador</label>
               <textarea value={obsTomb} onChange={e => setObsTomb(e.target.value)} rows={2} placeholder="Observações Tombador..." style={{ ...inputStyle, resize: "vertical", marginTop: 4 }} />
             </div>
             <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #F0F0F0" }}>
@@ -949,8 +968,8 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
                     </div>
                     <input type="text" placeholder="Descrição da parada" value={p.desc} onChange={e => updateParadaTomb(i, "desc", e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-                      <div><label style={{ fontSize: 11, color: "#9E9E9E" }}>Início</label><input type="time" value={p.ini} onChange={e => updateParadaTomb(i, "ini", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
-                      <div><label style={{ fontSize: 11, color: "#9E9E9E" }}>Fim</label><input type="time" value={p.fim} onChange={e => updateParadaTomb(i, "fim", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
+                      <div><label style={{ fontSize: 11, color: theme.textSub }}>Início</label><input type="time" value={p.ini} onChange={e => updateParadaTomb(i, "ini", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
+                      <div><label style={{ fontSize: 11, color: theme.textSub }}>Fim</label><input type="time" value={p.fim} onChange={e => updateParadaTomb(i, "fim", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
                     </div>
                     {min > 0 && <div style={{ fontSize: 13, fontWeight: 600, color: "#2D9E7F", padding: "6px 10px", background: "rgba(45,158,127,0.08)", borderRadius: 8, marginBottom: 8 }}>⏱ Parada total: {min} minutos (das {p.ini} às {p.fim}).</div>}
                     <input type="text" placeholder="Nota (ex: Aberto nota n° 1433966)" value={p.nota} onChange={e => updateParadaTomb(i, "nota", e.target.value)} style={inputStyle} />
@@ -977,7 +996,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
       </div>
 
       {/* Rodapé fixo */}
-      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(247,245,242,0.98)", borderTop: "1px solid #F0F0F0", padding: "12px 16px", paddingBottom: "calc(12px + env(safe-area-inset-bottom))", display: "flex", gap: 8 }}>
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: theme.footerBg, borderTop: `1px solid ${theme.cardBorder}`, padding: "12px 16px", paddingBottom: "calc(12px + env(safe-area-inset-bottom))", display: "flex", gap: 8 }}>
         <button onClick={handlePrevia} style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 600, borderRadius: 12, background: "#F0F0F0", color: "#1A1A2E", border: "none", cursor: "pointer" }}>👁 Prévia</button>
         <button onClick={handleSaveNote} style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 600, borderRadius: 12, background: "#1A1A2E", color: "#FFF", border: "none", cursor: "pointer" }}>💾 Salvar nota</button>
         <button onClick={handleShare} style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 600, borderRadius: 12, background: "#2D9E7F", color: "#FFF", border: "none", cursor: "pointer" }}>📤 Enviar</button>
