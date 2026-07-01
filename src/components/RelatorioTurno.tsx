@@ -83,6 +83,13 @@ function buildParadasTxt(paradas: Parada[]): string {
 }
 
 function newBobina(): BobinaTombador { return { id: Math.random().toString(36).slice(2), idUnit: "", origem: "", motivo: "", causa: "", obs: "" }; }
+
+function getSaudacao(): string {
+  const h = new Date().getHours();
+  if (h >= 6 && h < 12) return "Bom dia";
+  if (h >= 12 && h < 18) return "Boa tarde";
+  return "Boa noite";
+}
 function newLabel(codigo = ""): LabelImpresso { return { id: Math.random().toString(36).slice(2), codigo }; }
 
 // ── Modal genérico para substituir prompt() ──
@@ -574,9 +581,9 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState }: Props) {
       if (paradasRC) rollCutterSection += `\nObs:\n${paradasRC}Parada total: ${totalPRC}.\n`;
     }
     if (modoTombador) {
-      return `${dest},\nSegue relatório do tombador.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}\n${buildTombadorTxt()}`.trim();
+      return `${getSaudacao()}, ${dest},\nSegue relatório do tombador.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}\n${buildTombadorTxt()}`.trim();
     }
-    return `${dest},\nSegue Relatório da linha de bobinas.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}\n\n• Embaladeira ${embaladeiraNum}\n✔ Consumidos:\n${consumidos || " (sem consumos)\n"}\n✔ Total de Tempo de Parada: ${totalEmb}.${obsEmb ? "\n\nObs:\n" + obsEmb : ""}${paradasEmb ? "\n\nObs:\n" + paradasEmb + "Parada total: " + totalPEmb + "." : ""}${coreLinkSection}${rollCutterSection}${buildTombadorTxt()}`.trim();
+    return `${getSaudacao()}, ${dest},\nSegue Relatório da linha de bobinas.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}\n\n• Embaladeira ${embaladeiraNum}\n✔ Consumidos:\n${consumidos || " (sem consumos)\n"}\n✔ Total de Tempo de Parada: ${totalEmb}.${obsEmb ? "\n\nObs:\n" + obsEmb : ""}${paradasEmb ? "\n\nObs:\n" + paradasEmb + "Parada total: " + totalPEmb + "." : ""}${coreLinkSection}${rollCutterSection}${buildTombadorTxt()}`.trim();
   }, [dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, obsCL, rcId, rcSid, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, embaladeiraNum, db]);
 
   const handlePrevia = () => { setPrevia(gerarTexto()); setShowPrevia(true); };
