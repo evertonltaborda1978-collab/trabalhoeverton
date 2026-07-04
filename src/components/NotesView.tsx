@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { RelatorioTurno } from "./RelatorioTurno";
+import { RelatorioRebobinadeira } from "./RelatorioRebobinadeira";
 import { ClipboardList } from "lucide-react";
 
 export { getFontClass, getSizeClass } from "./NoteEditor";
@@ -53,6 +54,8 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
   const [showTrash, setShowTrash] = useState(false);
   const [showRelatorio, setShowRelatorio] = useState(false);
   const [relatorioInitialState, setRelatorioInitialState] = useState<any>(null);
+  const [showRebobinadeira, setShowRebobinadeira] = useState(false);
+  const [rebobInitialState, setRebobInitialState] = useState<any>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteTitle, setConfirmDeleteTitle] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
@@ -145,6 +148,18 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
       setLockNote(note);
       setLockMode("unlock");
       return;
+    }
+    // Detectar nota de Rebobinadeira
+    if (note.title && note.title.includes("Rebobinadeira")) {
+      const stateKey = `rebobinadeira_state_${note.title.replace(/\s/g, "_")}`;
+      const raw = localStorage.getItem(stateKey);
+      if (raw) {
+        try {
+          setRebobInitialState(JSON.parse(raw));
+          setShowRebobinadeira(true);
+          return;
+        } catch {}
+      }
     }
     // Detectar se é uma nota de Relatório de Turno pelo título
     if (note.title && note.title.includes("Relatório")) {
@@ -542,6 +557,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
       {showRelatorio && (
         <RelatorioTurno
           initialState={relatorioInitialState}
+          onOpenRebobinadeira={() => { setShowRelatorio(false); setShowRebobinadeira(true); }}
           onClose={() => { setShowRelatorio(false); setRelatorioInitialState(null); }}
           onSaveAsNote={(title, content) => {
             // Atualiza nota existente se título já existe, senão cria nova
@@ -553,6 +569,23 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
             }
             setShowRelatorio(false);
             setRelatorioInitialState(null);
+          }}
+        />
+      )}
+
+      {showRebobinadeira && (
+        <RelatorioRebobinadeira
+          initialState={rebobInitialState}
+          onClose={() => { setShowRebobinadeira(false); setRebobInitialState(null); }}
+          onSaveAsNote={(title, content) => {
+            const existing = notes.find(n => n.title === title);
+            if (existing) {
+              onUpdate(existing.id, title, content, [], existing.color || "bg-green-100", "default", "medium", "publicada");
+            } else {
+              onAdd(title, content, [], "bg-green-100", "default", "medium", "publicada");
+            }
+            setShowRebobinadeira(false);
+            setRebobInitialState(null);
           }}
         />
       )}
