@@ -677,49 +677,109 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // ── QR Code Scanner ─────────────────────────────────
+  // ── QR/Barcode Scanner (BarcodeDetector nativo + ZXing fallback) ──
+  const qrVideoRef = useRef<HTMLVideoElement>(null);
+  const qrCanvasRef = useRef<HTMLCanvasElement>(null);
+  const qrStreamRef = useRef<MediaStream | null>(null);
+  const qrRafRef = useRef<number>(0);
+  const qrDetectorRef = useRef<any>(null);
+
   const handleStartQrScanner = async () => {
     setShowQrScanner(true);
     setQrLoading(true);
-    try {
-      const { Html5Qrcode } = await import("html5-qrcode");
-      await new Promise((r) => setTimeout(r, 300));
-      const scanner = new Html5Qrcode("qr-reader");
-      await scanner.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => {
-          const idx = focusedBlockRef.current;
-          setBlocks((prev) => {
-            const next = [...prev];
-            if (next[idx]?.type === "text") {
-              next[idx] = { ...next[idx], content: (next[idx].content || "") + decodedText };
-            } else {
-              next.splice(idx + 1, 0, { type: "text", content: decodedText });
-            }
-            return next;
-          });
-          toast({ title: "QR Code lido!", description: decodedText.length > 60 ? decodedText.slice(0, 60) + "…" : decodedText });
-          scanner.stop().catch(() => {});
-          setShowQrScanner(false);
-        },
-        () => {}
-      );
-      setQrLoading(false);
-    } catch (err) {
-      console.error(err);
-      toast({ title: "Erro ao abrir câmera", description: "Não foi possível acessar a câmera para leitura de QR Code." });
-      setShowQrScanner(false);
-      setQrLoading(false);
-    }
   };
 
-  const handleStopQrScanner = async () => {
-    try {
-      const el = document.getElementById("qr-reader");
-      if (el) el.innerHTML = "";
-    } catch {}
+  const handleStopQrScanner = () => {
+    qrStreamRef.current?.getTracks().forEach(t => t.stop());
+    cancelAnimationFrame(qrRafRef.current);
+    qrDetectorRef.current = null;
     setShowQrScanner(false);
+    setQrLoading(false);
+  };
+
+  const handleQrFound = (decodedText: string) => {
+    qrStreamRef.current?.getTracks().forEach(t => t.stop());
+    cancelAnimationFrame(qrRafRef.current);
+    const idx = focusedBlockRef.current;
+    setBlocks((prev) => {
+      const next = [...prev];
+      if (next[idx]?.type === "text") {
+        next[idx] = { ...next[idx], content: (next[idx].content || "") + decodedText };
+      } else {
+        next.splice(idx + 1, 0, { type: "text", content: decodedText });
+      }
+      return next;
+    });
+    toast({ title: "✅ Código lido!", description: decodedText.length > 60 ? decodedText.slice(0, 60) + "…" : decodedText });
+    setShowQrScanner(false);
+    setQrLoading(false);
+  };
+
+  const iniciarQrStream = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } });
+      qrStreamRef.current = stream;
+      if (qrVideoRef.current) { qrVideoRef.current.srcObject = stream; await qrVideoRef.current.play(); }
+    } catch {
+      toast({ title: "Erro ao abrir câmera", description: "Verifique as permissões." });
+      setShowQrScanner(false); setQrLoading(false); return;
+    }
+
+    const scanLoop = async () => {
+      if (!qrVideoRef.current || !qrCanvasRef.current || !qrDetectorRef.current) return;
+      const video = qrVideoRef.current; const canvas = qrCanvasRef.current;
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        canvas.getContext("2d")?.drawImage(video, 0, 0);
+        try {
+          const codes = await qrDetectorRef.current.detect(canvas);
+          if (codes.length > 0) { handleQrFound(codes[0].rawValue); return; }
+        } catch {}
+      }
+      qrRafRef.current = requestAnimationFrame(scanLoop);
+    };
+
+    const scanLoopZXing = () => {
+      if (!qrVideoRef.current || !qrCanvasRef.current || !qrDetectorRef.current) return;
+      const video = qrVideoRef.current; const canvas = qrCanvasRef.current;
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        canvas.getContext("2d")?.drawImage(video, 0, 0);
+        try {
+          const ZXing = (window as any).ZXing;
+          const imgData = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height);
+          const luminance = new ZXing.RGBLuminanceSource(imgData.data, canvas.width, canvas.height);
+          const bitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminance));
+          const result = qrDetectorRef.current.decodeBitmap(bitmap);
+          if (result) { handleQrFound(result.getText()); return; }
+        } catch {}
+      }
+      qrRafRef.current = requestAnimationFrame(scanLoopZXing);
+    };
+
+    if ("BarcodeDetector" in window) {
+      qrDetectorRef.current = new (window as any).BarcodeDetector({ formats: ["code_128","code_39","ean_13","ean_8","qr_code","data_matrix","itf","upc_a","upc_e","pdf417","aztec"] });
+      setQrLoading(false);
+      scanLoop();
+    } else {
+      if ((window as any).ZXing) {
+        const ZXing = (window as any).ZXing;
+        const hints = new Map(); hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+        qrDetectorRef.current = new ZXing.BrowserMultiFormatReader(hints);
+        setQrLoading(false); scanLoopZXing();
+      } else {
+        const script = document.createElement("script");
+        script.src = "https://cdn.jsdelivr.net/npm/@zxing/library@0.21.0/umd/index.min.js";
+        script.onload = () => {
+          const ZXing = (window as any).ZXing;
+          const hints = new Map(); hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+          qrDetectorRef.current = new ZXing.BrowserMultiFormatReader(hints);
+          setQrLoading(false); scanLoopZXing();
+        };
+        script.onerror = () => { toast({ title: "Erro ao carregar leitor" }); setShowQrScanner(false); setQrLoading(false); };
+        document.head.appendChild(script);
+      }
+    }
   };
 
   // ── Edit mode helpers ─────────────────────────────────
@@ -1680,19 +1740,40 @@ ${blocksToPlainText(blocks)}`.trim() });
           </div>
         )}
 
-        {/* QR Scanner Modal */}
+        {/* QR/Barcode Scanner Modal */}
         {showQrScanner && (
-          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/80">
-            <div className="bg-white rounded-2xl p-4 mx-4 shadow-xl max-w-sm w-full">
-              <h3 className="text-base font-semibold text-gray-800 mb-3 text-center">Leitor de QR Code</h3>
-              <div id="qr-reader" className="w-full rounded-lg overflow-hidden" style={{ minHeight: 280 }} />
-              <button
-                onClick={handleStopQrScanner}
-                className="w-full mt-3 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors border rounded-xl"
-              >
-                Cancelar
-              </button>
+          <div className="absolute inset-0 z-50 flex flex-col bg-black">
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px" }}>
+              <span style={{ color: "#FFF", fontWeight: 700, fontSize: 16 }}>📷 Leitor de Código</span>
+              <button onClick={handleStopQrScanner} style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.15)", border: "none", color: "#FFF", fontSize: 18, cursor: "pointer" }}>✕</button>
             </div>
+            {/* Vídeo */}
+            <div style={{ position: "relative", flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <video ref={qrVideoRef} playsInline muted onCanPlay={iniciarQrStream} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <canvas ref={qrCanvasRef} style={{ display: "none" }} />
+              {/* Mira */}
+              {!qrLoading && (
+                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+                  <div style={{ width: "65%", aspectRatio: "1", position: "relative" }}>
+                    {[{top:0,left:0},{top:0,right:0},{bottom:0,left:0},{bottom:0,right:0}].map((pos, i) => (
+                      <div key={i} style={{ position: "absolute", width: 28, height: 28, borderTop: (pos as any).top===0?"3px solid #2D9E7F":"none", borderBottom: (pos as any).bottom===0?"3px solid #2D9E7F":"none", borderLeft: (pos as any).left===0?"3px solid #2D9E7F":"none", borderRight: (pos as any).right===0?"3px solid #2D9E7F":"none", ...pos }} />
+                    ))}
+                    <div style={{ position: "absolute", left: 4, right: 4, height: 2, background: "linear-gradient(90deg,transparent,#2D9E7F,transparent)", animation: "scanline 1.5s ease-in-out infinite", top: "50%" }} />
+                  </div>
+                </div>
+              )}
+              {/* Loading */}
+              {qrLoading && (
+                <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.7)" }}>
+                  <div style={{ width: 36, height: 36, border: "3px solid rgba(255,255,255,0.2)", borderTop: "3px solid #2D9E7F", borderRadius: "50%", animation: "spin 0.8s linear infinite", marginBottom: 12 }} />
+                  <span style={{ color: "#FFF", fontSize: 13 }}>Iniciando câmera...</span>
+                </div>
+              )}
+            </div>
+            <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, textAlign: "center", padding: "12px 0 4px" }}>Aponte para QR Code ou código de barras</p>
+            <button onClick={handleStopQrScanner} style={{ margin: "8px 16px 32px", padding: "12px 0", borderRadius: 12, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", color: "#FFF", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancelar</button>
+            <style>{`@keyframes scanline{0%,100%{top:10%}50%{top:85%}}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
           </div>
         )}
 
