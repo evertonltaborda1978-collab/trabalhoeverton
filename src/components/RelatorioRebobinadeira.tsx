@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { X, FileText, Camera, Pencil } from "lucide-react";
+import { X, Camera, Pencil } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 // ── Chaves localStorage ──
