@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Lock, Unlock, ShieldCheck } from "lucide-react";
+import { Lock, ShieldCheck, AlertTriangle } from "lucide-react";
 
 interface LockNoteModalProps {
   open: boolean;
@@ -10,15 +9,17 @@ interface LockNoteModalProps {
   onSetPin: (pin: string) => void;
   onUnlock: (pin: string) => boolean | Promise<boolean>;
   onRemoveLock: () => void;
+  onForceReset?: () => void;
 }
 
-export function LockNoteModal({ open, onOpenChange, mode, onSetPin, onUnlock, onRemoveLock }: LockNoteModalProps) {
+export function LockNoteModal({ open, onOpenChange, mode, onSetPin, onUnlock, onRemoveLock, onForceReset }: LockNoteModalProps) {
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
   const [error, setError] = useState("");
   const [step, setStep] = useState<"enter" | "confirm">(mode === "set" ? "enter" : "enter");
+  const [showForceConfirm, setShowForceConfirm] = useState(false);
 
-  const reset = () => { setPin(""); setConfirmPin(""); setError(""); setStep("enter"); };
+  const reset = () => { setPin(""); setConfirmPin(""); setError(""); setStep("enter"); setShowForceConfirm(false); };
 
   const handleClose = (v: boolean) => {
     if (!v) reset();
@@ -73,6 +74,11 @@ export function LockNoteModal({ open, onOpenChange, mode, onSetPin, onUnlock, on
     }
   };
 
+  const handleForceReset = () => {
+    onForceReset?.();
+    handleClose(false);
+  };
+
   const currentValue = step === "confirm" ? confirmPin : pin;
   const maxLen = 6;
 
@@ -87,6 +93,42 @@ export function LockNoteModal({ open, onOpenChange, mode, onSetPin, onUnlock, on
     unlock: "Digite a senha para acessar",
     manage: "Digite a senha atual para desbloquear",
   };
+
+  // ── Tela de confirmação do reset forçado ──
+  if (showForceConfirm) {
+    return (
+      <Dialog open={open} onOpenChange={handleClose}>
+        <DialogContent className="sm:max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base justify-center">
+              <AlertTriangle size={20} style={{ color: "#E53935" }} />
+              Atenção
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-4 mt-2 text-center">
+            <p className="text-sm text-gray-600">
+              O conteúdo desta nota será <strong>apagado permanentemente</strong> e a proteção será removida.
+            </p>
+            <p className="text-xs text-gray-400">Esta ação não pode ser desfeita.</p>
+            <button
+              onClick={handleForceReset}
+              className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all"
+              style={{ background: "#E53935" }}
+            >
+              🗑 Apagar conteúdo e remover proteção
+            </button>
+            <button
+              onClick={() => setShowForceConfirm(false)}
+              className="w-full py-2.5 rounded-xl text-sm font-medium transition-all hover:bg-gray-100"
+              style={{ color: "#999" }}
+            >
+              Voltar
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -160,6 +202,17 @@ export function LockNoteModal({ open, onOpenChange, mode, onSetPin, onUnlock, on
           >
             Cancelar
           </button>
+
+          {/* Botão esqueci minha senha — aparece nos modos unlock e manage */}
+          {(mode === "unlock" || mode === "manage") && onForceReset && (
+            <button
+              onClick={() => setShowForceConfirm(true)}
+              className="text-xs font-semibold transition-all hover:underline"
+              style={{ color: "#E53935" }}
+            >
+              Esqueci minha senha
+            </button>
+          )}
 
           {mode === "manage" && (
             <p className="text-[10px] text-gray-400 text-center">
