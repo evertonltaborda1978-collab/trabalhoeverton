@@ -263,6 +263,15 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
     return ok;
   };
 
+  const handleForceReset = async () => {
+    if (!lockNote) return;
+    onUpdate(lockNote.id, lockNote.title, "", [], lockNote.color, "default", "medium", "publicada");
+    await onUnlockNote(lockNote.id, "000000").catch(() => {});
+    toast({ title: "🔓 Proteção removida", description: "Conteúdo apagado e nota desbloqueada." });
+    setLockNote(null);
+    setPendingUnlockNote(null);
+  };
+
   const handleExport = () => {
     exportBackup();
     toast({ title: "Backup exportado ✓", description: "Arquivo JSON salvo com sucesso." });
@@ -528,6 +537,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
         onSetPin={handleSetPin}
         onUnlock={lockMode === "manage" ? handleManageRemove : handleUnlockAttempt}
         onRemoveLock={handleRemoveLock}
+        onForceReset={handleForceReset}
       />
 
       {/* Delete Confirmation Modal */}
