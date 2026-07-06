@@ -291,6 +291,8 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
 
   // ── Modais ──
   const [inputModal, setInputModal] = useState<{ title: string; subtitle?: string; placeholder?: string; onConfirm: (v: string) => void } | null>(null);
+  const [numTeclado, setNumTeclado] = useState<{ label: string; valor: string; onConfirm: (v: string) => void } | null>(null);
+  const [numValor, setNumValor] = useState("");
   const [showPrevia, setShowPrevia] = useState(false);
   const [previa, setPrevia] = useState("");
 
@@ -566,6 +568,26 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
     </div>
   );
 
+  // ── Teclado Numérico ──
+  const abrirTeclado = (label: string, valorAtual: string, onConfirm: (v: string) => void) => {
+    setNumValor(valorAtual);
+    setNumTeclado({ label, valor: valorAtual, onConfirm });
+  };
+
+  const tecladoDigito = (d: string) => {
+    setNumValor(prev => {
+      if (d === "," && prev.includes(",")) return prev;
+      if (d === "," && prev === "") return "0,";
+      return prev + d;
+    });
+  };
+
+  const tecladoApagar = () => setNumValor(prev => prev.slice(0, -1));
+
+  const tecladoConfirmar = () => {
+    if (numTeclado) { numTeclado.onConfirm(numValor); setNumTeclado(null); setNumValor(""); }
+  };
+
   return (
     <div className="fixed inset-0 z-[120] flex flex-col" style={{ background: theme.bg }}>
       {/* Header */}
@@ -634,10 +656,12 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
             <div style={{ marginTop: 12 }}>
               {parametros.map(p => (
                 <div key={p.id} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: theme.text, minWidth: 120 }}>• {p.label}</span>
-                  <input type="text" value={p.valor} onChange={e => updateParam(p.id, "valor", e.target.value)} placeholder="Valor" style={{ ...inputStyle, marginTop: 0, flex: 1 }} />
-                  <input type="text" value={p.unidade} onChange={e => updateParam(p.id, "unidade", e.target.value)} placeholder="Un." style={{ ...inputStyle, marginTop: 0, width: 60 }} />
-                  <button onClick={() => removeParam(p.id)} style={{ color: "#E53935", background: "none", border: "none", cursor: "pointer", fontSize: 14 }}>✕</button>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: theme.text, minWidth: 110 }}>• {p.label}</span>
+                  <button
+                    onClick={() => abrirTeclado(p.label, p.valor, (v) => updateParam(p.id, "valor", v))}
+                    style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${p.valor ? "#2D9E7F" : theme.inputBorder}`, background: theme.inputBg, color: p.valor ? theme.text : theme.textSub, fontSize: 15, fontWeight: p.valor ? 700 : 400, textAlign: "left", cursor: "pointer" }}
+                  >{p.valor ? `${p.valor}${p.unidade ? " " + p.unidade : ""}` : "Tocar para digitar"}</button>
+                  <button onClick={() => removeParam(p.id)} style={{ color: "#E53935", background: "none", border: "none", cursor: "pointer", fontSize: 14, flexShrink: 0 }}>✕</button>
                 </div>
               ))}
             </div>
@@ -763,6 +787,36 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
               <input type="text" placeholder="Largura" value={novoFormato.largura} onChange={e => setNovoFormato(p => ({ ...p, largura: e.target.value }))} style={{ flex: 1, fontSize: 14, borderRadius: 8, padding: "8px 10px", border: "1px solid #EBEBEB" }} />
               <input type="text" placeholder="Diâmetro" value={novoFormato.diametro} onChange={e => setNovoFormato(p => ({ ...p, diametro: e.target.value }))} style={{ flex: 1, fontSize: 14, borderRadius: 8, padding: "8px 10px", border: "1px solid #EBEBEB" }} />
               <button onClick={addFormato} style={{ padding: "8px 16px", borderRadius: 8, background: "#2D9E7F", color: "#FFF", fontWeight: 700, border: "none", cursor: "pointer" }}>+</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Teclado Numérico */}
+      {numTeclado && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 260, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+          <div style={{ background: "rgba(0,0,0,0.4)", position: "absolute", inset: 0 }} onClick={() => setNumTeclado(null)} />
+          <div style={{ position: "relative", background: theme.card, borderRadius: "20px 20px 0 0", padding: "16px 16px 32px", boxShadow: "0 -4px 32px rgba(0,0,0,0.15)" }}>
+            {/* Label e display */}
+            <div style={{ marginBottom: 12 }}>
+              <p style={{ fontSize: 12, color: theme.textSub, margin: "0 0 4px", fontWeight: 600 }}>{numTeclado.label}</p>
+              {numTeclado.valor && numTeclado.valor !== numValor && (
+                <p style={{ fontSize: 11, color: theme.textSub, margin: "0 0 4px" }}>Anterior: <strong>{numTeclado.valor}</strong></p>
+              )}
+              <div style={{ background: theme.inputBg, border: `2px solid #2D9E7F`, borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 28, fontWeight: 700, color: theme.text, letterSpacing: 2 }}>{numValor || <span style={{ color: theme.textSub, fontSize: 20, fontWeight: 400 }}>0</span>}</span>
+                <button onClick={tecladoApagar} style={{ width: 40, height: 40, borderRadius: 10, background: theme.sectionBtnBg, border: "none", fontSize: 18, cursor: "pointer", color: theme.text }}>⌫</button>
+              </div>
+            </div>
+            {/* Grid de teclas */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+              {["7","8","9","4","5","6","1","2","3"].map(d => (
+                <button key={d} onClick={() => tecladoDigito(d)} style={{ height: 52, borderRadius: 12, background: theme.sectionBtnBg, border: `1px solid ${theme.inputBorder}`, fontSize: 20, fontWeight: 600, color: theme.text, cursor: "pointer" }}>{d}</button>
+              ))}
+              <button onClick={() => tecladoDigito(",")} style={{ height: 52, borderRadius: 12, background: theme.sectionBtnBg, border: `1px solid ${theme.inputBorder}`, fontSize: 20, fontWeight: 600, color: theme.text, cursor: "pointer" }}>,</button>
+              <button onClick={() => tecladoDigito("0")} style={{ height: 52, borderRadius: 12, background: theme.sectionBtnBg, border: `1px solid ${theme.inputBorder}`, fontSize: 20, fontWeight: 600, color: theme.text, cursor: "pointer" }}>0</button>
+              <button onClick={() => setNumValor("")} style={{ height: 52, borderRadius: 12, background: "rgba(229,57,53,0.1)", border: "none", fontSize: 13, fontWeight: 600, color: "#E53935", cursor: "pointer" }}>C</button>
+              <button onClick={tecladoConfirmar} style={{ height: 52, borderRadius: 12, background: "#2D9E7F", border: "none", fontSize: 14, fontWeight: 700, color: "#FFF", cursor: "pointer" }}>OK</button>
             </div>
           </div>
         </div>
