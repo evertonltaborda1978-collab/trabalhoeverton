@@ -176,6 +176,23 @@ function EditRow({ value, onSave, onCancel }: { value: string; onSave: (v: strin
   );
 }
 
+function ManualInputBtn({ onScan, onClose, streamRef }: { onScan: (val: string) => void; onClose: () => void; streamRef: React.MutableRefObject<MediaStream | null> }) {
+  const [show, setShow] = useState(false);
+  const [val, setVal] = useState("");
+  if (!show) return (
+    <button onClick={() => setShow(true)} style={{ marginTop: 20, padding: "10px 28px", borderRadius: 12, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", color: "#FFF", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>⌨️ Digitar manualmente</button>
+  );
+  return (
+    <div style={{ marginTop: 20, padding: 16, background: "rgba(255,255,255,0.12)", borderRadius: 16, width: "min(90vw,340px)", display: "flex", flexDirection: "column", gap: 10 }}>
+      <p style={{ color: "#FFF", fontWeight: 700, fontSize: 14, margin: 0 }}>Digite o código</p>
+      <input autoFocus type="text" value={val} onChange={e => setVal(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && val.trim()) { streamRef.current?.getTracks().forEach(t => t.stop()); onScan(val.trim()); onClose(); } }} placeholder="Ex: 266F282614" style={{ fontSize: 15, borderRadius: 10, padding: "10px 12px", border: "none", outline: "none", width: "100%", boxSizing: "border-box" as const }} />
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => setShow(false)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "rgba(255,255,255,0.15)", border: "none", color: "#FFF", fontWeight: 600, cursor: "pointer" }}>Cancelar</button>
+        <button onClick={() => { if (val.trim()) { streamRef.current?.getTracks().forEach(t => t.stop()); onScan(val.trim()); onClose(); } }} style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "#2D9E7F", border: "none", color: "#FFF", fontWeight: 700, cursor: "pointer" }}>OK</button>
+      </div>
+    </div>
+  );
+}
 // ── Scanner Modal ──
 function BarcodeScannerModal({ onScan, onClose }: { onScan: (val: string) => void; onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -263,10 +280,7 @@ function BarcodeScannerModal({ onScan, onClose }: { onScan: (val: string) => voi
     return () => { active = false; streamRef.current?.getTracks().forEach(t => t.stop()); cancelAnimationFrame(rafRef.current); };
   }, []);
 
-  const handleManual = () => {
-    const val = prompt("Digite o código manualmente:");
-    if (val?.trim()) { streamRef.current?.getTracks().forEach(t => t.stop()); onScan(val.trim()); onClose(); }
-  };
+
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.92)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
@@ -301,7 +315,7 @@ function BarcodeScannerModal({ onScan, onClose }: { onScan: (val: string) => voi
         )}
       </div>
       {status === "scanning" && <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 20, textAlign: "center" }}>Aponte a câmera para o código de barras</p>}
-      <button onClick={handleManual} style={{ marginTop: 20, padding: "10px 28px", borderRadius: 12, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", color: "#FFF", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>⌨️ Digitar manualmente</button>
+      <ManualInputBtn onScan={onScan} onClose={onClose} streamRef={streamRef} />
       <style>{`@keyframes scanline { 0%,100% { top: 10%; } 50% { top: 85%; } } @keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
