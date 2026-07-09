@@ -363,14 +363,12 @@ export function useNotes() {
   // Soft delete — move to trash
   const deleteNote = useCallback(async (id: string) => {
     const now = new Date();
-    // Suprimir realtime por 5s para evitar que a nota volte
-    pinningSuppressRef.current = true;
-    setTimeout(() => { pinningSuppressRef.current = false; }, 5000);
+    markSelfModified(id);
     setNotes((prev) => prev.map((n) => n.id === id ? { ...n, deletedAt: now, sincronizado: false } : n));
     try {
       await (supabase.from("notes") as any).update({ deleted_at: now.toISOString() }).eq("id", id);
     } catch {}
-  }, []);
+  }, [markSelfModified]);
 
   // Restore from trash
   const restoreNote = useCallback(async (id: string) => {
