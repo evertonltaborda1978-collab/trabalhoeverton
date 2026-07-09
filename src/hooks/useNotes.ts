@@ -157,8 +157,11 @@ export function useNotes() {
   const pinningSuppressRef = useRef(false);
   // IDs de notas modificadas localmente — ignora eventos realtime para elas
   const selfModifiedRef = useRef<Map<string, number>>(new Map());
+  // Janela global "quieta" após qualquer escrita local — bloqueia fetchNotes por N ms
+  const lastLocalWriteRef = useRef<number>(0);
   const markSelfModified = useCallback((id: string, ttl = 8000) => {
     selfModifiedRef.current.set(id, Date.now() + ttl);
+    lastLocalWriteRef.current = Date.now();
   }, []);
   const isSelfModified = useCallback((id: string | undefined) => {
     if (!id) return false;
@@ -170,6 +173,10 @@ export function useNotes() {
     }
     return true;
   }, []);
+  const inQuietWindow = useCallback((ms = 3000) => {
+    return Date.now() - lastLocalWriteRef.current < ms;
+  }, []);
+
 
   const fetchNotes = useCallback(async () => {
     // Sem usuário ainda: carrega o que houver salvo localmente (chave "anon"
@@ -243,7 +250,14 @@ export function useNotes() {
         },
         (payload: any) => {
           const changedId = payload?.new?.id ?? payload?.old?.id;
-          if (isSelfModified(changedId)) return;
+          if (isSelfModified(changedId)) {
+            console.log("[notes-realtime] ignorado (self-modified):", changedId);
+            return;
+          }
+          if (inQuietWindow()) {
+            console.log("[notes-realtime] ignorado (quiet window)");
+            return;
+          }
           if (pinningSuppressRef.current) return;
           fetchNotes();
         }
@@ -372,19 +386,21 @@ export function useNotes() {
 
   // Restore from trash
   const restoreNote = useCallback(async (id: string) => {
+    markSelfModified(id);
     setNotes((prev) => prev.map((n) => n.id === id ? { ...n, deletedAt: null, sincronizado: false } : n));
     try {
       await (supabase.from("notes") as any).update({ deleted_at: null }).eq("id", id);
     } catch {}
-  }, []);
+  }, [markSelfModified]);
 
   // Permanent delete
   const permanentDeleteNote = useCallback(async (id: string) => {
+    markSelfModified(id);
     setNotes((prev) => prev.filter((n) => n.id !== id));
     try {
       await supabase.from("notes").delete().eq("id", id);
     } catch {}
-  }, []);
+  }, [markSelfModified]);
 
   // Empty trash
   const emptyTrash = useCallback(async () => {
@@ -411,6 +427,7 @@ export function useNotes() {
   const updateNote = useCallback(
     async (id: string, title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string, status?: "rascunho" | "publicada") => {
       const now = new Date();
+      markSelfModified(id);
       setNotes((prev) =>
         prev.map((n) =>
           n.id === id
@@ -446,17 +463,18 @@ export function useNotes() {
         setSyncStatus("offline");
       }
     },
-    []
+    [markSelfModified]
   );
 
   // Set/remove reminder
   const setNoteReminder = useCallback(async (id: string, reminderDate: string | null, reminderTime: string | null) => {
+    markSelfModified(id);
     setNotes((prev) => prev.map((n) => n.id === id ? { ...n, reminderDate, reminderTime, updatedAt: new Date(), sincronizado: false } : n));
     try {
       await (supabase.from("notes") as any).update({ reminder_date: reminderDate, reminder_time: reminderTime, updated_at: new Date().toISOString(), sincronizado: true }).eq("id", id);
       setNotes((prev) => prev.map((n) => n.id === id ? { ...n, sincronizado: true } : n));
     } catch { setSyncStatus("offline"); }
-  }, []);
+  }, [markSelfModified]);
 
   // Toggle pinned state for a note
   const togglePinNote = useCallback(async (id: string) => {
