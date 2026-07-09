@@ -250,7 +250,14 @@ export function useNotes() {
         },
         (payload: any) => {
           const changedId = payload?.new?.id ?? payload?.old?.id;
-          if (isSelfModified(changedId)) return;
+          if (isSelfModified(changedId)) {
+            console.log("[notes-realtime] ignorado (self-modified):", changedId);
+            return;
+          }
+          if (inQuietWindow()) {
+            console.log("[notes-realtime] ignorado (quiet window)");
+            return;
+          }
           if (pinningSuppressRef.current) return;
           fetchNotes();
         }
