@@ -267,6 +267,9 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   // ── Estado geral ──
   const [rebobNum, setRebobNum] = useState<"1"|"2">(saved?.rebobNum ?? "1");
   const [dest, setDest] = useState(saved?.dest ?? "Phablo");
+  const [destinatarios, setDestinatarios] = useState<string[]>(() => {
+    try { const r = localStorage.getItem("rebobinadeira_dest"); return r ? JSON.parse(r) : ["Phablo"]; } catch { return ["Phablo"]; }
+  });
   const [turno, setTurno] = useState(saved?.turno ?? "2");
   const [letra, setLetra] = useState(saved?.letra ?? "D");
   const [horario, setHorario] = useState(saved?.horario ?? "08:20 x 16:20 hr");
@@ -319,6 +322,10 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   }, [formatos]);
 
   useEffect(() => {
+    localStorage.setItem("rebobinadeira_dest", JSON.stringify(destinatarios));
+  }, [destinatarios]);
+
+  useEffect(() => {
     const state = { rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob, fontSize };
     localStorage.setItem(RASCUNHO_KEY, JSON.stringify(state));
   }, [rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob, fontSize]);
@@ -338,6 +345,17 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   });
 
   const removeParam = (id: string) => setParametros(prev => prev.filter(p => p.id !== id));
+  const moveParam = (id: string, dir: -1 | 1) => {
+    setParametros(prev => {
+      const idx = prev.findIndex(p => p.id === id);
+      if (idx < 0) return prev;
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= prev.length) return prev;
+      const arr = [...prev];
+      [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+      return arr;
+    });
+  };
 
   // ── Jumbos ──
   const addJumbo = () => {
@@ -634,7 +652,20 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
           </div>
           {!headerCollapsed && <>
             <label style={{ fontSize: 11, color: theme.textSub }}>Destinatário</label>
-            <input type="text" value={dest} onChange={e => setDest(e.target.value)} style={inputStyle} />
+            <div style={{ display: "flex", gap: 6, marginTop: 4, marginBottom: 8 }}>
+              <input type="text" value={dest} onChange={e => setDest(e.target.value)} style={{ ...inputStyle, marginTop: 0, flex: 1 }} />
+              <button onClick={() => setInputModal({ title: "Novo atalho", placeholder: "Ex: William", onConfirm: (v) => { if (!destinatarios.includes(v)) setDestinatarios(prev => [...prev, v]); setDest(v); setInputModal(null); } })} style={{ ...btnStyle, fontSize: 14, color: "#2D9E7F" }} title="Salvar atalho">+</button>
+            </div>
+            {destinatarios.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                {destinatarios.map(d => (
+                  <div key={d} style={{ display: "flex", alignItems: "center", borderRadius: 20, border: d === dest ? "1.5px solid #2D9E7F" : `1px solid ${theme.inputBorder}`, background: d === dest ? "rgba(45,158,127,0.1)" : theme.inputBg, overflow: "hidden" }}>
+                    <button onClick={() => setDest(d)} style={{ fontSize: 11, padding: "4px 10px", background: "none", border: "none", color: d === dest ? "#2D9E7F" : theme.textSub, fontWeight: 600, cursor: "pointer" }}>{d}</button>
+                    <button onClick={() => setDestinatarios(prev => prev.filter(x => x !== d))} style={{ fontSize: 11, padding: "4px 8px 4px 0", background: "none", border: "none", color: "#E53935", cursor: "pointer" }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, margin: "10px 0" }}>
               <div><label style={{ fontSize: 11, color: theme.textSub }}>Turno</label>
                 <select value={turno} onChange={e => onTurnoChange(e.target.value)} style={selectStyle}>
