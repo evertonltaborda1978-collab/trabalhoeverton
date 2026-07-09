@@ -241,8 +241,11 @@ export function useNotes() {
           table: "notes",
           filter: `user_id=eq.${user.id}`,
         },
-        () => {
-          if (!pinningSuppressRef.current) fetchNotes();
+        (payload: any) => {
+          const changedId = payload?.new?.id ?? payload?.old?.id;
+          if (isSelfModified(changedId)) return;
+          if (pinningSuppressRef.current) return;
+          fetchNotes();
         }
       )
       .subscribe();
