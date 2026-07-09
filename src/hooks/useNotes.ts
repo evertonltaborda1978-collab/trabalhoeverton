@@ -157,8 +157,11 @@ export function useNotes() {
   const pinningSuppressRef = useRef(false);
   // IDs de notas modificadas localmente — ignora eventos realtime para elas
   const selfModifiedRef = useRef<Map<string, number>>(new Map());
+  // Janela global "quieta" após qualquer escrita local — bloqueia fetchNotes por N ms
+  const lastLocalWriteRef = useRef<number>(0);
   const markSelfModified = useCallback((id: string, ttl = 8000) => {
     selfModifiedRef.current.set(id, Date.now() + ttl);
+    lastLocalWriteRef.current = Date.now();
   }, []);
   const isSelfModified = useCallback((id: string | undefined) => {
     if (!id) return false;
@@ -170,6 +173,10 @@ export function useNotes() {
     }
     return true;
   }, []);
+  const inQuietWindow = useCallback((ms = 3000) => {
+    return Date.now() - lastLocalWriteRef.current < ms;
+  }, []);
+
 
   const fetchNotes = useCallback(async () => {
     // Sem usuário ainda: carrega o que houver salvo localmente (chave "anon"
