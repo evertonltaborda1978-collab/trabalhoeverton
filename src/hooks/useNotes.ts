@@ -466,9 +466,8 @@ export function useNotes() {
     const newPinned = !note.isPinned;
     const now = new Date();
 
-    // Suprimir realtime por 5s para evitar sobrescrita
-    pinningSuppressRef.current = true;
-    setTimeout(() => { pinningSuppressRef.current = false; }, 5000);
+    // Ignora eventos realtime desta nota enquanto a mudança propaga
+    markSelfModified(id);
 
     // Atualizar estado local imediatamente
     setNotes((prev) => prev.map((n) => (
@@ -493,7 +492,7 @@ export function useNotes() {
     } catch {
       setSyncStatus("offline");
     }
-  }, [notes, user]);
+  }, [notes, user, markSelfModified]);
 
   // Lock a note: encrypts content+title+images with PIN-derived key. PIN is never stored.
   const lockNoteWithPin = useCallback(async (id: string, pin: string): Promise<boolean> => {
