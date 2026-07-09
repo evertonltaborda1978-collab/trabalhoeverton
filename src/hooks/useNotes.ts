@@ -474,7 +474,7 @@ export function useNotes() {
       await (supabase.from("notes") as any).update({ reminder_date: reminderDate, reminder_time: reminderTime, updated_at: new Date().toISOString(), sincronizado: true }).eq("id", id);
       setNotes((prev) => prev.map((n) => n.id === id ? { ...n, sincronizado: true } : n));
     } catch { setSyncStatus("offline"); }
-  }, []);
+  }, [markSelfModified]);
 
   // Toggle pinned state for a note
   const togglePinNote = useCallback(async (id: string) => {
