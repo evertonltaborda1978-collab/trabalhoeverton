@@ -30,7 +30,7 @@ interface NotesViewProps {
   onTogglePin: (id: string) => void;
   onLockNote: (id: string, pin: string) => Promise<boolean>;
   onUnlockNote: (id: string, pin: string) => Promise<boolean>;
-  onVerifyPin: (id: string, pin: string) => Promise<unknown | null>;
+  onVerifyPin: (id: string, pin: string) => Promise<any>;
   onAddAppointment?: (title: string, date: Date, time: string, description: string) => void;
   syncStatus: SyncStatus;
   draftCount: number;
