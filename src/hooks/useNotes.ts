@@ -386,19 +386,21 @@ export function useNotes() {
 
   // Restore from trash
   const restoreNote = useCallback(async (id: string) => {
+    markSelfModified(id);
     setNotes((prev) => prev.map((n) => n.id === id ? { ...n, deletedAt: null, sincronizado: false } : n));
     try {
       await (supabase.from("notes") as any).update({ deleted_at: null }).eq("id", id);
     } catch {}
-  }, []);
+  }, [markSelfModified]);
 
   // Permanent delete
   const permanentDeleteNote = useCallback(async (id: string) => {
+    markSelfModified(id);
     setNotes((prev) => prev.filter((n) => n.id !== id));
     try {
       await supabase.from("notes").delete().eq("id", id);
     } catch {}
-  }, []);
+  }, [markSelfModified]);
 
   // Empty trash
   const emptyTrash = useCallback(async () => {
