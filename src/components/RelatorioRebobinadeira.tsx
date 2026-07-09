@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { X, Camera, Pencil } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
+
 // ── Chaves localStorage ──
 const RASCUNHO_KEY = "rebobinadeira_rascunho";
 const PARAMS_KEY = "rebobinadeira_params";
