@@ -702,9 +702,13 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
             <label style={{ fontSize: 11, color: theme.textSub }}>ID da máquina</label>
             <input type="text" placeholder="Ex: 0R30-33220" value={idMaquina} onChange={e => setIdMaquina(e.target.value)} style={inputStyle} />
             <div style={{ marginTop: 12 }}>
-              {parametros.map(p => (
+              {parametros.map((p, idx) => (
                 <div key={p.id} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: theme.text, minWidth: 110 }}>• {p.label}</span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
+                    <button onClick={() => moveParam(p.id, -1)} disabled={idx === 0} style={{ fontSize: 10, width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === 0 ? "default" : "pointer", opacity: idx === 0 ? 0.3 : 1 }}>▲</button>
+                    <button onClick={() => moveParam(p.id, 1)} disabled={idx === parametros.length - 1} style={{ fontSize: 10, width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === parametros.length - 1 ? "default" : "pointer", opacity: idx === parametros.length - 1 ? 0.3 : 1 }}>▼</button>
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: theme.text, minWidth: 100 }}>• {p.label}</span>
                   <button
                     onClick={() => abrirTeclado(p.label, p.valor, (v) => updateParam(p.id, "valor", v))}
                     style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${p.valor ? "#2D9E7F" : theme.inputBorder}`, background: theme.inputBg, color: p.valor ? theme.text : theme.textSub, fontSize: 15, fontWeight: p.valor ? 700 : 400, textAlign: "left", cursor: "pointer" }}
