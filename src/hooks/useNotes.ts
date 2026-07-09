@@ -155,6 +155,21 @@ export function useNotes() {
   }, [user]);
 
   const pinningSuppressRef = useRef(false);
+  // IDs de notas modificadas localmente — ignora eventos realtime para elas
+  const selfModifiedRef = useRef<Map<string, number>>(new Map());
+  const markSelfModified = useCallback((id: string, ttl = 8000) => {
+    selfModifiedRef.current.set(id, Date.now() + ttl);
+  }, []);
+  const isSelfModified = useCallback((id: string | undefined) => {
+    if (!id) return false;
+    const exp = selfModifiedRef.current.get(id);
+    if (!exp) return false;
+    if (Date.now() > exp) {
+      selfModifiedRef.current.delete(id);
+      return false;
+    }
+    return true;
+  }, []);
 
   const fetchNotes = useCallback(async () => {
     // Sem usuário ainda: carrega o que houver salvo localmente (chave "anon"
