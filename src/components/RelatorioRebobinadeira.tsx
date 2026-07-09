@@ -844,31 +844,28 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
         </div>
       )}
 
-      {/* Teclado Numérico */}
+      {/* Teclado Numérico — compacto e centralizado */}
       {numTeclado && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 260, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-          <div style={{ background: "rgba(0,0,0,0.4)", position: "absolute", inset: 0 }} onClick={() => setNumTeclado(null)} />
-          <div style={{ position: "relative", background: theme.card, borderRadius: "20px 20px 0 0", padding: "16px 16px 32px", boxShadow: "0 -4px 32px rgba(0,0,0,0.15)" }}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 260, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "rgba(0,0,0,0.5)", position: "absolute", inset: 0 }} onClick={() => setNumTeclado(null)} />
+          <div style={{ position: "relative", background: theme.card, borderRadius: 20, padding: "14px 14px 18px", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", width: "min(88vw, 280px)" }}>
             {/* Label e display */}
-            <div style={{ marginBottom: 12 }}>
-              <p style={{ fontSize: 12, color: theme.textSub, margin: "0 0 4px", fontWeight: 600 }}>{numTeclado.label}</p>
-              {numTeclado.valor && numTeclado.valor !== numValor && (
-                <p style={{ fontSize: 11, color: theme.textSub, margin: "0 0 4px" }}>Anterior: <strong>{numTeclado.valor}</strong></p>
-              )}
-              <div style={{ background: theme.inputBg, border: `2px solid #2D9E7F`, borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 28, fontWeight: 700, color: theme.text, letterSpacing: 2 }}>{numValor || <span style={{ color: theme.textSub, fontSize: 20, fontWeight: 400 }}>0</span>}</span>
-                <button onClick={tecladoApagar} style={{ width: 40, height: 40, borderRadius: 10, background: theme.sectionBtnBg, border: "none", fontSize: 18, cursor: "pointer", color: theme.text }}>⌫</button>
+            <div style={{ marginBottom: 10 }}>
+              <p style={{ fontSize: 12, color: theme.textSub, margin: "0 0 6px", fontWeight: 600, textAlign: "center" }}>{numTeclado.label}</p>
+              <div style={{ background: theme.inputBg, border: `2px solid #2D9E7F`, borderRadius: 10, padding: "8px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 22, fontWeight: 700, color: theme.text, letterSpacing: 2 }}>{numValor || <span style={{ color: theme.textSub, fontSize: 16, fontWeight: 400 }}>0</span>}</span>
+                <button onClick={tecladoApagar} style={{ width: 34, height: 34, borderRadius: 8, background: theme.sectionBtnBg, border: "none", fontSize: 16, cursor: "pointer", color: theme.text }}>⌫</button>
               </div>
             </div>
             {/* Grid de teclas */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
               {["7","8","9","4","5","6","1","2","3"].map(d => (
-                <button key={d} onClick={() => tecladoDigito(d)} style={{ height: 52, borderRadius: 12, background: theme.sectionBtnBg, border: `1px solid ${theme.inputBorder}`, fontSize: 20, fontWeight: 600, color: theme.text, cursor: "pointer" }}>{d}</button>
+                <button key={d} onClick={() => tecladoDigito(d)} style={{ height: 42, borderRadius: 10, background: theme.sectionBtnBg, border: `1px solid ${theme.inputBorder}`, fontSize: 17, fontWeight: 600, color: theme.text, cursor: "pointer" }}>{d}</button>
               ))}
-              <button onClick={() => tecladoDigito(",")} style={{ height: 52, borderRadius: 12, background: theme.sectionBtnBg, border: `1px solid ${theme.inputBorder}`, fontSize: 20, fontWeight: 600, color: theme.text, cursor: "pointer" }}>,</button>
-              <button onClick={() => tecladoDigito("0")} style={{ height: 52, borderRadius: 12, background: theme.sectionBtnBg, border: `1px solid ${theme.inputBorder}`, fontSize: 20, fontWeight: 600, color: theme.text, cursor: "pointer" }}>0</button>
-              <button onClick={() => setNumValor("")} style={{ height: 52, borderRadius: 12, background: "rgba(229,57,53,0.1)", border: "none", fontSize: 13, fontWeight: 600, color: "#E53935", cursor: "pointer" }}>C</button>
-              <button onClick={tecladoConfirmar} style={{ height: 52, borderRadius: 12, background: "#2D9E7F", border: "none", fontSize: 14, fontWeight: 700, color: "#FFF", cursor: "pointer" }}>OK</button>
+              <button onClick={() => tecladoDigito(",")} style={{ height: 42, borderRadius: 10, background: theme.sectionBtnBg, border: `1px solid ${theme.inputBorder}`, fontSize: 17, fontWeight: 600, color: theme.text, cursor: "pointer" }}>,</button>
+              <button onClick={() => tecladoDigito("0")} style={{ height: 42, borderRadius: 10, background: theme.sectionBtnBg, border: `1px solid ${theme.inputBorder}`, fontSize: 17, fontWeight: 600, color: theme.text, cursor: "pointer" }}>0</button>
+              <button onClick={() => setNumValor("")} style={{ height: 42, borderRadius: 10, background: "rgba(229,57,53,0.1)", border: "none", fontSize: 12, fontWeight: 600, color: "#E53935", cursor: "pointer" }}>C</button>
+              <button onClick={tecladoConfirmar} style={{ height: 42, borderRadius: 10, background: "#2D9E7F", border: "none", fontSize: 13, fontWeight: 700, color: "#FFF", cursor: "pointer" }}>OK</button>
             </div>
           </div>
         </div>
