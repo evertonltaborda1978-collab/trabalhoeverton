@@ -427,6 +427,7 @@ export function useNotes() {
   const updateNote = useCallback(
     async (id: string, title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string, status?: "rascunho" | "publicada") => {
       const now = new Date();
+      markSelfModified(id);
       setNotes((prev) =>
         prev.map((n) =>
           n.id === id
@@ -462,11 +463,12 @@ export function useNotes() {
         setSyncStatus("offline");
       }
     },
-    []
+    [markSelfModified]
   );
 
   // Set/remove reminder
   const setNoteReminder = useCallback(async (id: string, reminderDate: string | null, reminderTime: string | null) => {
+    markSelfModified(id);
     setNotes((prev) => prev.map((n) => n.id === id ? { ...n, reminderDate, reminderTime, updatedAt: new Date(), sincronizado: false } : n));
     try {
       await (supabase.from("notes") as any).update({ reminder_date: reminderDate, reminder_time: reminderTime, updated_at: new Date().toISOString(), sincronizado: true }).eq("id", id);
