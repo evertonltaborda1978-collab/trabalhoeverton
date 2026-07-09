@@ -447,9 +447,9 @@ export function useNotes() {
     const newPinned = !note.isPinned;
     const now = new Date();
 
-    // Suprimir realtime por 2s para evitar sobrescrita
+    // Suprimir realtime por 3s para evitar sobrescrita imediata
     pinningSuppressRef.current = true;
-    setTimeout(() => { pinningSuppressRef.current = false; }, 2000);
+    setTimeout(() => { pinningSuppressRef.current = false; }, 3000);
 
     setNotes((prev) => prev.map((n) => (
       n.id === id ? { ...n, isPinned: newPinned, updatedAt: now, sincronizado: false } : n
