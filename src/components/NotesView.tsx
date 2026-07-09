@@ -504,7 +504,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
           </div>
         </DialogContent>
       </Dialog>
-    </div>
 
       {/* Relatório de Turno */}
       {showRelatorio && (
@@ -542,5 +541,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
           }}
         />
       )}
+    </div>
   );
 }
