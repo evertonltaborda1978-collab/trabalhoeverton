@@ -447,10 +447,11 @@ export function useNotes() {
     const newPinned = !note.isPinned;
     const now = new Date();
 
-    // Suprimir realtime por 3s para evitar sobrescrita imediata
+    // Suprimir realtime por 5s para evitar sobrescrita
     pinningSuppressRef.current = true;
-    setTimeout(() => { pinningSuppressRef.current = false; }, 3000);
+    setTimeout(() => { pinningSuppressRef.current = false; }, 5000);
 
+    // Atualizar estado local imediatamente
     setNotes((prev) => prev.map((n) => (
       n.id === id ? { ...n, isPinned: newPinned, updatedAt: now, sincronizado: false } : n
     )));
@@ -467,7 +468,8 @@ export function useNotes() {
 
       if (error) throw error;
 
-      setNotes((prev) => prev.map((n) => n.id === id ? { ...n, sincronizado: true } : n));
+      // Atualizar apenas o campo sincronizado, sem refetch
+      setNotes((prev) => prev.map((n) => n.id === id ? { ...n, isPinned: newPinned, sincronizado: true } : n));
       setSyncStatus("synced");
     } catch {
       setSyncStatus("offline");
