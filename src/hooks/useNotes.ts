@@ -155,6 +155,21 @@ export function useNotes() {
   }, [user]);
 
   const pinningSuppressRef = useRef(false);
+  // IDs de notas modificadas localmente — ignora eventos realtime para elas
+  const selfModifiedRef = useRef<Map<string, number>>(new Map());
+  const markSelfModified = useCallback((id: string, ttl = 8000) => {
+    selfModifiedRef.current.set(id, Date.now() + ttl);
+  }, []);
+  const isSelfModified = useCallback((id: string | undefined) => {
+    if (!id) return false;
+    const exp = selfModifiedRef.current.get(id);
+    if (!exp) return false;
+    if (Date.now() > exp) {
+      selfModifiedRef.current.delete(id);
+      return false;
+    }
+    return true;
+  }, []);
 
   const fetchNotes = useCallback(async () => {
     // Sem usuário ainda: carrega o que houver salvo localmente (chave "anon"
@@ -226,8 +241,11 @@ export function useNotes() {
           table: "notes",
           filter: `user_id=eq.${user.id}`,
         },
-        () => {
-          if (!pinningSuppressRef.current) fetchNotes();
+        (payload: any) => {
+          const changedId = payload?.new?.id ?? payload?.old?.id;
+          if (isSelfModified(changedId)) return;
+          if (pinningSuppressRef.current) return;
+          fetchNotes();
         }
       )
       .subscribe();
@@ -345,14 +363,12 @@ export function useNotes() {
   // Soft delete — move to trash
   const deleteNote = useCallback(async (id: string) => {
     const now = new Date();
-    // Suprimir realtime por 5s para evitar que a nota volte
-    pinningSuppressRef.current = true;
-    setTimeout(() => { pinningSuppressRef.current = false; }, 5000);
+    markSelfModified(id);
     setNotes((prev) => prev.map((n) => n.id === id ? { ...n, deletedAt: now, sincronizado: false } : n));
     try {
       await (supabase.from("notes") as any).update({ deleted_at: now.toISOString() }).eq("id", id);
     } catch {}
-  }, []);
+  }, [markSelfModified]);
 
   // Restore from trash
   const restoreNote = useCallback(async (id: string) => {
@@ -450,9 +466,8 @@ export function useNotes() {
     const newPinned = !note.isPinned;
     const now = new Date();
 
-    // Suprimir realtime por 5s para evitar sobrescrita
-    pinningSuppressRef.current = true;
-    setTimeout(() => { pinningSuppressRef.current = false; }, 5000);
+    // Ignora eventos realtime desta nota enquanto a mudança propaga
+    markSelfModified(id);
 
     // Atualizar estado local imediatamente
     setNotes((prev) => prev.map((n) => (
@@ -477,7 +492,7 @@ export function useNotes() {
     } catch {
       setSyncStatus("offline");
     }
-  }, [notes, user]);
+  }, [notes, user, markSelfModified]);
 
   // Lock a note: encrypts content+title+images with PIN-derived key. PIN is never stored.
   const lockNoteWithPin = useCallback(async (id: string, pin: string): Promise<boolean> => {
