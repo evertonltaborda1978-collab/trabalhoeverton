@@ -68,7 +68,7 @@ function mergeNotes(local: Note[], remote: Note[]): Note[] {
     const existing = map.get(n.id);
     if (!existing) {
       map.set(n.id, n);
-    } else if (n.updatedAt > existing.updatedAt) {
+    } else if (!n.sincronizado || n.updatedAt >= existing.updatedAt) {
       map.set(n.id, n);
     }
   }
@@ -103,14 +103,14 @@ export function useNotes() {
   const [loading, setLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("synced");
   const syncingRef = useRef(false);
+  const notesRef = useRef<Note[]>([]);
 
   // Save to localStorage whenever notes change. Uses "anon" as a fallback key
   // when the user session isn't available yet (e.g. offline first load), so
   // notes created before auth resolves aren't lost on refresh.
   useEffect(() => {
-    if (notes.length > 0) {
-      saveLocal(user?.id || "anon", notes);
-    }
+    notesRef.current = notes;
+    saveLocal(user?.id || "anon", notes);
   }, [notes, user]);
 
   // Sync unsynced notes to Supabase
@@ -195,7 +195,8 @@ export function useNotes() {
     // com as notas já salvas para este usuário.
     const anonNotes = loadLocal("anon");
     const userLocalNotes = loadLocal(user.id);
-    const localNotes = anonNotes.length > 0 ? mergeNotes(anonNotes, userLocalNotes) : userLocalNotes;
+    const savedLocalNotes = anonNotes.length > 0 ? mergeNotes(anonNotes, userLocalNotes) : userLocalNotes;
+    const localNotes = notesRef.current.length > 0 ? mergeNotes(savedLocalNotes, notesRef.current) : savedLocalNotes;
     if (anonNotes.length > 0) {
       try { localStorage.removeItem(getLocalKey("anon")); } catch {}
     }
@@ -478,19 +479,22 @@ export function useNotes() {
 
   // Toggle pinned state for a note
   const togglePinNote = useCallback(async (id: string) => {
-    const note = notes.find((n) => n.id === id);
+    const note = notesRef.current.find((n) => n.id === id);
     if (!note) return;
 
     const newPinned = !note.isPinned;
     const now = new Date();
 
     // Ignora eventos realtime desta nota enquanto a mudança propaga
-    markSelfModified(id);
+    markSelfModified(id, 30000);
 
-    // Atualizar estado local imediatamente
-    setNotes((prev) => prev.map((n) => (
+    // Atualizar estado local e persistência imediatamente, antes de qualquer refresh
+    const localUpdatedNotes = notesRef.current.map((n) => (
       n.id === id ? { ...n, isPinned: newPinned, updatedAt: now, sincronizado: false } : n
-    )));
+    ));
+    notesRef.current = localUpdatedNotes;
+    setNotes(localUpdatedNotes);
+    saveLocal(user?.id || "anon", localUpdatedNotes);
 
     if (!user) {
       setSyncStatus("offline");
@@ -498,19 +502,26 @@ export function useNotes() {
     }
 
     try {
-      const { error } = await (supabase.from("notes") as any)
+      const { data, error } = await (supabase.from("notes") as any)
         .update({ is_pinned: newPinned, updated_at: now.toISOString(), sincronizado: true })
-        .eq("id", id);
+        .eq("id", id)
+        .select("id,is_pinned,updated_at")
+        .single();
 
       if (error) throw error;
+      if (!data || data.is_pinned !== newPinned) throw new Error("Pin update was not persisted");
 
       // Atualizar apenas o campo sincronizado, sem refetch
-      setNotes((prev) => prev.map((n) => n.id === id ? { ...n, isPinned: newPinned, sincronizado: true } : n));
+      const confirmedAt = data.updated_at ? new Date(data.updated_at) : now;
+      const confirmedNotes = notesRef.current.map((n) => n.id === id ? { ...n, isPinned: newPinned, updatedAt: confirmedAt, sincronizado: true } : n);
+      notesRef.current = confirmedNotes;
+      setNotes(confirmedNotes);
+      saveLocal(user.id, confirmedNotes);
       setSyncStatus("synced");
     } catch {
       setSyncStatus("offline");
     }
-  }, [notes, user, markSelfModified]);
+  }, [user, markSelfModified]);
 
   // Lock a note: encrypts content+title+images with PIN-derived key. PIN is never stored.
   const lockNoteWithPin = useCallback(async (id: string, pin: string): Promise<boolean> => {
