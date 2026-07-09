@@ -154,6 +154,8 @@ export function useNotes() {
     syncingRef.current = false;
   }, [user]);
 
+  const pinningSuppressRef = useRef(false);
+
   const fetchNotes = useCallback(async () => {
     // Sem usuário ainda: carrega o que houver salvo localmente (chave "anon"
     // ou de um usuário anterior) para não deixar a tela vazia/travada offline.
@@ -225,7 +227,7 @@ export function useNotes() {
           filter: `user_id=eq.${user.id}`,
         },
         () => {
-          fetchNotes();
+          if (!pinningSuppressRef.current) fetchNotes();
         }
       )
       .subscribe();
@@ -444,6 +446,10 @@ export function useNotes() {
 
     const newPinned = !note.isPinned;
     const now = new Date();
+
+    // Suprimir realtime por 2s para evitar sobrescrita
+    pinningSuppressRef.current = true;
+    setTimeout(() => { pinningSuppressRef.current = false; }, 2000);
 
     setNotes((prev) => prev.map((n) => (
       n.id === id ? { ...n, isPinned: newPinned, updatedAt: now, sincronizado: false } : n
