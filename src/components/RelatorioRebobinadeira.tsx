@@ -560,7 +560,10 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
     const stateKey = `rebobinadeira_state_${title.replace(/\s/g, "_")}`;
     const state = { rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, itens, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob, fontSize };
     localStorage.setItem(stateKey, JSON.stringify(state));
-    onSaveAsNote(title, text);
+    // Embute o estado no próprio texto da nota (marcador invisível), para que
+    // reabrir o formulário funcione mesmo após limpeza de cache ou em outro aparelho.
+    const marker = `\n\n<!--relatorio-rebobinadeira-state:${JSON.stringify(state)}-->`;
+    onSaveAsNote(title, text + marker);
     toast({ title: "✅ Salvo nas notas!" });
     localStorage.removeItem(RASCUNHO_KEY);
     onClose();
