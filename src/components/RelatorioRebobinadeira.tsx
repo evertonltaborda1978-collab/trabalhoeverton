@@ -10,6 +10,8 @@ const FORMATOS_KEY = "rebobinadeira_formatos";
 // ── Tipos ──
 interface Parada { desc: string; ini: string; fim: string; nota: string; collapsed: boolean; }
 interface Parametro { id: string; label: string; valor: string; unidade: string; }
+interface Troca { min: number | null; }
+interface ItemConsumo { label: string; trocas: Troca[]; collapsed: boolean; }
 interface FormatoJumbo { id: string; largura: string; diametro: string; }
 interface Jumbo {
   id: string;
@@ -40,6 +42,11 @@ const PARAMS_BASE: Parametro[] = [
   { id: "ang", label: "Ângulo de abertura", valor: "", unidade: "°" },
   { id: "pas", label: "Passo", valor: "", unidade: "" },
   { id: "rec", label: "Receita", valor: "", unidade: "" },
+];
+
+const ITENS_BASE = [
+  "Rep. de P.O 1175","Rep. de P.O 1220","Rep. de P.O 1350","Rep. de P.O 1450",
+  "Trocas de Stretch","Pallet de Stretch","Reposição de Cola","Troca de Ribon","Troca de Label",
 ];
 
 const HORARIOS: Record<string, string> = {
@@ -274,11 +281,12 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   const [letra, setLetra] = useState(saved?.letra ?? "D");
   const [horario, setHorario] = useState(saved?.horario ?? "08:20 x 16:20 hr");
   const [resps, setResps] = useState<string[]>(saved?.resps ?? ["Everton"]);
-  const [headerCollapsed, setHeaderCollapsed] = useState(false);
-  const [paramsCollapsed, setParamsCollapsed] = useState(false);
+  const [headerCollapsed, setHeaderCollapsed] = useState(!!saved);
+  const [paramsCollapsed, setParamsCollapsed] = useState(!!saved);
   const [jumbosCollapsed, setJumbosCollapsed] = useState(false);
-  const [clCollapsed, setClCollapsed] = useState(false);
-  const [rcCollapsed, setRcCollapsed] = useState(false);
+  const [consumidosCollapsed, setConsumidosCollapsed] = useState(false);
+  const [clCollapsed, setClCollapsed] = useState(true);
+  const [rcCollapsed, setRcCollapsed] = useState(true);
   const [obsCollapsed, setObsCollapsed] = useState(false);
 
   // ── Parâmetros da rebobinadeira ──
@@ -286,6 +294,9 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   const [parametros, setParametros] = useState<Parametro[]>(saved?.parametros ?? loadParamsBase());
   const [darkMode, setDarkMode] = useState(false);
   const [fontSize, setFontSize] = useState<"sm"|"md"|"lg">(saved?.fontSize ?? "md");
+
+  // ── Consumidos ──
+  const [itens, setItens] = useState<ItemConsumo[]>(saved?.itens ?? ITENS_BASE.map(l => ({ label: l, trocas: [], collapsed: false })));
 
   // ── Jumbos ──
   const [jumbos, setJumbos] = useState<Jumbo[]>(saved?.jumbos ?? []);
@@ -326,9 +337,9 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   }, [destinatarios]);
 
   useEffect(() => {
-    const state = { rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob, fontSize };
+    const state = { rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, itens, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob, fontSize };
     localStorage.setItem(RASCUNHO_KEY, JSON.stringify(state));
-  }, [rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob, fontSize]);
+  }, [rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, itens, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob, fontSize]);
 
   const onTurnoChange = (v: string) => { setTurno(v); setHorario(HORARIOS[v] || ""); };
 
@@ -398,14 +409,29 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
 
   const totalParadas = (list: Parada[]) => list.reduce((s, p) => s + getMin(p), 0);
 
+  // ── Consumidos ──
+  const calcTotalConsumidos = () => itens.reduce((s, i) => s + i.trocas.reduce((a, t) => a + (t.min || 0), 0), 0);
+  const addTroca = (idx: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: [...item.trocas, { min: null }] } : item));
+  const removeTroca = (idx: number, ti: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.filter((_, j) => j !== ti) } : item));
+  const setTrocaMin = (idx: number, ti: number, val: string) => {
+    const n = parseInt(val); const v = isNaN(n) ? null : Math.max(0, n);
+    setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.map((t, j) => j === ti ? { min: v } : t) } : item));
+  };
+  const toggleItemConsumo = (idx: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, collapsed: !item.collapsed } : item));
+  const addItemConsumo = () => setInputModal({ title: "Novo item", placeholder: "Nome do item", onConfirm: (val) => { setItens(prev => [...prev, { label: val, trocas: [], collapsed: false }]); setInputModal(null); } });
+  const removeItemConsumo = (idx: number) => { if (confirm("Remover este item?")) setItens(prev => prev.filter((_, i) => i !== idx)); };
+
   // ── Novo relatório ──
   const handleNovo = () => {
     localStorage.removeItem(RASCUNHO_KEY);
     setRebobNum("1"); setDest("Phablo"); setTurno("2"); setLetra("D"); setHorario("08:20 x 16:20 hr");
     setResps(["Everton"]); setIdMaquina(""); setParametros(loadParamsBase());
+    setItens(ITENS_BASE.map(l => ({ label: l, trocas: [], collapsed: false })));
     setJumbos([]); setClQtd(0); setObsCL(""); setParadasCL([]);
     setRcId(0); setRcSid(0); setObsRC(""); setParadasRC([]);
     setObsRebob(""); setParadasRebob([]); setShowPrevia(false);
+    setHeaderCollapsed(false); setParamsCollapsed(false); setJumbosCollapsed(false);
+    setConsumidosCollapsed(false); setClCollapsed(true); setRcCollapsed(true); setObsCollapsed(false);
     toast({ title: "✅ Novo relatório iniciado!" });
   };
 
@@ -417,6 +443,13 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
       if (j.largura || j.diametro) linha += ` /${j.largura} ${j.diametro}`;
       return linha;
     }).join("\n");
+
+    let consumidosTxt = "";
+    itens.forEach(item => { if (item.trocas.length > 0) consumidosTxt += ` ${String(item.trocas.length).padStart(2, "0")} ${item.label}\n`; });
+    const totalConsumidos = formatMin(calcTotalConsumidos());
+    const consumidosSection = consumidosTxt
+      ? `\n\n✔ Consumidos:\n${consumidosTxt}✔ Total de Tempo de Parada: ${totalConsumidos}.`
+      : "";
 
     let clSection = "";
     if (clQtd > 0 || obsCL || paradasCL.length > 0) {
@@ -448,14 +481,14 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
       obsSection += `\n\n${ptxt}\nParada total: ${formatMin(totalParadas(paradasRebob))}.`;
     }
 
-    return `${getSaudacao()}, ${dest},\nSegue relatório da Rebobinadeira ${rebobNum}.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}${idMaquina ? `\n\nPARÂMETROS DA REBOBINADEIRA: ${idMaquina}` : "\n\nPARÂMETROS DA REBOBINADEIRA:"}${paramsTexto ? "\n" + paramsTexto : ""}${jumbosTexto ? "\n\nPROGRAMAÇÃO:\n" + jumbosTexto : ""}${clSection}${rcSection}${obsSection}`.trim();
-  }, [rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob]);
+    return `${getSaudacao()}, ${dest},\nSegue relatório da Rebobinadeira ${rebobNum}.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}${idMaquina ? `\n\nPARÂMETROS DA REBOBINADEIRA: ${idMaquina}` : "\n\nPARÂMETROS DA REBOBINADEIRA:"}${paramsTexto ? "\n" + paramsTexto : ""}${jumbosTexto ? "\n\nPROGRAMAÇÃO:\n" + jumbosTexto : ""}${consumidosSection}${clSection}${rcSection}${obsSection}`.trim();
+  }, [rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, itens, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob]);
 
   const handleSaveNote = () => {
     const text = gerarTexto();
     const title = `Relatório Rebobinadeira ${rebobNum} - Letra ${letra}`;
     const stateKey = `rebobinadeira_state_${title.replace(/\s/g, "_")}`;
-    const state = { rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob, fontSize };
+    const state = { rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, itens, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob, fontSize };
     localStorage.setItem(stateKey, JSON.stringify(state));
     onSaveAsNote(title, text);
     toast({ title: "✅ Salvo nas notas!" });
@@ -750,6 +783,45 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
           </>}
         </div>
 
+        {/* Consumidos */}
+        <div style={cardStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: consumidosCollapsed ? 0 : 12 }}>
+            <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>✔ Consumidos</span>
+            <button onClick={() => setConsumidosCollapsed(!consumidosCollapsed)} style={sectionBtn}>{consumidosCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
+          </div>
+          {!consumidosCollapsed && <>
+            {itens.map((item, idx) => {
+              const qtd = item.trocas.length;
+              const totalItem = item.trocas.reduce((a, t) => a + (t.min || 0), 0);
+              return (
+                <div key={idx} style={{ padding: 10, marginBottom: 6, borderRadius: 12, background: qtd > 0 ? "rgba(45,158,127,0.07)" : theme.inputBg, border: `1px solid ${qtd > 0 ? "rgba(45,158,127,0.2)" : "transparent"}` }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 13, flex: 1, fontWeight: 500, color: theme.text }}>{item.label}</span>
+                    {qtd > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: "#2D9E7F", background: "rgba(45,158,127,0.12)", padding: "2px 10px", borderRadius: 20, whiteSpace: "nowrap" }}>{String(qtd).padStart(2, "0")} · {totalItem}min</span>}
+                    <button onClick={() => toggleItemConsumo(idx)} style={sectionBtn}>{item.collapsed ? "▼" : "▲"}</button>
+                    <button onClick={() => addTroca(idx)} style={{ padding: "5px 10px", fontSize: 12, fontWeight: 600, color: "#fff", background: "#2D9E7F", border: "none", borderRadius: 8, whiteSpace: "nowrap", cursor: "pointer" }}>+ Troca</button>
+                    <button onClick={() => removeItemConsumo(idx)} style={{ width: 28, height: 28, padding: 0, fontSize: 13, color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>🗑</button>
+                  </div>
+                  {!item.collapsed && item.trocas.map((t, ti) => (
+                    <div key={ti} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, padding: "8px 10px", background: theme.card, borderRadius: 8 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: theme.textSub, whiteSpace: "nowrap", minWidth: 56 }}>Troca {ti + 1}</span>
+                      <input type="number" min={0} value={t.min !== null ? t.min : ""} placeholder="min" onChange={e => setTrocaMin(idx, ti, e.target.value)} style={{ width: 64, fontSize: 16, fontWeight: 700, textAlign: "center", borderRadius: 8, padding: 5, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text }} />
+                      <span style={{ fontSize: 12, color: theme.textSub }}>min</span>
+                      {t.min !== null && t.min > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: "#2D9E7F", marginLeft: "auto" }}>✓ {t.min}min</span>}
+                      <button onClick={() => removeTroca(idx, ti)} style={{ padding: "0 6px", color: "#E53935", fontSize: 13, marginLeft: t.min ? undefined : "auto", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+            <button onClick={addItemConsumo} style={{ marginTop: 8, fontSize: 12, color: "#2D9E7F", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar item</button>
+            <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${theme.cardBorder}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 13, color: theme.textSub }}>✔ Total Tempo de Parada</span>
+              <span style={{ fontSize: 17, fontWeight: 700, color: theme.text }}>{formatMin(calcTotalConsumidos())}</span>
+            </div>
+          </>}
+        </div>
+
         {/* Core Link */}
         <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: clCollapsed ? 0 : 10 }}>
@@ -835,11 +907,17 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
               </div>
             ))}
             <p style={{ fontSize: 12, fontWeight: 700, color: "#9E9E9E", margin: "12px 0 8px" }}>Novo formato</p>
-            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              <input type="text" placeholder="Largura" value={novoFormato.largura} onChange={e => setNovoFormato(p => ({ ...p, largura: e.target.value }))} style={{ flex: 1, fontSize: 14, borderRadius: 8, padding: "8px 10px", border: "1px solid #EBEBEB" }} />
-              <input type="text" placeholder="Diâmetro" value={novoFormato.diametro} onChange={e => setNovoFormato(p => ({ ...p, diametro: e.target.value }))} style={{ flex: 1, fontSize: 14, borderRadius: 8, padding: "8px 10px", border: "1px solid #EBEBEB" }} />
-              <button onClick={addFormato} style={{ padding: "8px 16px", borderRadius: 8, background: "#2D9E7F", color: "#FFF", fontWeight: 700, border: "none", cursor: "pointer" }}>+</button>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+              <div>
+                <label style={{ fontSize: 11, color: "#9E9E9E" }}>Largura</label>
+                <input type="text" inputMode="numeric" placeholder="Ex: 500" value={novoFormato.largura} onChange={e => setNovoFormato(p => ({ ...p, largura: e.target.value }))} style={{ width: "100%", boxSizing: "border-box", fontSize: 15, borderRadius: 8, padding: "8px 10px", border: "1px solid #EBEBEB", marginTop: 4 }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: "#9E9E9E" }}>Diâmetro</label>
+                <input type="text" inputMode="numeric" placeholder="Ex: 1480" value={novoFormato.diametro} onChange={e => setNovoFormato(p => ({ ...p, diametro: e.target.value }))} style={{ width: "100%", boxSizing: "border-box", fontSize: 15, borderRadius: 8, padding: "8px 10px", border: "1px solid #EBEBEB", marginTop: 4 }} />
+              </div>
             </div>
+            <button onClick={addFormato} style={{ width: "100%", padding: "10px 0", borderRadius: 8, background: "#2D9E7F", color: "#FFF", fontWeight: 700, fontSize: 14, border: "none", cursor: "pointer", marginBottom: 12 }}>+ Adicionar formato</button>
           </div>
         </div>
       )}
