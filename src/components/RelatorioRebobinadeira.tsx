@@ -671,7 +671,13 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
                 updateJumbo(j.id, "largura", vLargura);
                 setInputModal({
                   title: "Diâmetro personalizado", placeholder: "Ex: 1500",
-                  onConfirm: (vDiametro) => { updateJumbo(j.id, "diametro", vDiametro); setInputModal(null); }
+                  onConfirm: (vDiametro) => {
+                    updateJumbo(j.id, "diametro", vDiametro);
+                    setFormatos(prev => prev.some(f => f.largura === vLargura && f.diametro === vDiametro)
+                      ? prev
+                      : [...prev, { id: Math.random().toString(36).slice(2), largura: vLargura, diametro: vDiametro }]);
+                    setInputModal(null);
+                  }
                 });
               }
             });
