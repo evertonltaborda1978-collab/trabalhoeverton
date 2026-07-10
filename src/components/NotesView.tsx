@@ -149,40 +149,23 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
       setLockMode("unlock");
       return;
     }
-    // Detectar nota de Rebobinadeira
+    // Detectar nota de Rebobinadeira — abre sempre pelo título
     if (note.title && note.title.includes("Rebobinadeira")) {
       const stateKey = `rebobinadeira_state_${note.title.replace(/\s/g, "_")}`;
       const raw = localStorage.getItem(stateKey);
-      if (raw) {
-        try {
-          setRebobInitialState(JSON.parse(raw));
-          setShowRebobinadeira(true);
-          return;
-        } catch {}
-      }
+      if (raw) { try { setRebobInitialState(JSON.parse(raw)); } catch {} }
+      setShowRebobinadeira(true);
+      return;
     }
-    // Detectar se é uma nota de Relatório de Turno pelo título
-    if (note.title && note.title.includes("Relatório")) {
+    // Detectar nota de Relatório de Turno — abre sempre pelo título
+    if (note.title && (note.title.includes("Relatório") || note.title.includes("Tombador"))) {
       const stateKey = `relatorio_state_${note.title.replace(/\s/g, "_")}`;
       const raw = localStorage.getItem(stateKey);
-      if (raw) {
-        try {
-          const state = JSON.parse(raw);
-          setRelatorioInitialState(state);
-          setShowRelatorio(true);
-          return;
-        } catch {}
-      }
-    }
-    // Compatibilidade com notas antigas que ainda têm o comentário HTML
-    const match = note.content.match(/<!--relatorio-turno-state:([\s\S]*?)-->/);
-    if (match) {
-      try {
-        const state = JSON.parse(match[1]);
-        setRelatorioInitialState(state);
-        setShowRelatorio(true);
-        return;
-      } catch {}
+      if (raw) { try { setRelatorioInitialState(JSON.parse(raw)); } catch {} }
+      const match2 = note.content.match(/<!--relatorio-turno-state:([\s\S]*?)-->/);
+      if (match2) { try { setRelatorioInitialState(JSON.parse(match2[1])); } catch {} }
+      setShowRelatorio(true);
+      return;
     }
     // Always open in read-only mode
     setEditorReadOnly(true);
