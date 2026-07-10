@@ -614,8 +614,10 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
     // Salva o estado no localStorage com chave baseada no título
     const stateKey = `relatorio_state_${title.replace(/\s/g, "_")}`;
     localStorage.setItem(stateKey, JSON.stringify(state));
-    // Salva na nota apenas o texto limpo + marcador invisível no título
-    onSaveAsNote(title, text);
+    // Embute o estado no próprio texto da nota (marcador invisível), para que
+    // reabrir o formulário funcione mesmo após limpeza de cache ou em outro aparelho.
+    const marker = `\n\n<!--relatorio-turno-state:${JSON.stringify(state)}-->`;
+    onSaveAsNote(title, text + marker);
     toast({ title: "✅ Salvo nas notas!" });
     localStorage.removeItem(RASCUNHO_KEY);
     onClose();
