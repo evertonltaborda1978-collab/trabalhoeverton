@@ -689,6 +689,18 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     setQrLoading(true);
   };
 
+  useEffect(() => {
+    if (showQrScanner) {
+      iniciarQrStream();
+    }
+    return () => {
+      qrStreamRef.current?.getTracks().forEach(t => t.stop());
+      cancelAnimationFrame(qrRafRef.current);
+      qrDetectorRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showQrScanner]);
+
   const handleStopQrScanner = () => {
     qrStreamRef.current?.getTracks().forEach(t => t.stop());
     cancelAnimationFrame(qrRafRef.current);
@@ -1750,7 +1762,7 @@ ${blocksToPlainText(blocks)}`.trim() });
             </div>
             {/* Vídeo */}
             <div style={{ position: "relative", flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <video ref={qrVideoRef} playsInline muted onCanPlay={iniciarQrStream} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <video ref={qrVideoRef} playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               <canvas ref={qrCanvasRef} style={{ display: "none" }} />
               {/* Mira */}
               {!qrLoading && (
