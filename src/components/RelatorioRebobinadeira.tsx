@@ -20,11 +20,7 @@ interface Jumbo {
   diametro: string;
   obsJumbo: string;
   parametrosCustom: boolean;
-  velocidade: string;
-  tensao: string;
-  angulo: string;
-  passo: string;
-  receita: string;
+  parametrosEspecificos: Parametro[];
 }
 
 // ── Defaults ──
@@ -76,8 +72,18 @@ function formatMin(t: number): string {
   return `${t} min`;
 }
 
+function newParametrosJumbo(): Parametro[] {
+  return [
+    { id: Math.random().toString(36).slice(2), label: "Velocidade", valor: "", unidade: "m/min" },
+    { id: Math.random().toString(36).slice(2), label: "Tensão", valor: "", unidade: "N/m" },
+    { id: Math.random().toString(36).slice(2), label: "Ângulo", valor: "", unidade: "°" },
+    { id: Math.random().toString(36).slice(2), label: "Passo", valor: "", unidade: "" },
+    { id: Math.random().toString(36).slice(2), label: "Receita", valor: "", unidade: "" },
+  ];
+}
+
 function newJumbo(): Jumbo {
-  return { id: Math.random().toString(36).slice(2), codigo: "", largura: "", diametro: "", obsJumbo: "", parametrosCustom: false, velocidade: "", tensao: "", angulo: "", passo: "", receita: "" };
+  return { id: Math.random().toString(36).slice(2), codigo: "", largura: "", diametro: "", obsJumbo: "", parametrosCustom: false, parametrosEspecificos: newParametrosJumbo() };
 }
 
 function loadFormatos(): FormatoJumbo[] {
@@ -141,7 +147,7 @@ function ManageListModal({ open, title, items, onClose, onEdit, onDelete }: {
               <>
                 <span style={{ fontSize: 13, flex: 1 }}>{item}</span>
                 <button onClick={() => setEditing(item)} style={{ width: 28, height: 28, borderRadius: 8, background: "#F0F0F0", border: "none", cursor: "pointer" }}><Pencil size={12} style={{ margin: "auto" }} /></button>
-                <button onClick={() => { if (confirm(`Excluir "${item}"?`)) onDelete(item); }} style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(229,57,53,0.1)", border: "none", color: "#E53935", cursor: "pointer" }}>✕</button>
+                <button onClick={() => onDelete(item)} style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(229,57,53,0.1)", border: "none", color: "#E53935", cursor: "pointer" }}>✕</button>
               </>
             )}
           </div>
@@ -300,6 +306,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
 
   // ── Jumbos ──
   const [jumbos, setJumbos] = useState<Jumbo[]>(saved?.jumbos ?? []);
+  const [rascunhoJumbo, setRascunhoJumbo] = useState<Jumbo | null>(null);
   const [formatos, setFormatos] = useState<FormatoJumbo[]>(loadFormatos());
   const [editandoJumbo, setEditandoJumbo] = useState<string | null>(null);
   const [showFormatoModal, setShowFormatoModal] = useState(false);
@@ -370,19 +377,82 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
 
   // ── Jumbos ──
   const addJumbo = () => {
-    const j = newJumbo();
-    setJumbos(prev => [...prev, j]);
-    setEditandoJumbo(j.id);
+    setRascunhoJumbo(newJumbo());
   };
 
-  const updateJumbo = (id: string, field: keyof Jumbo, val: any) =>
+  const updateJumbo = (id: string, field: keyof Jumbo, val: any) => {
+    if (rascunhoJumbo && rascunhoJumbo.id === id) {
+      const updated = { ...rascunhoJumbo, [field]: val };
+      setJumbos(prev => [...prev, updated]);
+      setRascunhoJumbo(null);
+      setEditandoJumbo(updated.id);
+      return;
+    }
     setJumbos(prev => prev.map(j => j.id === id ? { ...j, [field]: val } : j));
+  };
 
-  const removeJumbo = (id: string) => { setJumbos(prev => prev.filter(j => j.id !== id)); setEditandoJumbo(null); };
+  const removeJumbo = (id: string) => {
+    if (rascunhoJumbo && rascunhoJumbo.id === id) { setRascunhoJumbo(null); return; }
+    setJumbos(prev => prev.filter(j => j.id !== id));
+    setEditandoJumbo(null);
+  };
+
+  const closeJumboForm = () => { setEditandoJumbo(null); setRascunhoJumbo(null); };
 
   const applyFormato = (jumboId: string, f: FormatoJumbo) => {
     updateJumbo(jumboId, "largura", f.largura);
     updateJumbo(jumboId, "diametro", f.diametro);
+  };
+
+  const updateJumboParam = (jumboId: string, paramId: string, field: "valor" | "unidade", val: string) => {
+    if (rascunhoJumbo && rascunhoJumbo.id === jumboId) {
+      const updated = { ...rascunhoJumbo, parametrosEspecificos: rascunhoJumbo.parametrosEspecificos.map(p => p.id === paramId ? { ...p, [field]: val } : p) };
+      setJumbos(prev => [...prev, updated]);
+      setRascunhoJumbo(null);
+      setEditandoJumbo(updated.id);
+      return;
+    }
+    setJumbos(prev => prev.map(j => j.id === jumboId ? { ...j, parametrosEspecificos: j.parametrosEspecificos.map(p => p.id === paramId ? { ...p, [field]: val } : p) } : j));
+  };
+
+  const addJumboParam = (jumboId: string) => setInputModal({
+    title: "Novo parâmetro", placeholder: "Ex: Pressão",
+    onConfirm: (label) => {
+      const novo = { id: Math.random().toString(36).slice(2), label, valor: "", unidade: "" };
+      if (rascunhoJumbo && rascunhoJumbo.id === jumboId) {
+        setJumbos(prev => [...prev, { ...rascunhoJumbo, parametrosEspecificos: [...rascunhoJumbo.parametrosEspecificos, novo] }]);
+        setRascunhoJumbo(null);
+        setEditandoJumbo(jumboId);
+      } else {
+        setJumbos(prev => prev.map(j => j.id === jumboId ? { ...j, parametrosEspecificos: [...j.parametrosEspecificos, novo] } : j));
+      }
+      setInputModal(null);
+    }
+  });
+
+  const removeJumboParam = (jumboId: string, paramId: string) => {
+    if (rascunhoJumbo && rascunhoJumbo.id === jumboId) {
+      setRascunhoJumbo(prev => prev ? { ...prev, parametrosEspecificos: prev.parametrosEspecificos.filter(p => p.id !== paramId) } : prev);
+      return;
+    }
+    setJumbos(prev => prev.map(j => j.id === jumboId ? { ...j, parametrosEspecificos: j.parametrosEspecificos.filter(p => p.id !== paramId) } : j));
+  };
+
+  const moveJumboParam = (jumboId: string, paramId: string, dir: -1 | 1) => {
+    const reorder = (list: Parametro[]) => {
+      const idx = list.findIndex(p => p.id === paramId);
+      if (idx < 0) return list;
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= list.length) return list;
+      const arr = [...list];
+      [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+      return arr;
+    };
+    if (rascunhoJumbo && rascunhoJumbo.id === jumboId) {
+      setRascunhoJumbo(prev => prev ? { ...prev, parametrosEspecificos: reorder(prev.parametrosEspecificos) } : prev);
+      return;
+    }
+    setJumbos(prev => prev.map(j => j.id === jumboId ? { ...j, parametrosEspecificos: reorder(j.parametrosEspecificos) } : j));
   };
 
   const addFormato = () => {
@@ -419,7 +489,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   };
   const toggleItemConsumo = (idx: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, collapsed: !item.collapsed } : item));
   const addItemConsumo = () => setInputModal({ title: "Novo item", placeholder: "Nome do item", onConfirm: (val) => { setItens(prev => [...prev, { label: val, trocas: [], collapsed: false }]); setInputModal(null); } });
-  const removeItemConsumo = (idx: number) => { if (confirm("Remover este item?")) setItens(prev => prev.filter((_, i) => i !== idx)); };
+  const removeItemConsumo = (idx: number) => setItens(prev => prev.filter((_, i) => i !== idx));
 
   // ── Novo relatório ──
   const handleNovo = () => {
@@ -427,7 +497,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
     setRebobNum("1"); setDest("Phablo"); setTurno("2"); setLetra("D"); setHorario("08:20 x 16:20 hr");
     setResps(["Everton"]); setIdMaquina(""); setParametros(loadParamsBase());
     setItens(ITENS_BASE.map(l => ({ label: l, trocas: [], collapsed: false })));
-    setJumbos([]); setClQtd(0); setObsCL(""); setParadasCL([]);
+    setJumbos([]); setRascunhoJumbo(null); setClQtd(0); setObsCL(""); setParadasCL([]);
     setRcId(0); setRcSid(0); setObsRC(""); setParadasRC([]);
     setObsRebob(""); setParadasRebob([]); setShowPrevia(false);
     setHeaderCollapsed(false); setParamsCollapsed(false); setJumbosCollapsed(false);
@@ -564,13 +634,13 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
 
   // ── Render form jumbo ──
   const renderJumboForm = (j: Jumbo) => (
-    <div style={{ position: "fixed", inset: 0, zIndex: 160, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end" }} onClick={() => setEditandoJumbo(null)}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 160, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end" }} onClick={closeJumboForm}>
       <div style={{ background: theme.card, borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "85vh", overflowY: "auto", padding: "20px 16px 32px" }} onClick={e => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "#2D9E7F" }}>🧻 Jumbo {jumbos.findIndex(x => x.id === j.id) + 1}</span>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "#2D9E7F" }}>🧻 Jumbo {rascunhoJumbo && rascunhoJumbo.id === j.id ? jumbos.length + 1 : jumbos.findIndex(x => x.id === j.id) + 1}</span>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => removeJumbo(j.id)} style={{ fontSize: 12, color: "#E53935", background: "rgba(229,57,53,0.1)", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontWeight: 600 }}>🗑 Remover</button>
-            <button onClick={() => setEditandoJumbo(null)} style={{ width: 32, height: 32, borderRadius: "50%", background: "#F0F0F0", border: "none", cursor: "pointer" }}>✕</button>
+            <button onClick={closeJumboForm} style={{ width: 32, height: 32, borderRadius: "50%", background: "#F0F0F0", border: "none", cursor: "pointer" }}>✕</button>
           </div>
         </div>
 
@@ -592,7 +662,20 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
               {f.largura}/{f.diametro}
             </button>
           ))}
-          <button onClick={() => { updateJumbo(j.id, "largura", ""); updateJumbo(j.id, "diametro", ""); setInputModal({ title: "Largura personalizada", placeholder: "Ex: 600", onConfirm: (v) => { updateJumbo(j.id, "largura", v); setInputModal(null); } }); }} style={{ fontSize: 12, padding: "6px 12px", borderRadius: 20, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.textSub, cursor: "pointer" }}>Outro</button>
+          <button onClick={() => {
+            updateJumbo(j.id, "largura", "");
+            updateJumbo(j.id, "diametro", "");
+            setInputModal({
+              title: "Largura personalizada", placeholder: "Ex: 600",
+              onConfirm: (vLargura) => {
+                updateJumbo(j.id, "largura", vLargura);
+                setInputModal({
+                  title: "Diâmetro personalizado", placeholder: "Ex: 1500",
+                  onConfirm: (vDiametro) => { updateJumbo(j.id, "diametro", vDiametro); setInputModal(null); }
+                });
+              }
+            });
+          }} style={{ fontSize: 12, padding: "6px 12px", borderRadius: 20, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.textSub, cursor: "pointer" }}>Outro</button>
         </div>
 
         {/* Diâmetro manual se Outro */}
@@ -612,18 +695,20 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
         {j.parametrosCustom && (
           <div style={{ padding: 12, borderRadius: 12, background: "rgba(245,124,0,0.06)", border: "1px solid rgba(245,124,0,0.2)", marginBottom: 12 }}>
             <p style={{ fontSize: 12, fontWeight: 700, color: "#F57C00", margin: "0 0 10px" }}>⚙️ Parâmetros específicos</p>
-            {[
-              { field: "velocidade", label: "Velocidade", unit: "m/min" },
-              { field: "tensao", label: "Tensão", unit: "N/m" },
-              { field: "angulo", label: "Ângulo", unit: "°" },
-              { field: "passo", label: "Passo", unit: "" },
-              { field: "receita", label: "Receita", unit: "" },
-            ].map(({ field, label, unit }) => (
-              <div key={field} style={{ marginBottom: 8 }}>
-                <label style={{ fontSize: 11, color: theme.textSub }}>{label}{unit ? ` (${unit})` : ""}</label>
-                <input type="text" value={(j as any)[field]} onChange={e => updateJumbo(j.id, field as keyof Jumbo, e.target.value)} style={inputStyle} />
+            {j.parametrosEspecificos.map((p, idx) => (
+              <div key={p.id} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
+                  <button onClick={() => moveJumboParam(j.id, p.id, -1)} disabled={idx === 0} style={{ fontSize: 10, width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === 0 ? "default" : "pointer", opacity: idx === 0 ? 0.3 : 1 }}>▲</button>
+                  <button onClick={() => moveJumboParam(j.id, p.id, 1)} disabled={idx === j.parametrosEspecificos.length - 1} style={{ fontSize: 10, width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === j.parametrosEspecificos.length - 1 ? "default" : "pointer", opacity: idx === j.parametrosEspecificos.length - 1 ? 0.3 : 1 }}>▼</button>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 11, color: theme.textSub }}>{p.label}{p.unidade ? ` (${p.unidade})` : ""}</label>
+                  <input type="text" value={p.valor} onChange={e => updateJumboParam(j.id, p.id, "valor", e.target.value)} style={inputStyle} />
+                </div>
+                <button onClick={() => removeJumboParam(j.id, p.id)} style={{ color: "#E53935", background: "none", border: "none", cursor: "pointer", fontSize: 14, flexShrink: 0, alignSelf: "flex-end", marginBottom: 6 }}>✕</button>
               </div>
             ))}
+            <button onClick={() => addJumboParam(j.id)} style={{ marginTop: 4, fontSize: 12, color: "#F57C00", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar parâmetro</button>
           </div>
         )}
 
@@ -631,7 +716,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
         <label style={{ fontSize: 11, color: theme.textSub }}>Observações</label>
         <textarea value={j.obsJumbo} onChange={e => updateJumbo(j.id, "obsJumbo", e.target.value)} rows={2} placeholder="Obs deste jumbo..." style={{ ...inputStyle, resize: "vertical", marginTop: 4, marginBottom: 16 }} />
 
-        <button onClick={() => setEditandoJumbo(null)} style={{ width: "100%", padding: "12px 0", borderRadius: 12, background: "#2D9E7F", color: "#FFF", fontWeight: 700, fontSize: 14, border: "none", cursor: "pointer" }}>✓ Confirmar</button>
+        <button onClick={closeJumboForm} style={{ width: "100%", padding: "12px 0", borderRadius: 12, background: "#2D9E7F", color: "#FFF", fontWeight: 700, fontSize: 14, border: "none", cursor: "pointer" }}>✓ Confirmar</button>
       </div>
     </div>
   );
@@ -779,7 +864,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
               <BarcodeScannerBtn onScan={val => { const j = newJumbo(); j.codigo = val; setJumbos(prev => [...prev, j]); setEditandoJumbo(j.id); }} />
             </div>
             {/* Form jumbo */}
-            {editandoJumbo && (() => { const j = jumbos.find(x => x.id === editandoJumbo); return j ? renderJumboForm(j) : null; })()}
+            {(editandoJumbo || rascunhoJumbo) && (() => { const j = rascunhoJumbo ?? jumbos.find(x => x.id === editandoJumbo); return j ? renderJumboForm(j) : null; })()}
           </>}
         </div>
 
