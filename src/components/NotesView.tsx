@@ -160,6 +160,16 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
           return;
         } catch {}
       }
+      // Respaldo: lê o estado embutido no próprio texto da nota (sobrevive a
+      // limpeza de cache e troca de aparelho, pois vem do Supabase junto com a nota)
+      const rebobMatch = note.content.match(/<!--relatorio-rebobinadeira-state:([\s\S]*?)-->/);
+      if (rebobMatch) {
+        try {
+          setRebobInitialState(JSON.parse(rebobMatch[1]));
+          setShowRebobinadeira(true);
+          return;
+        } catch {}
+      }
     }
     // Detectar se é uma nota de Relatório de Turno pelo título
     if (note.title && note.title.includes("Relatório")) {
