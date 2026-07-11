@@ -15,6 +15,7 @@ import { useAppointments } from "@/hooks/useAppointments";
 import { useDeviceTracking } from "@/hooks/useDeviceTracking";
 import { useDeviceCommands } from "@/hooks/useDeviceCommands";
 import { useDeviceLocations, reverseGeocodeFetch } from "@/hooks/useDeviceLocations";
+import { useVersionCheck } from "@/hooks/useVersionCheck";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { LogOut, RefreshCw } from "lucide-react";
@@ -48,6 +49,7 @@ const Index = () => {
   const [showLabelModal, setShowLabelModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const { updateAvailable, applyUpdate } = useVersionCheck();
 
   // Escuta global de comandos remotos — funciona em qualquer aba, não só na Local
   const { markExecuted } = useDeviceCommands(currentDevice?.id ?? null, async (cmd) => {
@@ -194,6 +196,26 @@ const Index = () => {
         }}
       >
         <div className="max-w-lg mx-auto px-4 pt-2 pb-2">
+          {/* Faixa de nova versão disponível */}
+          {updateAvailable && (
+            <button
+              onClick={applyUpdate}
+              className="w-full flex items-center justify-center gap-1.5 transition-opacity hover:opacity-90"
+              style={{
+                background: "#1A1A2E",
+                color: "#FFFFFF",
+                fontSize: 12,
+                fontWeight: 700,
+                borderRadius: 10,
+                padding: "8px 12px",
+                marginBottom: 8,
+                border: "none",
+              }}
+            >
+              🔄 Nova versão disponível — toque para atualizar
+            </button>
+          )}
+
           {/* Linha 1 — título centralizado */}
           <h1
             className="font-display text-center"
