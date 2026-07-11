@@ -1520,62 +1520,56 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                           return (
                             <div
                               key={item.id}
-                              className="rounded-xl px-2.5 py-2"
+                              className="flex items-center gap-1.5 rounded-xl px-2 py-1.5"
                               style={{
                                 background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.025)",
                                 border: `1px solid ${theme.lines}`,
                               }}
                             >
-                              {/* Linha 1: checkbox + nome */}
-                              <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => !readOnly && updateTableItem(idx, item.id, { marcado: !item.marcado })}
+                                className="shrink-0 transition-all duration-200"
+                                style={{ color: item.marcado ? "#4CAF50" : (isDark ? "#888" : "#BDBDBD") }}
+                                disabled={readOnly}
+                              >
+                                {item.marcado ? <CheckSquare size={16} /> : <Square size={16} />}
+                              </button>
+                              <input
+                                value={item.nome}
+                                onChange={(e) => !readOnly && updateTableItem(idx, item.id, { nome: e.target.value })}
+                                onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
+                                onPaste={handleMobilePaste}
+                                readOnly={readOnly}
+                                tabIndex={readOnly ? -1 : 0}
+                                placeholder="Nome"
+                                className="flex-1 min-w-0 bg-transparent border-0 outline-none text-xs font-medium"
+                                style={{ color: textColor, opacity: item.marcado ? 1 : 0.6 }}
+                              />
+                              <input
+                                value={item.valor}
+                                onChange={(e) => !readOnly && updateTableItem(idx, item.id, { valor: e.target.value })}
+                                onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
+                                onPaste={handleMobilePaste}
+                                readOnly={readOnly}
+                                tabIndex={readOnly ? -1 : 0}
+                                inputMode="decimal"
+                                placeholder="Valor"
+                                className="w-14 shrink-0 bg-transparent border-0 outline-none text-xs text-right font-semibold"
+                                style={{
+                                  color: numero < 0 ? "#E53935" : (isDark ? "#81C784" : "#2D9E7F"),
+                                  opacity: item.marcado ? 1 : 0.6,
+                                }}
+                              />
+                              {!readOnly && (
                                 <button
-                                  onClick={() => !readOnly && updateTableItem(idx, item.id, { marcado: !item.marcado })}
-                                  className="shrink-0 transition-all duration-200"
-                                  style={{ color: item.marcado ? "#4CAF50" : (isDark ? "#888" : "#BDBDBD") }}
-                                  disabled={readOnly}
+                                  onClick={() => removeTableItem(idx, item.id)}
+                                  className="shrink-0 hover:bg-black/5 rounded"
+                                  style={{ color: "#BDBDBD", padding: 2 }}
+                                  aria-label="Remover item"
                                 >
-                                  {item.marcado ? <CheckSquare size={18} /> : <Square size={18} />}
+                                  <Trash2 size={13} />
                                 </button>
-                                <input
-                                  value={item.nome}
-                                  onChange={(e) => !readOnly && updateTableItem(idx, item.id, { nome: e.target.value })}
-                                  onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
-                                  onPaste={handleMobilePaste}
-                                  readOnly={readOnly}
-                                  tabIndex={readOnly ? -1 : 0}
-                                  placeholder="Nome (ex: Mercado)"
-                                  className="flex-1 min-w-0 w-full bg-transparent border-0 outline-none text-sm font-medium"
-                                  style={{ color: textColor, opacity: item.marcado ? 1 : 0.6 }}
-                                />
-                                {!readOnly && (
-                                  <button
-                                    onClick={() => removeTableItem(idx, item.id)}
-                                    className="shrink-0 p-1 rounded hover:bg-black/5"
-                                    style={{ color: "#BDBDBD" }}
-                                    aria-label="Remover item"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                )}
-                              </div>
-                              {/* Linha 2: valor, alinhado à direita, embaixo do nome */}
-                              <div className="flex items-center justify-end gap-2 mt-1" style={{ paddingLeft: 26 }}>
-                                <input
-                                  value={item.valor}
-                                  onChange={(e) => !readOnly && updateTableItem(idx, item.id, { valor: e.target.value })}
-                                  onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
-                                  onPaste={handleMobilePaste}
-                                  readOnly={readOnly}
-                                  tabIndex={readOnly ? -1 : 0}
-                                  inputMode="decimal"
-                                  placeholder="Valor (ex: 150 ou -10%)"
-                                  className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm text-right font-semibold"
-                                  style={{
-                                    color: numero < 0 ? "#E53935" : (isDark ? "#81C784" : "#2D9E7F"),
-                                    opacity: item.marcado ? 1 : 0.6,
-                                  }}
-                                />
-                              </div>
+                              )}
                             </div>
                           );
                         })}
