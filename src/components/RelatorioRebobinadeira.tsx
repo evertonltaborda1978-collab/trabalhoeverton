@@ -35,10 +35,10 @@ interface Jumbo {
 // ── Defaults ──
 const FORMATOS_BASE: FormatoJumbo[] = [
   { id: "1", largura: "250", diametro: "1200" },
-  { id: "2", largura: "482", diametro: "1220" },
+  { id: "2", largura: "482", diametro: "1240" },
   { id: "3", largura: "482", diametro: "1480" },
   { id: "4", largura: "500", diametro: "1480" },
-  { id: "5", largura: "1000", diametro: "1450" },
+  { id: "5", largura: "1000", diametro: "1500" },
 ];
 
 const PARAMS_BASE: Parametro[] = [
