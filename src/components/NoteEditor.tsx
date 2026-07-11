@@ -20,6 +20,8 @@ import {
   Trash2,
   Pencil,
   Share2,
+  Table2,
+  Plus,
 } from "lucide-react";
 import {
   Dialog,
@@ -40,11 +42,19 @@ export interface ChecklistItem {
   checked: boolean;
 }
 
+export interface TableItem {
+  id: string;
+  nome: string;
+  valor: string; // ex: "150", "-100", "-10%", "5%"
+  marcado: boolean;
+}
+
 export interface ContentBlock {
-  type: "text" | "image" | "checklist";
+  type: "text" | "image" | "checklist" | "table";
   content?: string;
   url?: string;
   items?: ChecklistItem[];
+  tableItems?: TableItem[];
 }
 
 // ── Color theme map ────────────────────────────────────
@@ -167,10 +177,55 @@ function deserializeBlocks(raw: string): ContentBlock[] {
   return [{ type: "text", content: stripImagePlaceholders(raw) }];
 }
 
+// ── Tabela Manual: helpers de cálculo ─────────────────
+function tableValorEhPorcentagem(valor: string): boolean {
+  return valor.trim().endsWith("%");
+}
+
+function tableValorParaNumero(valor: string): number {
+  const limpo = valor.trim().replace("%", "").replace(",", ".");
+  const num = parseFloat(limpo);
+  return isNaN(num) ? 0 : num;
+}
+
+function formatarMoedaBRL(valor: number): string {
+  return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+/**
+ * 1. Subtotal = soma dos itens marcados cujo valor NÃO é porcentagem.
+ * 2. Cada item marcado com porcentagem aplica o percentual sobre esse subtotal.
+ * 3. Total = subtotal + soma dos ajustes percentuais.
+ */
+function calcularTotalTabela(items: TableItem[]): number {
+  const marcados = items.filter((i) => i.marcado);
+  const subtotal = marcados
+    .filter((i) => !tableValorEhPorcentagem(i.valor))
+    .reduce((acc, i) => acc + tableValorParaNumero(i.valor), 0);
+  const ajuste = marcados
+    .filter((i) => tableValorEhPorcentagem(i.valor))
+    .reduce((acc, i) => acc + (subtotal * tableValorParaNumero(i.valor)) / 100, 0);
+  return subtotal + ajuste;
+}
+
+function tableItemsToPlainText(items: TableItem[]): string {
+  if (!items.length) return "";
+  const linhas = items.map((i) => {
+    const marca = i.marcado ? "[X]" : "[ ]";
+    return `${marca} ${i.nome}: ${i.valor}`;
+  });
+  linhas.push(`Total: ${formatarMoedaBRL(calcularTotalTabela(items))}`);
+  return linhas.join("\n");
+}
+
 function blocksToPlainText(blocks: ContentBlock[]): string {
   return blocks
-    .filter((b) => b.type === "text")
-    .map((b) => b.content || "")
+    .map((b) => {
+      if (b.type === "text") return b.content || "";
+      if (b.type === "table" && b.tableItems) return tableItemsToPlainText(b.tableItems);
+      return "";
+    })
+    .filter(Boolean)
     .join("\n");
 }
 
@@ -252,7 +307,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
   const saveDraftToLocal = useCallback(() => {
     if (!open) return;
-    const hasContent = title.trim() || blocks.some(b => (b.type === "text" && b.content?.trim()) || b.type === "image" || b.type === "checklist");
+    const hasContent = title.trim() || blocks.some(b => (b.type === "text" && b.content?.trim()) || b.type === "image" || b.type === "checklist" || (b.type === "table" && (b.tableItems?.length ?? 0) > 0));
     if (!hasContent) return;
     const draft = {
       noteId: editingNote?.id || null,
@@ -630,6 +685,72 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
       const next = [...prev];
       if (next[blockIdx]?.type === "checklist" && next[blockIdx].items) {
         next[blockIdx] = { ...next[blockIdx], items: [...next[blockIdx].items!, newItem] };
+      }
+      return next;
+    });
+  };
+
+  // ── Tabela Manual: operações ─────────────────────────
+  const addTable = () => {
+    const idx = focusedBlockRef.current;
+    const newItem: TableItem = { id: crypto.randomUUID(), nome: "", valor: "", marcado: true };
+    setBlocks((prev) => {
+      const next = [...prev];
+      // Se o bloco atual já é uma tabela, adiciona item nela
+      if (next[idx]?.type === "table" && next[idx].tableItems) {
+        next[idx] = { ...next[idx], tableItems: [...next[idx].tableItems!, newItem] };
+      } else {
+        // Insere novo bloco de tabela após o atual
+        next.splice(idx + 1, 0, { type: "table", tableItems: [newItem] });
+      }
+      pushHistory(next);
+      return next;
+    });
+  };
+
+  const updateTableItem = (blockIdx: number, itemId: string, updates: Partial<TableItem>) => {
+    setBlocks((prev) => {
+      const next = [...prev];
+      if (next[blockIdx]?.type === "table" && next[blockIdx].tableItems) {
+        next[blockIdx] = {
+          ...next[blockIdx],
+          tableItems: next[blockIdx].tableItems!.map((item) =>
+            item.id === itemId ? { ...item, ...updates } : item
+          ),
+        };
+      }
+      return next;
+    });
+    clearTimeout(historyTimer.current);
+    historyTimer.current = setTimeout(() => {
+      setBlocks((current) => { pushHistory(current); return current; });
+    }, 500);
+  };
+
+  const removeTableItem = (blockIdx: number, itemId: string) => {
+    setBlocks((prev) => {
+      const next = [...prev];
+      if (next[blockIdx]?.type === "table" && next[blockIdx].tableItems) {
+        const remaining = next[blockIdx].tableItems!.filter((item) => item.id !== itemId);
+        if (remaining.length === 0) {
+          // Remove o bloco de tabela inteiro
+          next.splice(blockIdx, 1);
+          if (next.length === 0) next.push({ type: "text", content: "" });
+        } else {
+          next[blockIdx] = { ...next[blockIdx], tableItems: remaining };
+        }
+      }
+      pushHistory(next);
+      return next;
+    });
+  };
+
+  const addTableItemAfter = (blockIdx: number) => {
+    const newItem: TableItem = { id: crypto.randomUUID(), nome: "", valor: "", marcado: true };
+    setBlocks((prev) => {
+      const next = [...prev];
+      if (next[blockIdx]?.type === "table" && next[blockIdx].tableItems) {
+        next[blockIdx] = { ...next[blockIdx], tableItems: [...next[blockIdx].tableItems!, newItem] };
       }
       return next;
     });
@@ -1384,6 +1505,101 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                   );
                 }
 
+                if (block.type === "table" && block.tableItems) {
+                  const total = calcularTotalTabela(block.tableItems);
+                  return (
+                    <div key={`table-${idx}`} className="my-2">
+                      <div className="flex items-center gap-1.5 mb-2 px-1">
+                        <Table2 size={14} style={{ color: theme.textMuted }} />
+                        <span className="text-xs font-bold" style={{ color: theme.textMuted }}>Tabela Manual</span>
+                      </div>
+                      <div className="space-y-2">
+                        {block.tableItems.map((item) => {
+                          const ehPct = tableValorEhPorcentagem(item.valor);
+                          const numero = tableValorParaNumero(item.valor);
+                          return (
+                            <div
+                              key={item.id}
+                              className="flex items-center gap-2 rounded-xl px-2.5 py-2"
+                              style={{
+                                background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.025)",
+                                border: `1px solid ${theme.lines}`,
+                              }}
+                            >
+                              <button
+                                onClick={() => !readOnly && updateTableItem(idx, item.id, { marcado: !item.marcado })}
+                                className="shrink-0 transition-all duration-200"
+                                style={{ color: item.marcado ? "#4CAF50" : (isDark ? "#888" : "#BDBDBD") }}
+                                disabled={readOnly}
+                              >
+                                {item.marcado ? <CheckSquare size={18} /> : <Square size={18} />}
+                              </button>
+                              <input
+                                value={item.nome}
+                                onChange={(e) => !readOnly && updateTableItem(idx, item.id, { nome: e.target.value })}
+                                onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
+                                onPaste={handleMobilePaste}
+                                readOnly={readOnly}
+                                tabIndex={readOnly ? -1 : 0}
+                                placeholder="Nome (ex: Mercado)"
+                                className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm font-medium"
+                                style={{ color: textColor, opacity: item.marcado ? 1 : 0.6 }}
+                              />
+                              <input
+                                value={item.valor}
+                                onChange={(e) => !readOnly && updateTableItem(idx, item.id, { valor: e.target.value })}
+                                onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
+                                onPaste={handleMobilePaste}
+                                readOnly={readOnly}
+                                tabIndex={readOnly ? -1 : 0}
+                                inputMode="decimal"
+                                placeholder="Valor"
+                                className="w-24 shrink-0 bg-transparent border-0 outline-none text-sm text-right font-semibold"
+                                style={{
+                                  color: numero < 0 ? "#E53935" : (isDark ? "#81C784" : "#2D9E7F"),
+                                  opacity: item.marcado ? 1 : 0.6,
+                                }}
+                              />
+                              {!readOnly && (
+                                <button
+                                  onClick={() => removeTableItem(idx, item.id)}
+                                  className="shrink-0 p-1 rounded hover:bg-black/5"
+                                  style={{ color: "#BDBDBD" }}
+                                  aria-label="Remover item"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {!readOnly && (
+                        <button
+                          onClick={() => addTableItemAfter(idx)}
+                          className="flex items-center gap-1 text-xs mt-2 py-1 hover:opacity-80 transition-opacity"
+                          style={{ color: theme.textMuted }}
+                        >
+                          <Plus size={13} /> Adicionar item
+                        </button>
+                      )}
+
+                      {/* Rodapé fixo com o total, sempre visível ao rolar a nota */}
+                      <div
+                        className="sticky bottom-0 mt-2 flex items-center justify-between rounded-xl px-3 py-2 z-10"
+                        style={{
+                          background: isDark ? "#1F1F1F" : "#1A1A2E",
+                          boxShadow: "0 -2px 10px rgba(0,0,0,0.15)",
+                        }}
+                      >
+                        <span className="text-[11px] font-medium" style={{ color: "#BDBDBD" }}>Total da tabela</span>
+                        <span className="text-sm font-bold" style={{ color: "#FFF" }}>{formatarMoedaBRL(total)}</span>
+                      </div>
+                    </div>
+                  );
+                }
+
                 if (block.type === "image" && block.url) {
                   return (
                     <div key={`img-${idx}`} className="relative group/img my-3 flex justify-center">
@@ -1469,6 +1685,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                         { icon: ocrLoading ? <Loader2 size={18} className="animate-spin" /> : <ScanSearch size={18} />, label: "OCR", action: () => { setShowOcrModal(true); setShowFab(false); } },
                         { icon: qrLoading ? <Loader2 size={18} className="animate-spin" /> : <ScanLine size={18} />, label: "QR", action: () => { handleStartQrScanner(); setShowFab(false); } },
                         { icon: <ListChecks size={18} />, label: "Lista", action: () => { addChecklist(); setShowFab(false); } },
+                        { icon: <Table2 size={18} />, label: "Tabela Manual", action: () => { addTable(); setShowFab(false); } },
                         ...(voiceSupported ? [{ icon: isListening ? <MicOff size={18} /> : <Mic size={18} />, label: isListening ? "Parar voz" : "Voz", action: () => { toggleVoice(); setShowFab(false); } }] : []),
                         ...(onSchedule ? [{ icon: <CalendarPlus size={18} />, label: "Agendar", action: () => { setScheduleDate(new Date().toISOString().slice(0, 10)); setScheduleTime("09:00"); setShowScheduleDialog(true); setShowFab(false); } }] : []),
                         { icon: <Undo2 size={18} />, label: "Desfazer", action: () => { undo(); setShowFab(false); }, disabled: !canUndo },
