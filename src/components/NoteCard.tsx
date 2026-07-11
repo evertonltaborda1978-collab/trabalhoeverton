@@ -27,10 +27,13 @@ function getPlainContent(content: string): string {
     if (Array.isArray(parsed)) {
       return stripImagePlaceholders(
         parsed
-          .filter((b: any) => b.type === "text" || b.type === "checklist")
+          .filter((b: any) => b.type === "text" || b.type === "checklist" || b.type === "table")
           .map((b: any) => {
             if (b.type === "checklist" && Array.isArray(b.items)) {
               return b.items.map((item: any) => item.text || "").join(" ");
+            }
+            if (b.type === "table" && Array.isArray(b.tableItems)) {
+              return b.tableItems.map((item: any) => `${item.nome || ""} ${item.valor || ""}`).join(" ");
             }
             return b.content || "";
           })
