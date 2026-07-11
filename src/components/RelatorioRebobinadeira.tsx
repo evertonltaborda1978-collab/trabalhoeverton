@@ -8,7 +8,16 @@ const PARAMS_KEY = "rebobinadeira_params";
 const FORMATOS_KEY = "rebobinadeira_formatos";
 
 // ── Tipos ──
-interface Parada { desc: string; ini: string; fim: string; nota: string; collapsed: boolean; }
+interface Parada {
+  desc: string;
+  ini: string;
+  fim: string;
+  nota: string;
+  collapsed: boolean;
+  manualMin?: number | null; // tempo informado manualmente em minutos (sobrepõe cálculo por ini/fim)
+  emAndamento?: boolean; // true enquanto a parada está rodando (iniciada automaticamente, ainda sem fim)
+  iniciadaEm?: number; // timestamp (Date.now()) de quando a parada foi iniciada automaticamente
+}
 interface Parametro { id: string; label: string; valor: string; unidade: string; }
 interface Troca { min: number | null; }
 interface ItemConsumo { label: string; trocas: Troca[]; collapsed: boolean; }
@@ -59,11 +68,28 @@ function getSaudacao(): string {
 }
 
 function getMin(p: Parada): number {
+  if (typeof p.manualMin === "number") return p.manualMin;
   if (!p.ini || !p.fim) return 0;
   const [ih, im] = p.ini.split(":").map(Number);
   const [fh, fm] = p.fim.split(":").map(Number);
   const d = fh * 60 + fm - (ih * 60 + im);
   return d > 0 ? d : 0;
+}
+
+function nowHHMM(): string {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/** Texto de uma parada finalizada, cobrindo os três casos: ini+fim, só ini (finalizada manualmente), ou nenhum horário */
+function paradaTexto(p: Parada): string {
+  const m = getMin(p);
+  if (m <= 0) return p.desc || "";
+  const desc = p.desc ? `${p.desc}. ` : "";
+  let quando = "";
+  if (p.ini && p.fim) quando = ` (das ${p.ini} às ${p.fim})`;
+  else if (p.ini) quando = ` (iniciada às ${p.ini})`;
+  return `${desc}Parada total: ${formatMin(m)}${quando}.${p.nota ? " " + p.nota : ""}`;
 }
 
 function formatMin(t: number): string {
@@ -279,9 +305,9 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
 
   // ── Estado geral ──
   const [rebobNum, setRebobNum] = useState<"1"|"2">(saved?.rebobNum ?? "1");
-  const [dest, setDest] = useState(saved?.dest ?? "Phablo");
+  const [dest, setDest] = useState(saved?.dest ?? "");
   const [destinatarios, setDestinatarios] = useState<string[]>(() => {
-    try { const r = localStorage.getItem("rebobinadeira_dest"); return r ? JSON.parse(r) : ["Phablo"]; } catch { return ["Phablo"]; }
+    try { const r = localStorage.getItem("rebobinadeira_dest"); return r ? JSON.parse(r) : []; } catch { return []; }
   });
   const [turno, setTurno] = useState(saved?.turno ?? "2");
   const [letra, setLetra] = useState(saved?.letra ?? "D");
@@ -333,6 +359,13 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   const [numValor, setNumValor] = useState("");
   const [showPrevia, setShowPrevia] = useState(false);
   const [previa, setPrevia] = useState("");
+
+  // Força um re-render periódico para o cronômetro das paradas "em andamento" avançar na tela
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const iv = setInterval(() => setTick(t => t + 1), 30000);
+    return () => clearInterval(iv);
+  }, []);
 
   // ── Persistência ──
   useEffect(() => {
@@ -466,7 +499,19 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
 
   // ── Paradas helpers ──
   const addParada = (set: React.Dispatch<React.SetStateAction<Parada[]>>) =>
-    set(prev => [...prev, { desc: "", ini: "", fim: "", nota: "", collapsed: false }]);
+    set(prev => [...prev, { desc: "", ini: "", fim: "", nota: "", collapsed: false, manualMin: null, emAndamento: false }]);
+
+  // Inicia uma parada automática: marca o horário atual como início e fica "em andamento" até ser finalizada
+  const addParadaAutomatica = (set: React.Dispatch<React.SetStateAction<Parada[]>>) =>
+    set(prev => [...prev, { desc: "", ini: nowHHMM(), fim: "", nota: "", collapsed: false, manualMin: null, emAndamento: true, iniciadaEm: Date.now() }]);
+
+  // Finaliza a parada usando o horário atual como fim (cálculo automático)
+  const finalizarParadaAgora = (set: React.Dispatch<React.SetStateAction<Parada[]>>, i: number) =>
+    set(prev => prev.map((p, j) => j === i ? { ...p, fim: nowHHMM(), emAndamento: false, iniciadaEm: undefined } : p));
+
+  // Finaliza a parada com um tempo em minutos informado manualmente (para quando esqueceu de iniciar/finalizar na hora)
+  const finalizarParadaManual = (set: React.Dispatch<React.SetStateAction<Parada[]>>, i: number, minutos: number) =>
+    set(prev => prev.map((p, j) => j === i ? { ...p, manualMin: minutos, emAndamento: false, iniciadaEm: undefined } : p));
 
   const updateParada = (set: React.Dispatch<React.SetStateAction<Parada[]>>, i: number, field: keyof Parada, val: string) =>
     set(prev => prev.map((p, j) => j === i ? { ...p, [field]: val } : p));
@@ -481,7 +526,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
 
   // ── Consumidos ──
   const calcTotalConsumidos = () => itens.reduce((s, i) => s + i.trocas.reduce((a, t) => a + (t.min || 0), 0), 0);
-  const addTroca = (idx: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: [...item.trocas, { min: null }] } : item));
+  const addTroca = (idx: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: [...item.trocas, { min: null }], collapsed: false } : item));
   const removeTroca = (idx: number, ti: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.filter((_, j) => j !== ti) } : item));
   const setTrocaMin = (idx: number, ti: number, val: string) => {
     const n = parseInt(val); const v = isNaN(n) ? null : Math.max(0, n);
@@ -490,11 +535,20 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   const toggleItemConsumo = (idx: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, collapsed: !item.collapsed } : item));
   const addItemConsumo = () => setInputModal({ title: "Novo item", placeholder: "Nome do item", onConfirm: (val) => { setItens(prev => [...prev, { label: val, trocas: [], collapsed: false }]); setInputModal(null); } });
   const removeItemConsumo = (idx: number) => setItens(prev => prev.filter((_, i) => i !== idx));
+  const moveItemConsumo = (idx: number, dir: -1 | 1) => {
+    setItens(prev => {
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= prev.length) return prev;
+      const arr = [...prev];
+      [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+      return arr;
+    });
+  };
 
   // ── Novo relatório ──
   const handleNovo = () => {
     localStorage.removeItem(RASCUNHO_KEY);
-    setRebobNum("1"); setDest("Phablo"); setTurno("2"); setLetra("D"); setHorario("08:20 x 16:20 hr");
+    setRebobNum("1"); setDest(""); setTurno("2"); setLetra("D"); setHorario("08:20 x 16:20 hr");
     setResps(["Everton"]); setIdMaquina(""); setParametros(loadParamsBase());
     setItens(ITENS_BASE.map(l => ({ label: l, trocas: [], collapsed: false })));
     setJumbos([]); setRascunhoJumbo(null); setClQtd(0); setObsCL(""); setParadasCL([]);
@@ -527,7 +581,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
       if (clQtd > 0) clSection += ` ${String(clQtd).padStart(2,"0")} Cargas de Tubetes\n`;
       if (obsCL) clSection += `Obs: ${obsCL}\n`;
       if (paradasCL.length > 0) {
-        const ptxt = paradasCL.map(p => { const m = getMin(p); return m > 0 ? `Parada total: ${m} minutos (das ${p.ini} às ${p.fim}).${p.nota ? " " + p.nota : ""}` : p.desc; }).filter(Boolean).join("\n");
+        const ptxt = paradasCL.map(paradaTexto).filter(Boolean).join("\n");
         clSection += `\n${ptxt}\nParada total: ${formatMin(totalParadas(paradasCL))}.`;
       }
     }
@@ -539,7 +593,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
       if (rcSid > 0) rcSection += ` ${String(rcSid).padStart(2,"0")} sem id.\n`;
       if (obsRC) rcSection += `Obs: ${obsRC}\n`;
       if (paradasRC.length > 0) {
-        const ptxt = paradasRC.map(p => { const m = getMin(p); return m > 0 ? `Parada total: ${m} minutos (das ${p.ini} às ${p.fim}).${p.nota ? " " + p.nota : ""}` : p.desc; }).filter(Boolean).join("\n");
+        const ptxt = paradasRC.map(paradaTexto).filter(Boolean).join("\n");
         rcSection += `\n${ptxt}\nParada total: ${formatMin(totalParadas(paradasRC))}.`;
       }
     }
@@ -547,11 +601,11 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
     let obsSection = "";
     if (obsRebob) obsSection += `\n\nObs: ${obsRebob}`;
     if (paradasRebob.length > 0) {
-      const ptxt = paradasRebob.map(p => { const m = getMin(p); return m > 0 ? `Parada total: ${m} minutos (das ${p.ini} às ${p.fim}).${p.nota ? " " + p.nota : ""}` : p.desc; }).filter(Boolean).join("\n");
+      const ptxt = paradasRebob.map(paradaTexto).filter(Boolean).join("\n");
       obsSection += `\n\n${ptxt}\nParada total: ${formatMin(totalParadas(paradasRebob))}.`;
     }
 
-    return `${getSaudacao()}, ${dest},\nSegue relatório da Rebobinadeira ${rebobNum}.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}${idMaquina ? `\n\nPARÂMETROS DA REBOBINADEIRA: ${idMaquina}` : "\n\nPARÂMETROS DA REBOBINADEIRA:"}${paramsTexto ? "\n" + paramsTexto : ""}${jumbosTexto ? "\n\nPROGRAMAÇÃO:\n" + jumbosTexto : ""}${consumidosSection}${clSection}${rcSection}${obsSection}`.trim();
+    return `${getSaudacao()}${dest ? ", " + dest : ""},\nSegue relatório da Rebobinadeira ${rebobNum}.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}${idMaquina ? `\n\nPARÂMETROS DA REBOBINADEIRA: ${idMaquina}` : "\n\nPARÂMETROS DA REBOBINADEIRA:"}${paramsTexto ? "\n" + paramsTexto : ""}${jumbosTexto ? "\n\nPROGRAMAÇÃO:\n" + jumbosTexto : ""}${consumidosSection}${clSection}${rcSection}${obsSection}`.trim();
   }, [rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, itens, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob]);
 
   const handleSaveNote = () => {
@@ -601,10 +655,45 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
     <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${theme.cardBorder}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: theme.textSub }}>⏱ {label}</span>
-        <button onClick={() => addParada(setList)} style={{ ...sectionBtn, color: "#2D9E7F", fontWeight: 600 }}>+ Adicionar</button>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={() => addParadaAutomatica(setList)} style={{ ...sectionBtn, color: "#E53935", fontWeight: 600 }}>🔴 Iniciar agora</button>
+          <button onClick={() => addParada(setList)} style={{ ...sectionBtn, color: "#2D9E7F", fontWeight: 600 }}>+ Adicionar</button>
+        </div>
       </div>
       {list.map((p, i) => {
-        const min = getMin(p); const tl = min > 0 ? ` · ${min} min` : "";
+        const min = getMin(p); const tl = min > 0 ? ` · ${formatMin(min)}` : "";
+
+        // Parada "em andamento": iniciada automaticamente e ainda sem horário de fim
+        if (p.emAndamento) {
+          const elapsed = p.iniciadaEm ? Math.max(0, Math.floor((Date.now() - p.iniciadaEm) / 60000)) : 0;
+          return (
+            <div key={i} style={{ border: "1.5px solid #E53935", borderRadius: 12, padding: 10, marginBottom: 8, background: "rgba(229,57,53,0.06)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#E53935" }}>🔴 Parada {i + 1} em andamento · desde {p.ini}</span>
+                <button onClick={() => removeParada(setList, i)} style={{ padding: "0 8px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+              </div>
+              <input type="text" placeholder="Motivo da parada (pode preencher depois)" value={p.desc} onChange={e => updateParada(setList, i, "desc", e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
+              <div style={{ fontSize: 22, fontWeight: 700, color: "#E53935", textAlign: "center", padding: "6px 0 10px" }}>{formatMin(elapsed)}</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => finalizarParadaAgora(setList, i)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "#2D9E7F", color: "#FFF", border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✅ Finalizar agora</button>
+                <button
+                  onClick={() => setInputModal({
+                    title: "Tempo parado",
+                    subtitle: "Informe quantos minutos a máquina ficou parada",
+                    placeholder: "Ex: 45",
+                    onConfirm: (v) => {
+                      const n = parseInt(v.replace(/\D/g, ""), 10);
+                      if (!isNaN(n) && n >= 0) finalizarParadaManual(setList, i, n);
+                      setInputModal(null);
+                    }
+                  })}
+                  style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: theme.sectionBtnBg, color: theme.text, border: `1px solid ${theme.inputBorder}`, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                >✏️ Informar tempo</button>
+              </div>
+            </div>
+          );
+        }
+
         if (p.collapsed) return (
           <div key={i} style={{ border: `1px solid ${theme.cardBorder}`, borderRadius: 12, padding: 10, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 13, fontWeight: 500, flex: 1, color: min > 0 ? "#2D9E7F" : theme.text }}>{p.desc || `Parada ${i+1}`}{tl}</span>
@@ -626,7 +715,11 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
               <div><label style={{ fontSize: 11, color: theme.textSub }}>Início</label><input type="time" value={p.ini} onChange={e => updateParada(setList, i, "ini", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
               <div><label style={{ fontSize: 11, color: theme.textSub }}>Fim</label><input type="time" value={p.fim} onChange={e => updateParada(setList, i, "fim", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
             </div>
-            {min > 0 && <div style={{ fontSize: 13, fontWeight: 600, color: "#2D9E7F", padding: "6px 10px", background: "rgba(45,158,127,0.08)", borderRadius: 8, marginBottom: 8 }}>⏱ {min} minutos (das {p.ini} às {p.fim})</div>}
+            {min > 0 && (
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#2D9E7F", padding: "6px 10px", background: "rgba(45,158,127,0.08)", borderRadius: 8, marginBottom: 8 }}>
+                ⏱ {formatMin(min)}{p.ini && p.fim ? ` (das ${p.ini} às ${p.fim})` : p.ini ? ` (iniciada às ${p.ini})` : typeof p.manualMin === "number" ? " (informado manualmente)" : ""}
+              </div>
+            )}
             <input type="text" placeholder="Nota adicional" value={p.nota} onChange={e => updateParada(setList, i, "nota", e.target.value)} style={inputStyle} />
           </div>
         );
@@ -780,7 +873,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
           {!headerCollapsed && <>
             <label style={{ fontSize: 11, color: theme.textSub }}>Destinatário</label>
             <div style={{ display: "flex", gap: 6, marginTop: 4, marginBottom: 8 }}>
-              <input type="text" value={dest} onChange={e => setDest(e.target.value)} style={{ ...inputStyle, marginTop: 0, flex: 1 }} />
+              <input type="text" placeholder="Nome do destinatário" value={dest} onChange={e => setDest(e.target.value)} style={{ ...inputStyle, marginTop: 0, flex: 1 }} />
               <button onClick={() => setInputModal({ title: "Novo atalho", placeholder: "Ex: William", onConfirm: (v) => { if (!destinatarios.includes(v)) setDestinatarios(prev => [...prev, v]); setDest(v); setInputModal(null); } })} style={{ ...btnStyle, fontSize: 14, color: "#2D9E7F" }} title="Salvar atalho">+</button>
             </div>
             {destinatarios.length > 0 && (
@@ -890,9 +983,13 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
               return (
                 <div key={idx} style={{ padding: 10, marginBottom: 6, borderRadius: 12, background: qtd > 0 ? "rgba(45,158,127,0.07)" : theme.inputBg, border: `1px solid ${qtd > 0 ? "rgba(45,158,127,0.2)" : "transparent"}` }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
+                      <button onClick={() => moveItemConsumo(idx, -1)} disabled={idx === 0} style={{ fontSize: 10, width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === 0 ? "default" : "pointer", opacity: idx === 0 ? 0.3 : 1 }}>▲</button>
+                      <button onClick={() => moveItemConsumo(idx, 1)} disabled={idx === itens.length - 1} style={{ fontSize: 10, width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === itens.length - 1 ? "default" : "pointer", opacity: idx === itens.length - 1 ? 0.3 : 1 }}>▼</button>
+                    </div>
                     <span style={{ fontSize: 13, flex: 1, fontWeight: 500, color: theme.text }}>{item.label}</span>
                     {qtd > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: "#2D9E7F", background: "rgba(45,158,127,0.12)", padding: "2px 10px", borderRadius: 20, whiteSpace: "nowrap" }}>{String(qtd).padStart(2, "0")} · {totalItem}min</span>}
-                    <button onClick={() => toggleItemConsumo(idx)} style={sectionBtn}>{item.collapsed ? "▼" : "▲"}</button>
+                    {qtd > 0 && <button onClick={() => toggleItemConsumo(idx)} style={sectionBtn}>{item.collapsed ? "▼" : "▲"}</button>}
                     <button onClick={() => addTroca(idx)} style={{ padding: "5px 10px", fontSize: 12, fontWeight: 600, color: "#fff", background: "#2D9E7F", border: "none", borderRadius: 8, whiteSpace: "nowrap", cursor: "pointer" }}>+ Troca</button>
                     <button onClick={() => removeItemConsumo(idx)} style={{ width: 28, height: 28, padding: 0, fontSize: 13, color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>🗑</button>
                   </div>
