@@ -121,8 +121,8 @@ function loadParamsBase(): Parametro[] {
 }
 
 // ── InputModal ──
-function InputModal({ open, title, subtitle, placeholder, initialValue = "", onConfirm, onCancel }: {
-  open: boolean; title: string; subtitle?: string; placeholder?: string; initialValue?: string;
+function InputModal({ open, title, subtitle, placeholder, initialValue = "", inputMode, onConfirm, onCancel }: {
+  open: boolean; title: string; subtitle?: string; placeholder?: string; initialValue?: string; inputMode?: "text" | "numeric" | "decimal";
   onConfirm: (val: string) => void; onCancel: () => void;
 }) {
   const [val, setVal] = useState(initialValue);
@@ -134,7 +134,7 @@ function InputModal({ open, title, subtitle, placeholder, initialValue = "", onC
       <div style={{ background: "#FFF", borderRadius: 18, padding: 20, width: "min(100%,340px)" }} onClick={e => e.stopPropagation()}>
         <p style={{ fontWeight: 700, fontSize: 15, color: "#1A1A2E", margin: "0 0 4px" }}>{title}</p>
         {subtitle && <p style={{ fontSize: 12, color: "#9E9E9E", margin: "0 0 12px" }}>{subtitle}</p>}
-        <input autoFocus type="text" value={val} placeholder={placeholder} onChange={e => setVal(e.target.value)} onKeyDown={e => { if (e.key === "Enter") confirm(); if (e.key === "Escape") onCancel(); }} style={{ width: "100%", boxSizing: "border-box", fontSize: 15, borderRadius: 10, padding: "10px 12px", border: "1.5px solid #2D9E7F", marginBottom: 14, outline: "none" }} />
+        <input autoFocus type="text" inputMode={inputMode ?? "text"} value={val} placeholder={placeholder} onChange={e => setVal(e.target.value)} onKeyDown={e => { if (e.key === "Enter") confirm(); if (e.key === "Escape") onCancel(); }} style={{ width: "100%", boxSizing: "border-box", fontSize: 15, borderRadius: 10, padding: "10px 12px", border: "1.5px solid #2D9E7F", marginBottom: 14, outline: "none" }} />
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={onCancel} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#F0F0F0", color: "#1A1A2E", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Cancelar</button>
           <button onClick={confirm} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#2D9E7F", color: "#FFF", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>OK</button>
@@ -1183,7 +1183,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
         </div>
       )}
 
-      <InputModal open={!!inputModal} title={inputModal?.title || ""} subtitle={inputModal?.subtitle} placeholder={inputModal?.placeholder} onConfirm={v => inputModal?.onConfirm(v)} onCancel={() => setInputModal(null)} />
+      <InputModal open={!!inputModal} title={inputModal?.title || ""} subtitle={inputModal?.subtitle} placeholder={inputModal?.placeholder} inputMode={(inputModal as any)?.inputMode} onConfirm={v => inputModal?.onConfirm(v)} onCancel={() => setInputModal(null)} />
     </div>
   );
 }
