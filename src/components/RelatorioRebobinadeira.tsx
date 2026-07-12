@@ -35,10 +35,10 @@ interface Jumbo {
 // ── Defaults ──
 const FORMATOS_BASE: FormatoJumbo[] = [
   { id: "1", largura: "250", diametro: "1200" },
-  { id: "2", largura: "482", diametro: "1240" },
+  { id: "2", largura: "482", diametro: "1220" },
   { id: "3", largura: "482", diametro: "1480" },
   { id: "4", largura: "500", diametro: "1480" },
-  { id: "5", largura: "1000", diametro: "1500" },
+  { id: "5", largura: "1000", diametro: "1450" },
 ];
 
 const PARAMS_BASE: Parametro[] = [
@@ -305,7 +305,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
 
   // ── Estado geral ──
   const [rebobNum, setRebobNum] = useState<"1"|"2">(saved?.rebobNum ?? "1");
-  const [dest, setDest] = useState(saved?.dest ?? "");
+  const [dest, setDest] = useState(saved?.dest ?? (() => { try { return localStorage.getItem("rebobinadeira_last_dest") ?? ""; } catch { return ""; } })());
   const [destinatarios, setDestinatarios] = useState<string[]>(() => {
     try { const r = localStorage.getItem("rebobinadeira_dest"); return r ? JSON.parse(r) : []; } catch { return []; }
   });
@@ -527,6 +527,21 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   // ── Consumidos ──
   const calcTotalConsumidos = () => itens.reduce((s, i) => s + i.trocas.reduce((a, t) => a + (t.min || 0), 0), 0);
   const addTroca = (idx: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: [...item.trocas, { min: null }], collapsed: false } : item));
+
+  // Adiciona várias trocas de uma vez (ex: trocou 4 fitas crepe juntas na correria)
+  const addTrocas = (idx: number, qtd: number) => {
+    const n = Math.max(1, Math.min(50, qtd));
+    setItens(prev => prev.map((item, i) => i === idx
+      ? { ...item, trocas: [...item.trocas, ...Array.from({ length: n }, () => ({ min: null }))], collapsed: false }
+      : item));
+  };
+
+  const addTrocasMultiplas = (idx: number) => {
+    abrirTeclado("Quantas trocas de uma vez?", "", (v) => {
+      const n = parseInt(v.replace(/\D/g, ""), 10);
+      if (!isNaN(n) && n > 0) addTrocas(idx, n);
+    });
+  };
   const removeTroca = (idx: number, ti: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.filter((_, j) => j !== ti) } : item));
   const setTrocaMin = (idx: number, ti: number, val: string) => {
     const n = parseInt(val); const v = isNaN(n) ? null : Math.max(0, n);
@@ -548,7 +563,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   // ── Novo relatório ──
   const handleNovo = () => {
     localStorage.removeItem(RASCUNHO_KEY);
-    setRebobNum("1"); setDest(""); setTurno("2"); setLetra("D"); setHorario("08:20 x 16:20 hr");
+    setRebobNum("1"); setDest((() => { try { return localStorage.getItem("rebobinadeira_last_dest") ?? ""; } catch { return ""; } })()); setTurno("2"); setLetra("D"); setHorario("08:20 x 16:20 hr");
     setResps(["Everton"]); setIdMaquina(""); setParametros(loadParamsBase());
     setItens(ITENS_BASE.map(l => ({ label: l, trocas: [], collapsed: false })));
     setJumbos([]); setRascunhoJumbo(null); setClQtd(0); setObsCL(""); setParadasCL([]);
@@ -614,6 +629,9 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
     const stateKey = `rebobinadeira_state_${title.replace(/\s/g, "_")}`;
     const state = { rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, itens, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob, fontSize };
     localStorage.setItem(stateKey, JSON.stringify(state));
+    // Guarda o destinatário atual como "último usado", pra próxima vez que abrir
+    // um relatório novo já vir preenchido sozinho (só precisa trocar quando mudar de turma)
+    if (dest.trim()) localStorage.setItem("rebobinadeira_last_dest", dest.trim());
     // Embute o estado no próprio texto da nota (marcador invisível), para que
     // reabrir o formulário funcione mesmo após limpeza de cache ou em outro aparelho.
     const marker = `\n\n<!--relatorio-rebobinadeira-state:${JSON.stringify(state)}-->`;
@@ -818,7 +836,10 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
         <label style={{ fontSize: 11, color: theme.textSub }}>Observações</label>
         <textarea value={j.obsJumbo} onChange={e => updateJumbo(j.id, "obsJumbo", e.target.value)} rows={2} placeholder="Obs deste jumbo..." style={{ ...inputStyle, resize: "vertical", marginTop: 4, marginBottom: 16 }} />
 
-        <button onClick={closeJumboForm} style={{ width: "100%", padding: "12px 0", borderRadius: 12, background: "#2D9E7F", color: "#FFF", fontWeight: 700, fontSize: 14, border: "none", cursor: "pointer" }}>✓ Confirmar</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => removeJumbo(j.id)} style={{ padding: "12px 16px", borderRadius: 12, background: "rgba(229,57,53,0.1)", color: "#E53935", fontWeight: 700, fontSize: 14, border: "1px solid rgba(229,57,53,0.3)", cursor: "pointer" }}>🗑</button>
+          <button onClick={closeJumboForm} style={{ flex: 1, padding: "12px 0", borderRadius: 12, background: "#2D9E7F", color: "#FFF", fontWeight: 700, fontSize: 14, border: "none", cursor: "pointer" }}>✓ Confirmar</button>
+        </div>
       </div>
     </div>
   );
@@ -990,6 +1011,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
                     <span style={{ fontSize: 13, flex: 1, fontWeight: 500, color: theme.text }}>{item.label}</span>
                     {qtd > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: "#2D9E7F", background: "rgba(45,158,127,0.12)", padding: "2px 10px", borderRadius: 20, whiteSpace: "nowrap" }}>{String(qtd).padStart(2, "0")} · {totalItem}min</span>}
                     {qtd > 0 && <button onClick={() => toggleItemConsumo(idx)} style={sectionBtn}>{item.collapsed ? "▼" : "▲"}</button>}
+                    <button onClick={() => addTrocasMultiplas(idx)} style={{ padding: "5px 8px", fontSize: 12, fontWeight: 600, color: "#2D9E7F", background: "rgba(45,158,127,0.1)", border: "1px solid rgba(45,158,127,0.3)", borderRadius: 8, whiteSpace: "nowrap", cursor: "pointer" }} title="Adicionar várias trocas de uma vez">🔢 Várias</button>
                     <button onClick={() => addTroca(idx)} style={{ padding: "5px 10px", fontSize: 12, fontWeight: 600, color: "#fff", background: "#2D9E7F", border: "none", borderRadius: 8, whiteSpace: "nowrap", cursor: "pointer" }}>+ Troca</button>
                     <button onClick={() => removeItemConsumo(idx)} style={{ width: 28, height: 28, padding: 0, fontSize: 13, color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>🗑</button>
                   </div>
