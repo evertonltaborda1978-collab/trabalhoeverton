@@ -20,8 +20,6 @@ import { RelatorioTurno } from "./RelatorioTurno";
 import { RelatorioRebobinadeira } from "./RelatorioRebobinadeira";
 import { ClipboardList } from "lucide-react";
 
-export { getFontClass, getSizeClass } from "./NoteEditor";
-
 interface NotesViewProps {
   notes: Note[];
   onAdd: (title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string, status?: "rascunho" | "publicada") => void;
