@@ -1,88 +1,64 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { X, FileText, Camera, Pencil } from "lucide-react";
+import { X, Camera, Pencil } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
+// ── Chaves localStorage ──
+const RASCUNHO_KEY = "rebobinadeira_rascunho";
+const PARAMS_KEY = "rebobinadeira_params";
+const FORMATOS_KEY = "rebobinadeira_formatos";
+
 // ── Tipos ──
-interface TombadorDB {
-  origens: string[];
-  motivos: Record<string, string[]>;
-  causas: Record<string, string[]>;
-  destinatarios: string[];
-  responsaveis: string[];
+interface Parada {
+  desc: string;
+  ini: string;
+  fim: string;
+  nota: string;
+  collapsed: boolean;
+  manualMin?: number | null; // tempo informado manualmente em minutos (sobrepõe cálculo por ini/fim)
+  emAndamento?: boolean; // true enquanto a parada está rodando (iniciada automaticamente, ainda sem fim)
+  iniciadaEm?: number; // timestamp (Date.now()) de quando a parada foi iniciada automaticamente
+}
+interface Parametro { id: string; label: string; valor: string; unidade: string; }
+interface Troca { min: number | null; qtd?: number; }
+interface ItemConsumo { label: string; trocas: Troca[]; collapsed: boolean; }
+interface FormatoJumbo { id: string; largura: string; diametro: string; }
+interface Jumbo {
+  id: string;
+  codigo: string;
+  largura: string;
+  diametro: string;
+  obsJumbo: string;
+  parametrosCustom: boolean;
+  parametrosEspecificos: Parametro[];
 }
 
-const DB_KEY = "tombador_db";
-const RASCUNHO_KEY = "relatorio_turno_rascunho";
+// ── Defaults ──
+const FORMATOS_BASE: FormatoJumbo[] = [
+  { id: "1", largura: "250", diametro: "1200" },
+  { id: "2", largura: "482", diametro: "1220" },
+  { id: "3", largura: "482", diametro: "1480" },
+  { id: "4", largura: "500", diametro: "1480" },
+  { id: "5", largura: "1000", diametro: "1450" },
+];
 
-function loadDB(): TombadorDB {
-  try {
-    const raw = localStorage.getItem(DB_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (!parsed.destinatarios) parsed.destinatarios = ["Phablo"];
-    if (!parsed.responsaveis) parsed.responsaveis = ["Everton Luis Taborda", "Luis", "Karlla"];
-      return parsed;
-    }
-  } catch {}
-  return {
-    origens: ["Linha de Bobinas 1", "Linha de Bobinas 2", "Rebobinadeira 1", "Rebobinadeira 2"],
-    motivos: { "Linha de Bobinas 1": ["Danificada"], "Linha de Bobinas 2": ["Danificada"], "Rebobinadeira 1": [], "Rebobinadeira 2": [] },
-    causas: { "Danificada": ["Transportador"] },
-    destinatarios: ["Phablo"],
-    responsaveis: ["Everton Luis Taborda", "Luis", "Karlla"],
-  };
-}
-
-function saveDB(db: TombadorDB) { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
-
-// ── Constantes ──
-const HORARIOS: Record<string, string> = {
-  "1": "00:20 x 08:20 hr",
-  "2": "08:20 x 16:20 hr",
-  "3": "16:20 x 00:20 hr",
-};
+const PARAMS_BASE: Parametro[] = [
+  { id: "vel", label: "Velocidade", valor: "", unidade: "m/min" },
+  { id: "ten", label: "Tensão", valor: "", unidade: "N/m" },
+  { id: "ang", label: "Ângulo de abertura", valor: "", unidade: "°" },
+  { id: "pas", label: "Passo", valor: "", unidade: "" },
+  { id: "rec", label: "Receita", valor: "", unidade: "" },
+];
 
 const ITENS_BASE = [
   "Rep. de P.O 1175","Rep. de P.O 1220","Rep. de P.O 1350","Rep. de P.O 1450",
   "Trocas de Stretch","Pallet de Stretch","Reposição de Cola","Troca de Ribon","Troca de Label",
 ];
 
-// ── Interfaces ──
-interface Troca { min: number | null; qtd?: number; }
-interface ItemConsumo { label: string; trocas: Troca[]; collapsed: boolean; }
-interface Parada { desc: string; ini: string; fim: string; nota: string; collapsed: boolean; }
-interface ParadasMap { emb: Parada[]; cl: Parada[]; rc: Parada[]; }
-interface BobinaTombador { id: string; idUnit: string; origem: string; motivo: string; causa: string; obs: string; }
-interface LabelImpresso { id: string; codigo: string; }
-
-function getMin(p: Parada): number {
-  if (!p.ini || !p.fim) return 0;
-  const [ih, im] = p.ini.split(":").map(Number);
-  const [fh, fm] = p.fim.split(":").map(Number);
-  const d = fh * 60 + fm - (ih * 60 + im);
-  return d > 0 ? d : 0;
-}
-
-function formatMin(t: number): string {
-  if (!t || t === 0) return "0 min";
-  if (t >= 60) return `${Math.floor(t / 60)}h ${t % 60 > 0 ? t % 60 + "min" : ""}`;
-  return `${t} min`;
-}
-
-function buildParadasTxt(paradas: Parada[]): string {
-  let txt = "";
-  paradas.forEach((p, i) => {
-    if (!p.desc && !p.ini) return;
-    const min = getMin(p);
-    if (i > 0) txt += "\n";
-    if (p.desc) txt += `${p.desc}\n`;
-    if (min > 0) { txt += `Parada total: ${min} minutos (das ${p.ini} às ${p.fim}).`; if (p.nota) txt += ` ${p.nota}`; }
-    txt += "\n";
-  });
-  return txt;
-}
-
-function newBobina(): BobinaTombador { return { id: Math.random().toString(36).slice(2), idUnit: "", origem: "", motivo: "", causa: "", obs: "" }; }
+const HORARIOS: Record<string, string> = {
+  "1": "00:20 x 08:20 hr",
+  "2": "08:20 x 16:20 hr",
+  "3": "16:20 x 00:20 hr",
+};
 
 function getSaudacao(): string {
   const h = new Date().getHours();
@@ -90,36 +66,75 @@ function getSaudacao(): string {
   if (h >= 12 && h < 18) return "Boa tarde";
   return "Boa noite";
 }
-function newLabel(codigo = ""): LabelImpresso { return { id: Math.random().toString(36).slice(2), codigo }; }
 
-// ── Modal genérico para substituir prompt() ──
-function InputModal({
-  open, title, subtitle, placeholder, initialValue = "", inputMode, onConfirm, onCancel,
-}: {
+function getMin(p: Parada): number {
+  if (typeof p.manualMin === "number") return p.manualMin;
+  if (!p.ini || !p.fim) return 0;
+  const [ih, im] = p.ini.split(":").map(Number);
+  const [fh, fm] = p.fim.split(":").map(Number);
+  const d = fh * 60 + fm - (ih * 60 + im);
+  return d > 0 ? d : 0;
+}
+
+function nowHHMM(): string {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/** Texto de uma parada finalizada, cobrindo os três casos: ini+fim, só ini (finalizada manualmente), ou nenhum horário */
+function paradaTexto(p: Parada): string {
+  const m = getMin(p);
+  if (m <= 0) return p.desc || "";
+  const desc = p.desc ? `${p.desc}. ` : "";
+  let quando = "";
+  if (p.ini && p.fim) quando = ` (das ${p.ini} às ${p.fim})`;
+  else if (p.ini) quando = ` (iniciada às ${p.ini})`;
+  return `${desc}Parada total: ${formatMin(m)}${quando}.${p.nota ? " " + p.nota : ""}`;
+}
+
+function formatMin(t: number): string {
+  if (!t) return "0 min";
+  if (t >= 60) return `${Math.floor(t / 60)}h ${t % 60 > 0 ? t % 60 + "min" : ""}`;
+  return `${t} min`;
+}
+
+function newParametrosJumbo(): Parametro[] {
+  return [
+    { id: Math.random().toString(36).slice(2), label: "Velocidade", valor: "", unidade: "m/min" },
+    { id: Math.random().toString(36).slice(2), label: "Tensão", valor: "", unidade: "N/m" },
+    { id: Math.random().toString(36).slice(2), label: "Ângulo", valor: "", unidade: "°" },
+    { id: Math.random().toString(36).slice(2), label: "Passo", valor: "", unidade: "" },
+    { id: Math.random().toString(36).slice(2), label: "Receita", valor: "", unidade: "" },
+  ];
+}
+
+function newJumbo(): Jumbo {
+  return { id: Math.random().toString(36).slice(2), codigo: "", largura: "", diametro: "", obsJumbo: "", parametrosCustom: false, parametrosEspecificos: newParametrosJumbo() };
+}
+
+function loadFormatos(): FormatoJumbo[] {
+  try { const r = localStorage.getItem(FORMATOS_KEY); return r ? JSON.parse(r) : FORMATOS_BASE; } catch { return FORMATOS_BASE; }
+}
+
+function loadParamsBase(): Parametro[] {
+  try { const r = localStorage.getItem(PARAMS_KEY); return r ? JSON.parse(r) : PARAMS_BASE; } catch { return PARAMS_BASE; }
+}
+
+// ── InputModal ──
+function InputModal({ open, title, subtitle, placeholder, initialValue = "", inputMode, onConfirm, onCancel }: {
   open: boolean; title: string; subtitle?: string; placeholder?: string; initialValue?: string; inputMode?: "text" | "numeric" | "decimal";
   onConfirm: (val: string) => void; onCancel: () => void;
 }) {
   const [val, setVal] = useState(initialValue);
   useEffect(() => { if (open) setVal(initialValue); }, [open, initialValue]);
   if (!open) return null;
-
   const confirm = () => { if (val.trim()) { onConfirm(val.trim()); setVal(""); } };
-
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 250, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onCancel}>
-      <div style={{ background: "#FFF", borderRadius: 18, padding: 20, width: "min(100%, 340px)" }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: "#FFF", borderRadius: 18, padding: 20, width: "min(100%,340px)" }} onClick={e => e.stopPropagation()}>
         <p style={{ fontWeight: 700, fontSize: 15, color: "#1A1A2E", margin: "0 0 4px" }}>{title}</p>
         {subtitle && <p style={{ fontSize: 12, color: "#9E9E9E", margin: "0 0 12px" }}>{subtitle}</p>}
-        <input
-          autoFocus
-          type="text"
-          inputMode={inputMode ?? "text"}
-          value={val}
-          placeholder={placeholder}
-          onChange={e => setVal(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter") confirm(); if (e.key === "Escape") onCancel(); }}
-          style={{ width: "100%", boxSizing: "border-box", fontSize: 15, borderRadius: 10, padding: "10px 12px", border: "1.5px solid #2D9E7F", marginBottom: 14, outline: "none" }}
-        />
+        <input autoFocus type="text" inputMode={inputMode ?? "text"} value={val} placeholder={placeholder} onChange={e => setVal(e.target.value)} onKeyDown={e => { if (e.key === "Enter") confirm(); if (e.key === "Escape") onCancel(); }} style={{ width: "100%", boxSizing: "border-box", fontSize: 15, borderRadius: 10, padding: "10px 12px", border: "1.5px solid #2D9E7F", marginBottom: 14, outline: "none" }} />
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={onCancel} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#F0F0F0", color: "#1A1A2E", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Cancelar</button>
           <button onClick={confirm} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#2D9E7F", color: "#FFF", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>OK</button>
@@ -129,17 +144,13 @@ function InputModal({
   );
 }
 
-// ── Modal de gerenciar lista (editar/excluir opções) ──
-function ManageListModal({
-  open, title, items, onClose, onEdit, onDelete,
-}: {
+// ── ManageListModal ──
+function ManageListModal({ open, title, items, onClose, onEdit, onDelete }: {
   open: boolean; title: string; items: string[]; onClose: () => void;
-  onEdit: (oldVal: string, newVal: string) => void; onDelete: (val: string) => void;
+  onEdit: (o: string, n: string) => void; onDelete: (v: string) => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
-
   if (!open) return null;
-
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 250, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
       <div style={{ background: "#FFF", borderRadius: "20px 20px 0 0", padding: 20, width: "100%", maxWidth: 480, maxHeight: "70vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
@@ -147,16 +158,22 @@ function ManageListModal({
           <p style={{ fontWeight: 700, fontSize: 15, color: "#1A1A2E", margin: 0 }}>Gerenciar {title}</p>
           <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: "50%", background: "#F0F0F0", border: "none", cursor: "pointer" }}>✕</button>
         </div>
-        {items.length === 0 && <p style={{ fontSize: 13, color: "#BDBDBD", fontStyle: "italic" }}>Nenhum item cadastrado.</p>}
+        {items.length === 0 && <p style={{ fontSize: 13, color: "#BDBDBD", fontStyle: "italic" }}>Nenhum item.</p>}
         {items.map(item => (
           <div key={item} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", marginBottom: 6, borderRadius: 10, background: "#FAFAFA", border: "1px solid #F0F0F0" }}>
             {editing === item ? (
-              <EditRow value={item} onSave={(v) => { onEdit(item, v); setEditing(null); }} onCancel={() => setEditing(null)} />
+              (() => { let v = item; return (
+                <>
+                  <input autoFocus defaultValue={item} onChange={e => { v = e.target.value; }} style={{ flex: 1, fontSize: 13, borderRadius: 8, padding: "6px 8px", border: "1px solid #2D9E7F" }} />
+                  <button onClick={() => { if (v.trim()) { onEdit(item, v.trim()); setEditing(null); } }} style={{ width: 28, height: 28, borderRadius: 8, background: "#2D9E7F", border: "none", color: "#FFF", cursor: "pointer" }}>✓</button>
+                  <button onClick={() => setEditing(null)} style={{ width: 28, height: 28, borderRadius: 8, background: "#F0F0F0", border: "none", cursor: "pointer" }}>✕</button>
+                </>
+              ); })()
             ) : (
               <>
-                <span style={{ fontSize: 13, flex: 1, color: "#1A1A2E" }}>{item}</span>
-                <button onClick={() => setEditing(item)} style={{ width: 28, height: 28, borderRadius: 8, background: "#F0F0F0", border: "none", color: "#1A1A2E", cursor: "pointer" }}><Pencil size={12} style={{ margin: "auto" }} /></button>
-                <button onClick={() => { if (confirm(`Excluir "${item}"?`)) onDelete(item); }} style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(229,57,53,0.1)", border: "none", color: "#E53935", cursor: "pointer", fontSize: 13 }}>✕</button>
+                <span style={{ fontSize: 13, flex: 1 }}>{item}</span>
+                <button onClick={() => setEditing(item)} style={{ width: 28, height: 28, borderRadius: 8, background: "#F0F0F0", border: "none", cursor: "pointer" }}><Pencil size={12} style={{ margin: "auto" }} /></button>
+                <button onClick={() => onDelete(item)} style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(229,57,53,0.1)", border: "none", color: "#E53935", cursor: "pointer" }}>✕</button>
               </>
             )}
           </div>
@@ -166,14 +183,84 @@ function ManageListModal({
   );
 }
 
-function EditRow({ value, onSave, onCancel }: { value: string; onSave: (v: string) => void; onCancel: () => void }) {
-  const [v, setV] = useState(value);
+// ── Scanner ──
+function BarcodeScannerModal({ onScan, onClose }: { onScan: (val: string) => void; onClose: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const rafRef = useRef<number>(0);
+  const [status, setStatus] = useState<"loading"|"scanning"|"error">("loading");
+  const [errorMsg, setErrorMsg] = useState("");
+  const detectorRef = useRef<any>(null);
+
+  useEffect(() => {
+    let active = true;
+    const handleFound = (value: string) => {
+      active = false;
+      streamRef.current?.getTracks().forEach(t => t.stop());
+      cancelAnimationFrame(rafRef.current);
+      onScan(value);
+      toast({ title: "✅ Código lido!", description: value });
+      onClose();
+    };
+    const scanLoop = async () => {
+      if (!active || !videoRef.current || !canvasRef.current || !detectorRef.current) return;
+      const video = videoRef.current; const canvas = canvasRef.current;
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        canvas.getContext("2d")?.drawImage(video, 0, 0);
+        try { const codes = await detectorRef.current.detect(canvas); if (codes.length > 0 && active) { handleFound(codes[0].rawValue); return; } } catch {}
+      }
+      rafRef.current = requestAnimationFrame(scanLoop);
+    };
+    const start = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        if (!active) { stream.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = stream;
+        if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
+      } catch { setStatus("error"); setErrorMsg("Sem acesso à câmera."); return; }
+      if ("BarcodeDetector" in window) {
+        detectorRef.current = new (window as any).BarcodeDetector({ formats: ["code_128","code_39","ean_13","ean_8","qr_code","data_matrix","itf","upc_a","upc_e"] });
+        setStatus("scanning"); scanLoop();
+      } else {
+        const script = document.createElement("script");
+        script.src = "https://cdn.jsdelivr.net/npm/@zxing/library@0.21.0/umd/index.min.js";
+        script.onload = () => { if (!active) return; try { const ZXing = (window as any).ZXing; const hints = new Map(); hints.set(ZXing.DecodeHintType.TRY_HARDER, true); detectorRef.current = new ZXing.BrowserMultiFormatReader(hints); setStatus("scanning"); } catch { setStatus("error"); setErrorMsg("Erro ao carregar leitor."); } };
+        script.onerror = () => { setStatus("error"); setErrorMsg("Sem conexão."); };
+        document.head.appendChild(script);
+      }
+    };
+    start();
+    return () => { active = false; streamRef.current?.getTracks().forEach(t => t.stop()); cancelAnimationFrame(rafRef.current); };
+  }, []);
+
   return (
-    <>
-      <input autoFocus value={v} onChange={e => setV(e.target.value)} style={{ flex: 1, fontSize: 13, borderRadius: 8, padding: "6px 8px", border: "1px solid #2D9E7F" }} />
-      <button onClick={() => v.trim() && onSave(v.trim())} style={{ width: 28, height: 28, borderRadius: 8, background: "#2D9E7F", border: "none", color: "#FFF", cursor: "pointer", fontSize: 13 }}>✓</button>
-      <button onClick={onCancel} style={{ width: 28, height: 28, borderRadius: 8, background: "#F0F0F0", border: "none", color: "#999", cursor: "pointer", fontSize: 13 }}>✕</button>
-    </>
+    <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.92)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", position: "absolute", top: 0 }}>
+        <span style={{ color: "#FFF", fontWeight: 700, fontSize: 16 }}>📷 Escanear código</span>
+        <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.15)", border: "none", color: "#FFF", fontSize: 18, cursor: "pointer" }}>✕</button>
+      </div>
+      <div style={{ position: "relative", width: "min(90vw,380px)", aspectRatio: "1", borderRadius: 20, overflow: "hidden", background: "#111" }}>
+        <video ref={videoRef} playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        <canvas ref={canvasRef} style={{ display: "none" }} />
+        {status === "scanning" && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+            <div style={{ width: "65%", aspectRatio: "1", position: "relative" }}>
+              {[{top:0,left:0},{top:0,right:0},{bottom:0,left:0},{bottom:0,right:0}].map((pos, i) => (
+                <div key={i} style={{ position: "absolute", width: 28, height: 28, borderTop: (pos as any).top===0?"3px solid #2D9E7F":"none", borderBottom: (pos as any).bottom===0?"3px solid #2D9E7F":"none", borderLeft: (pos as any).left===0?"3px solid #2D9E7F":"none", borderRight: (pos as any).right===0?"3px solid #2D9E7F":"none", ...pos }} />
+              ))}
+              <div style={{ position: "absolute", left: 4, right: 4, height: 2, background: "linear-gradient(90deg,transparent,#2D9E7F,transparent)", animation: "scanline 1.5s ease-in-out infinite", top: "50%" }} />
+            </div>
+          </div>
+        )}
+        {status === "loading" && <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)" }}><div style={{ width: 36, height: 36, border: "3px solid rgba(255,255,255,0.2)", borderTop: "3px solid #2D9E7F", borderRadius: "50%", animation: "spin 0.8s linear infinite", marginBottom: 12 }} /><span style={{ color: "#FFF", fontSize: 13 }}>Iniciando câmera...</span></div>}
+        {status === "error" && <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.7)", padding: 20, textAlign: "center" }}><span style={{ fontSize: 32, marginBottom: 8 }}>⚠️</span><span style={{ color: "#FFF", fontSize: 13 }}>{errorMsg}</span></div>}
+      </div>
+      {status === "scanning" && <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 20 }}>Aponte para o código</p>}
+      <ManualInputBtn onScan={onScan} onClose={onClose} streamRef={streamRef} />
+      <style>{`@keyframes scanline{0%,100%{top:10%}50%{top:85%}}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
   );
 }
 
@@ -194,139 +281,11 @@ function ManualInputBtn({ onScan, onClose, streamRef }: { onScan: (val: string) 
     </div>
   );
 }
-// ── Scanner Modal ──
-function BarcodeScannerModal({ onScan, onClose }: { onScan: (val: string) => void; onClose: () => void }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const rafRef = useRef<number>(0);
-  const [status, setStatus] = useState<"loading" | "scanning" | "error">("loading");
-  const [errorMsg, setErrorMsg] = useState("");
-  const detectorRef = useRef<any>(null);
-
-  useEffect(() => {
-    let active = true;
-
-    const handleFound = (value: string) => {
-      active = false;
-      streamRef.current?.getTracks().forEach(t => t.stop());
-      cancelAnimationFrame(rafRef.current);
-      onScan(value);
-      toast({ title: "✅ Código lido!", description: value });
-      onClose();
-    };
-
-    const scanLoop = async () => {
-      if (!active || !videoRef.current || !canvasRef.current || !detectorRef.current) return;
-      const video = videoRef.current; const canvas = canvasRef.current;
-      if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-        const ctx = canvas.getContext("2d"); ctx?.drawImage(video, 0, 0);
-        try {
-          const codes = await detectorRef.current.detect(canvas);
-          if (codes.length > 0 && active) { handleFound(codes[0].rawValue); return; }
-        } catch {}
-      }
-      rafRef.current = requestAnimationFrame(scanLoop);
-    };
-
-    const scanLoopZXing = () => {
-      if (!active || !videoRef.current || !canvasRef.current || !detectorRef.current) return;
-      const video = videoRef.current; const canvas = canvasRef.current;
-      if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-        const ctx = canvas.getContext("2d"); ctx?.drawImage(video, 0, 0);
-        try {
-          const ZXing = (window as any).ZXing;
-          const imgData = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height);
-          const luminance = new ZXing.RGBLuminanceSource(imgData.data, canvas.width, canvas.height);
-          const bitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminance));
-          const result = detectorRef.current.decodeBitmap(bitmap);
-          if (result && active) { handleFound(result.getText()); return; }
-        } catch {}
-      }
-      rafRef.current = requestAnimationFrame(scanLoopZXing);
-    };
-
-    const start = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } });
-        if (!active) { stream.getTracks().forEach(t => t.stop()); return; }
-        streamRef.current = stream;
-        if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
-      } catch { setStatus("error"); setErrorMsg("Sem acesso à câmera. Verifique as permissões."); return; }
-
-      if ("BarcodeDetector" in window) {
-        detectorRef.current = new (window as any).BarcodeDetector({ formats: ["code_128","code_39","ean_13","ean_8","qr_code","data_matrix","itf","upc_a","upc_e","pdf417","aztec"] });
-        setStatus("scanning"); scanLoop();
-      } else {
-        setStatus("loading");
-        const script = document.createElement("script");
-        script.src = "https://cdn.jsdelivr.net/npm/@zxing/library@0.21.0/umd/index.min.js";
-        script.onload = () => {
-          if (!active) return;
-          try {
-            const ZXing = (window as any).ZXing;
-            const hints = new Map(); hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-            detectorRef.current = new ZXing.BrowserMultiFormatReader(hints);
-            setStatus("scanning"); scanLoopZXing();
-          } catch { setStatus("error"); setErrorMsg("Erro ao carregar leitor."); }
-        };
-        script.onerror = () => { setStatus("error"); setErrorMsg("Sem conexão para carregar o leitor."); };
-        document.head.appendChild(script);
-      }
-    };
-
-    start();
-    return () => { active = false; streamRef.current?.getTracks().forEach(t => t.stop()); cancelAnimationFrame(rafRef.current); };
-  }, []);
-
-
-
-  return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.92)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", position: "absolute", top: 0 }}>
-        <span style={{ color: "#FFF", fontWeight: 700, fontSize: 16 }}>📷 Escanear código</span>
-        <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.15)", border: "none", color: "#FFF", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
-      </div>
-      <div style={{ position: "relative", width: "min(90vw, 380px)", aspectRatio: "1", borderRadius: 20, overflow: "hidden", background: "#111" }}>
-        <video ref={videoRef} playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-        <canvas ref={canvasRef} style={{ display: "none" }} />
-        {status === "scanning" && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-            <div style={{ width: "65%", aspectRatio: "1", position: "relative" }}>
-              {[{top:0,left:0},{top:0,right:0},{bottom:0,left:0},{bottom:0,right:0}].map((pos, i) => (
-                <div key={i} style={{ position: "absolute", width: 28, height: 28, borderTop: (pos as any).top === 0 ? "3px solid #2D9E7F" : "none", borderBottom: (pos as any).bottom === 0 ? "3px solid #2D9E7F" : "none", borderLeft: (pos as any).left === 0 ? "3px solid #2D9E7F" : "none", borderRight: (pos as any).right === 0 ? "3px solid #2D9E7F" : "none", ...pos }} />
-              ))}
-              <div style={{ position: "absolute", left: 4, right: 4, height: 2, background: "linear-gradient(90deg, transparent, #2D9E7F, transparent)", animation: "scanline 1.5s ease-in-out infinite", top: "50%" }} />
-            </div>
-          </div>
-        )}
-        {status === "loading" && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)" }}>
-            <div style={{ width: 36, height: 36, border: "3px solid rgba(255,255,255,0.2)", borderTop: "3px solid #2D9E7F", borderRadius: "50%", animation: "spin 0.8s linear infinite", marginBottom: 12 }} />
-            <span style={{ color: "#FFF", fontSize: 13 }}>Iniciando câmera...</span>
-          </div>
-        )}
-        {status === "error" && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.7)", padding: 20, textAlign: "center" }}>
-            <span style={{ fontSize: 32, marginBottom: 8 }}>⚠️</span>
-            <span style={{ color: "#FFF", fontSize: 13, marginBottom: 16 }}>{errorMsg}</span>
-          </div>
-        )}
-      </div>
-      {status === "scanning" && <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 20, textAlign: "center" }}>Aponte a câmera para o código de barras</p>}
-      <ManualInputBtn onScan={onScan} onClose={onClose} streamRef={streamRef} />
-      <style>{`@keyframes scanline { 0%,100% { top: 10%; } 50% { top: 85%; } } @keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
-  );
-}
-
-function BarcodeScannerBtn({ onScan }: { onScan: (val: string) => void }) {
+function BarcodeScannerBtn({ onScan, style }: { onScan: (val: string) => void; style?: React.CSSProperties }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} style={{ width: 36, height: 36, borderRadius: 8, background: "#1A1A2E", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }} title="Escanear código">
+      <button type="button" onClick={() => setOpen(true)} style={{ width: 36, height: 36, borderRadius: 8, background: "#1A1A2E", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, ...style }}>
         <Camera size={16} color="white" />
       </button>
       {open && <BarcodeScannerModal onScan={onScan} onClose={() => setOpen(false)} />}
@@ -339,173 +298,234 @@ interface Props {
   onClose: () => void;
   onSaveAsNote: (title: string, content: string) => void;
   initialState?: any;
-  onOpenRebobinadeira?: () => void;
 }
 
-export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebobinadeira }: Props) {
-  const saved = initialState || (() => { try { const raw = localStorage.getItem(RASCUNHO_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } })();
+export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: Props) {
+  const saved = initialState || (() => { try { const r = localStorage.getItem(RASCUNHO_KEY); return r ? JSON.parse(r) : null; } catch { return null; } })();
 
-  const [dest, setDest] = useState(saved?.dest ?? "Phablo");
+  // ── Estado geral ──
+  const [rebobNum, setRebobNum] = useState<"1"|"2">(saved?.rebobNum ?? "1");
+  const [dest, setDest] = useState(saved?.dest ?? (() => { try { return localStorage.getItem("rebobinadeira_last_dest") ?? ""; } catch { return ""; } })());
+  const [destinatarios, setDestinatarios] = useState<string[]>(() => {
+    try { const r = localStorage.getItem("rebobinadeira_dest"); return r ? JSON.parse(r) : []; } catch { return []; }
+  });
   const [turno, setTurno] = useState(saved?.turno ?? "2");
   const [letra, setLetra] = useState(saved?.letra ?? "D");
   const [horario, setHorario] = useState(saved?.horario ?? "08:20 x 16:20 hr");
-  const [resps, setResps] = useState<string[]>(saved?.resps ?? loadDB().responsaveis);
-  const [modoTombador, setModoTombador] = useState(saved?.modoTombador ?? false);
+  const [resps, setResps] = useState<string[]>(saved?.resps ?? ["Everton"]);
+  const [headerCollapsed, setHeaderCollapsed] = useState(!!saved);
+  const [paramsCollapsed, setParamsCollapsed] = useState(!!saved);
+  const [jumbosCollapsed, setJumbosCollapsed] = useState(false);
+  const [consumidosCollapsed, setConsumidosCollapsed] = useState(false);
+  const [clCollapsed, setClCollapsed] = useState(true);
+  const [rcCollapsed, setRcCollapsed] = useState(true);
+  const [obsCollapsed, setObsCollapsed] = useState(false);
+
+  // ── Parâmetros da rebobinadeira ──
+  const [idMaquina, setIdMaquina] = useState(saved?.idMaquina ?? "");
+  const [parametros, setParametros] = useState<Parametro[]>(saved?.parametros ?? loadParamsBase());
   const [darkMode, setDarkMode] = useState(false);
   const [fontSize, setFontSize] = useState<"sm"|"md"|"lg">(saved?.fontSize ?? "md");
-  const [embaladeiraNum, setEmbaladeiraNum] = useState<"1"|"2">(saved?.embaladeiraNum ?? "2");
-  const [headerCollapsed, setHeaderCollapsed] = useState(false);
-  const [embCollapsed, setEmbCollapsed] = useState(false);
-  const [clCollapsed, setClCollapsed] = useState(false);
-  const [rcCollapsed, setRcCollapsed] = useState(false);
-  const [tombCollapsed, setTombCollapsed] = useState(false);
+
+  // ── Consumidos ──
   const [itens, setItens] = useState<ItemConsumo[]>(saved?.itens ?? ITENS_BASE.map(l => ({ label: l, trocas: [], collapsed: false })));
-  const [obsEmb, setObsEmb] = useState(saved?.obsEmb ?? "");
-  const [paradasMap, setParadasMap] = useState<ParadasMap>(saved?.paradasMap ?? { emb: [], cl: [], rc: [] });
+
+  // ── Jumbos ──
+  const [jumbos, setJumbos] = useState<Jumbo[]>(saved?.jumbos ?? []);
+  const [rascunhoJumbo, setRascunhoJumbo] = useState<Jumbo | null>(null);
+  const [formatos, setFormatos] = useState<FormatoJumbo[]>(loadFormatos());
+  const [editandoJumbo, setEditandoJumbo] = useState<string | null>(null);
+  const [showFormatoModal, setShowFormatoModal] = useState(false);
+  const [novoFormato, setNovoFormato] = useState({ largura: "", diametro: "" });
+
+  // ── Core Link ──
   const [clQtd, setClQtd] = useState(saved?.clQtd ?? 0);
+  const [obsCL, setObsCL] = useState(saved?.obsCL ?? "");
+  const [paradasCL, setParadasCL] = useState<Parada[]>(saved?.paradasCL ?? []);
+
+  // ── Roll Cutter ──
   const [rcId, setRcId] = useState(saved?.rcId ?? 0);
   const [rcSid, setRcSid] = useState(saved?.rcSid ?? 0);
-  const [obsCL, setObsCL] = useState(saved?.obsCL ?? "");
   const [obsRC, setObsRC] = useState(saved?.obsRC ?? "");
-  const [previa, setPrevia] = useState("");
+  const [paradasRC, setParadasRC] = useState<Parada[]>(saved?.paradasRC ?? []);
+
+  // ── Obs e Paradas Rebobinadeira ──
+  const [obsRebob, setObsRebob] = useState(saved?.obsRebob ?? "");
+  const [paradasRebob, setParadasRebob] = useState<Parada[]>(saved?.paradasRebob ?? []);
+
+  // ── Modais ──
+  const [inputModal, setInputModal] = useState<{ title: string; subtitle?: string; placeholder?: string; onConfirm: (v: string) => void } | null>(null);
+  const [numTeclado, setNumTeclado] = useState<{ label: string; valor: string; onConfirm: (v: string) => void } | null>(null);
+  const [numValor, setNumValor] = useState("");
   const [showPrevia, setShowPrevia] = useState(false);
+  const [previa, setPrevia] = useState("");
 
-  const [retrabalhadas, setRetrabalhadas] = useState<BobinaTombador[]>(saved?.retrabalhadas ?? []);
-  const [editandoBobina, setEditandoBobina] = useState<{id: string; lista: "ret"|"rej"} | null>(null);
-  const [rejeitadas, setRejeitadas] = useState<BobinaTombador[]>(saved?.rejeitadas ?? []);
-  const [labels, setLabels] = useState<LabelImpresso[]>(saved?.labels ?? []);
-  const [novoLabel, setNovoLabel] = useState("");
-  const [obsTomb, setObsTomb] = useState(saved?.obsTomb ?? "");
-  const [paradasTomb, setParadasTomb] = useState<Parada[]>(saved?.paradasTomb ?? []);
-  const [db, setDb] = useState<TombadorDB>(loadDB);
-
-  // Modais
-  const [inputModal, setInputModal] = useState<{ title: string; subtitle?: string; placeholder?: string; initialValue?: string; inputMode?: "text" | "numeric" | "decimal"; onConfirm: (v: string) => void } | null>(null);
-  const [manageModal, setManageModal] = useState<{ title: string; items: string[]; onEdit: (o: string, n: string) => void; onDelete: (v: string) => void } | null>(null);
-
-  useEffect(() => { saveDB(db); }, [db]);
-
-  // Auto-salvar rascunho
+  // Força um re-render periódico para o cronômetro das paradas "em andamento" avançar na tela
+  const [, setTick] = useState(0);
   useEffect(() => {
-    const state = { dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, rcId, rcSid, obsCL, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, modoTombador, embaladeiraNum, fontSize };
+    const iv = setInterval(() => setTick(t => t + 1), 30000);
+    return () => clearInterval(iv);
+  }, []);
+
+  // ── Persistência ──
+  useEffect(() => {
+    localStorage.setItem(FORMATOS_KEY, JSON.stringify(formatos));
+  }, [formatos]);
+
+  useEffect(() => {
+    localStorage.setItem("rebobinadeira_dest", JSON.stringify(destinatarios));
+  }, [destinatarios]);
+
+  useEffect(() => {
+    const state = { rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, itens, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob, fontSize };
     localStorage.setItem(RASCUNHO_KEY, JSON.stringify(state));
-  }, [dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, rcId, rcSid, obsCL, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, modoTombador, embaladeiraNum, fontSize]);
-
-  const addOrigem = () => setInputModal({
-    title: "Nova Origem", placeholder: "Ex: Linha de Bobinas 3",
-    onConfirm: (val) => {
-      if (db.origens.includes(val)) return;
-      setDb(prev => ({ ...prev, origens: [...prev.origens, val], motivos: { ...prev.motivos, [val]: [] } }));
-      setInputModal(null);
-    },
-  });
-
-  const addMotivo = (origem: string) => setInputModal({
-    title: "Novo Motivo", subtitle: `Para "${origem}"`, placeholder: "Ex: Danificada",
-    onConfirm: (val) => {
-      setDb(prev => ({ ...prev, motivos: { ...prev.motivos, [origem]: [...(prev.motivos[origem] || []), val] }, causas: { ...prev.causas, [val]: prev.causas[val] || [] } }));
-      setInputModal(null);
-    },
-  });
-
-  const addCausa = (motivo: string) => setInputModal({
-    title: "Nova Causa", subtitle: `Para "${motivo}"`, placeholder: "Ex: Transportador",
-    onConfirm: (val) => {
-      setDb(prev => ({ ...prev, causas: { ...prev.causas, [motivo]: [...(prev.causas[motivo] || []), val] } }));
-      setInputModal(null);
-    },
-  });
-
-  const addDestinatario = () => setInputModal({
-    title: "Novo destinatário atalho", placeholder: "Ex: Karlla",
-    onConfirm: (val) => {
-      if (!db.destinatarios.includes(val)) setDb(prev => ({ ...prev, destinatarios: [...prev.destinatarios, val] }));
-      setDest(val);
-      setInputModal(null);
-    },
-  });
-
-  // ── Gerenciar listas (editar/excluir) ──
-  const openManageOrigens = () => setManageModal({
-    title: "Origens", items: db.origens,
-    onEdit: (old, nv) => setDb(prev => {
-      const motivos = { ...prev.motivos }; motivos[nv] = motivos[old] || []; delete motivos[old];
-      return { ...prev, origens: prev.origens.map(o => o === old ? nv : o), motivos };
-    }),
-    onDelete: (val) => setDb(prev => {
-      const motivos = { ...prev.motivos }; delete motivos[val];
-      return { ...prev, origens: prev.origens.filter(o => o !== val), motivos };
-    }),
-  });
-
-  const openManageMotivos = (origem: string) => setManageModal({
-    title: `Motivos de "${origem}"`, items: db.motivos[origem] || [],
-    onEdit: (old, nv) => setDb(prev => {
-      const causas = { ...prev.causas }; causas[nv] = causas[old] || []; delete causas[old];
-      return { ...prev, motivos: { ...prev.motivos, [origem]: (prev.motivos[origem] || []).map(m => m === old ? nv : m) }, causas };
-    }),
-    onDelete: (val) => setDb(prev => {
-      const causas = { ...prev.causas }; delete causas[val];
-      return { ...prev, motivos: { ...prev.motivos, [origem]: (prev.motivos[origem] || []).filter(m => m !== val) }, causas };
-    }),
-  });
-
-  const openManageCausas = (motivo: string) => setManageModal({
-    title: `Causas de "${motivo}"`, items: db.causas[motivo] || [],
-    onEdit: (old, nv) => setDb(prev => ({ ...prev, causas: { ...prev.causas, [motivo]: (prev.causas[motivo] || []).map(c => c === old ? nv : c) } })),
-    onDelete: (val) => setDb(prev => ({ ...prev, causas: { ...prev.causas, [motivo]: (prev.causas[motivo] || []).filter(c => c !== val) } })),
-  });
-
-  const handleNovoRelatorio = () => {
-    localStorage.removeItem(RASCUNHO_KEY);
-    setDest("Phablo");
-    setTurno("2");
-    setLetra("D");
-    setHorario("08:20 x 16:20 hr");
-    setResps(loadDB().responsaveis);
-    setItens(ITENS_BASE.map(l => ({ label: l, trocas: [], collapsed: false })));
-    setObsEmb("");
-    setParadasMap({ emb: [], cl: [], rc: [] });
-    setClQtd(0);
-    setRcId(0);
-    setRcSid(0);
-    setObsCL("");
-    setObsRC("");
-    setRetrabalhadas([]);
-    setRejeitadas([]);
-    setLabels([]);
-    setObsTomb("");
-    setParadasTomb([]);
-    setModoTombador(false);
-    setEmbaladeiraNum("2");
-    setShowPrevia(false);
-    toast({ title: "✅ Novo relatório iniciado!" });
-  };
+  }, [rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, itens, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob, fontSize]);
 
   const onTurnoChange = (v: string) => { setTurno(v); setHorario(HORARIOS[v] || ""); };
-  const addResp = () => {
-    setResps(r => {
-      const novo = [...r, ""];
-      setDb(prev => ({ ...prev, responsaveis: novo.filter(Boolean) }));
-      return novo;
-    });
-  };
-  const updateResp = (i: number, v: string) => {
-    setResps(r => {
-      const novo = r.map((x, j) => j === i ? v : x);
-      setDb(prev => ({ ...prev, responsaveis: novo.filter(Boolean) }));
-      return novo;
-    });
-  };
-  const removeResp = (i: number) => {
-    setResps(r => {
-      const novo = r.filter((_, j) => j !== i);
-      setDb(prev => ({ ...prev, responsaveis: novo.filter(Boolean) }));
-      return novo;
-    });
-  };
-  const calcTotalEmb = () => itens.reduce((s, i) => s + i.trocas.reduce((a, t) => a + (t.min || 0), 0), 0);
 
+  // ── Parâmetros ──
+  const updateParam = (id: string, field: "valor"|"unidade", val: string) =>
+    setParametros(prev => prev.map(p => p.id === id ? { ...p, [field]: val } : p));
+
+  const addParam = () => setInputModal({
+    title: "Novo parâmetro", placeholder: "Ex: Pressão",
+    onConfirm: (label) => {
+      setParametros(prev => [...prev, { id: Math.random().toString(36).slice(2), label, valor: "", unidade: "" }]);
+      setInputModal(null);
+    }
+  });
+
+  const removeParam = (id: string) => setParametros(prev => prev.filter(p => p.id !== id));
+  const moveParam = (id: string, dir: -1 | 1) => {
+    setParametros(prev => {
+      const idx = prev.findIndex(p => p.id === id);
+      if (idx < 0) return prev;
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= prev.length) return prev;
+      const arr = [...prev];
+      [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+      return arr;
+    });
+  };
+
+  // ── Jumbos ──
+  const addJumbo = () => {
+    setRascunhoJumbo(newJumbo());
+  };
+
+  const updateJumbo = (id: string, field: keyof Jumbo, val: any) => {
+    if (rascunhoJumbo && rascunhoJumbo.id === id) {
+      const updated = { ...rascunhoJumbo, [field]: val };
+      setJumbos(prev => [...prev, updated]);
+      setRascunhoJumbo(null);
+      setEditandoJumbo(updated.id);
+      return;
+    }
+    setJumbos(prev => prev.map(j => j.id === id ? { ...j, [field]: val } : j));
+  };
+
+  const removeJumbo = (id: string) => {
+    if (rascunhoJumbo && rascunhoJumbo.id === id) { setRascunhoJumbo(null); return; }
+    setJumbos(prev => prev.filter(j => j.id !== id));
+    setEditandoJumbo(null);
+  };
+
+  const closeJumboForm = () => { setEditandoJumbo(null); setRascunhoJumbo(null); };
+
+  const applyFormato = (jumboId: string, f: FormatoJumbo) => {
+    updateJumbo(jumboId, "largura", f.largura);
+    updateJumbo(jumboId, "diametro", f.diametro);
+  };
+
+  const updateJumboParam = (jumboId: string, paramId: string, field: "valor" | "unidade", val: string) => {
+    if (rascunhoJumbo && rascunhoJumbo.id === jumboId) {
+      const updated = { ...rascunhoJumbo, parametrosEspecificos: rascunhoJumbo.parametrosEspecificos.map(p => p.id === paramId ? { ...p, [field]: val } : p) };
+      setJumbos(prev => [...prev, updated]);
+      setRascunhoJumbo(null);
+      setEditandoJumbo(updated.id);
+      return;
+    }
+    setJumbos(prev => prev.map(j => j.id === jumboId ? { ...j, parametrosEspecificos: j.parametrosEspecificos.map(p => p.id === paramId ? { ...p, [field]: val } : p) } : j));
+  };
+
+  const addJumboParam = (jumboId: string) => setInputModal({
+    title: "Novo parâmetro", placeholder: "Ex: Pressão",
+    onConfirm: (label) => {
+      const novo = { id: Math.random().toString(36).slice(2), label, valor: "", unidade: "" };
+      if (rascunhoJumbo && rascunhoJumbo.id === jumboId) {
+        setJumbos(prev => [...prev, { ...rascunhoJumbo, parametrosEspecificos: [...rascunhoJumbo.parametrosEspecificos, novo] }]);
+        setRascunhoJumbo(null);
+        setEditandoJumbo(jumboId);
+      } else {
+        setJumbos(prev => prev.map(j => j.id === jumboId ? { ...j, parametrosEspecificos: [...j.parametrosEspecificos, novo] } : j));
+      }
+      setInputModal(null);
+    }
+  });
+
+  const removeJumboParam = (jumboId: string, paramId: string) => {
+    if (rascunhoJumbo && rascunhoJumbo.id === jumboId) {
+      setRascunhoJumbo(prev => prev ? { ...prev, parametrosEspecificos: prev.parametrosEspecificos.filter(p => p.id !== paramId) } : prev);
+      return;
+    }
+    setJumbos(prev => prev.map(j => j.id === jumboId ? { ...j, parametrosEspecificos: j.parametrosEspecificos.filter(p => p.id !== paramId) } : j));
+  };
+
+  const moveJumboParam = (jumboId: string, paramId: string, dir: -1 | 1) => {
+    const reorder = (list: Parametro[]) => {
+      const idx = list.findIndex(p => p.id === paramId);
+      if (idx < 0) return list;
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= list.length) return list;
+      const arr = [...list];
+      [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+      return arr;
+    };
+    if (rascunhoJumbo && rascunhoJumbo.id === jumboId) {
+      setRascunhoJumbo(prev => prev ? { ...prev, parametrosEspecificos: reorder(prev.parametrosEspecificos) } : prev);
+      return;
+    }
+    setJumbos(prev => prev.map(j => j.id === jumboId ? { ...j, parametrosEspecificos: reorder(j.parametrosEspecificos) } : j));
+  };
+
+  const addFormato = () => {
+    if (!novoFormato.largura || !novoFormato.diametro) return;
+    setFormatos(prev => [...prev, { id: Math.random().toString(36).slice(2), ...novoFormato }]);
+    setNovoFormato({ largura: "", diametro: "" });
+    setShowFormatoModal(false);
+  };
+
+  const removeFormato = (id: string) => setFormatos(prev => prev.filter(f => f.id !== id));
+
+  // ── Paradas helpers ──
+  const addParada = (set: React.Dispatch<React.SetStateAction<Parada[]>>) =>
+    set(prev => [...prev, { desc: "", ini: "", fim: "", nota: "", collapsed: false, manualMin: null, emAndamento: false }]);
+
+  // Inicia uma parada automática: marca o horário atual como início e fica "em andamento" até ser finalizada
+  const addParadaAutomatica = (set: React.Dispatch<React.SetStateAction<Parada[]>>) =>
+    set(prev => [...prev, { desc: "", ini: nowHHMM(), fim: "", nota: "", collapsed: false, manualMin: null, emAndamento: true, iniciadaEm: Date.now() }]);
+
+  // Finaliza a parada usando o horário atual como fim (cálculo automático)
+  const finalizarParadaAgora = (set: React.Dispatch<React.SetStateAction<Parada[]>>, i: number) =>
+    set(prev => prev.map((p, j) => j === i ? { ...p, fim: nowHHMM(), emAndamento: false, iniciadaEm: undefined } : p));
+
+  // Finaliza a parada com um tempo em minutos informado manualmente (para quando esqueceu de iniciar/finalizar na hora)
+  const finalizarParadaManual = (set: React.Dispatch<React.SetStateAction<Parada[]>>, i: number, minutos: number) =>
+    set(prev => prev.map((p, j) => j === i ? { ...p, manualMin: minutos, emAndamento: false, iniciadaEm: undefined } : p));
+
+  const updateParada = (set: React.Dispatch<React.SetStateAction<Parada[]>>, i: number, field: keyof Parada, val: string) =>
+    set(prev => prev.map((p, j) => j === i ? { ...p, [field]: val } : p));
+
+  const toggleParada = (set: React.Dispatch<React.SetStateAction<Parada[]>>, i: number) =>
+    set(prev => prev.map((p, j) => j === i ? { ...p, collapsed: !p.collapsed } : p));
+
+  const removeParada = (set: React.Dispatch<React.SetStateAction<Parada[]>>, i: number) =>
+    set(prev => prev.filter((_, j) => j !== i));
+
+  const totalParadas = (list: Parada[]) => list.reduce((s, p) => s + getMin(p), 0);
+
+  // ── Consumidos ──
+  const calcTotalConsumidos = () => itens.reduce((s, i) => s + i.trocas.reduce((a, t) => a + (t.min || 0), 0), 0);
   const addTroca = (idx: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: [...item.trocas, { min: null, qtd: 1 }], collapsed: false } : item));
 
   // Adiciona várias trocas de uma vez (ex: trocou 4 fitas crepe juntas na correria) — vira UM lote, uma linha só
@@ -515,28 +535,11 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
       ? { ...item, trocas: [...item.trocas, { min: null, qtd: n }], collapsed: false }
       : item));
   };
+
   const addTrocasMultiplas = (idx: number) => {
-    setInputModal({
-      title: "Quantas trocas de uma vez?", placeholder: "Ex: 4", inputMode: "numeric",
-      onConfirm: (v) => {
-        const n = parseInt(v.replace(/\D/g, ""), 10);
-        if (!isNaN(n) && n > 0) addTrocas(idx, n);
-        setInputModal(null);
-      }
-    });
-  };
-  const updateTrocaQtd = (idx: number, ti: number, qtd: number) => {
-    const n = Math.max(1, Math.min(999, qtd));
-    setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.map((t, j) => j === ti ? { ...t, qtd: n } : t) } : item));
-  };
-  const editarQtdTroca = (idx: number, ti: number, atual: number) => {
-    setInputModal({
-      title: "Corrigir quantidade", placeholder: "Ex: 4", initialValue: String(atual), inputMode: "numeric",
-      onConfirm: (v) => {
-        const n = parseInt(v.replace(/\D/g, ""), 10);
-        if (!isNaN(n) && n > 0) updateTrocaQtd(idx, ti, n);
-        setInputModal(null);
-      }
+    abrirTeclado("Quantas trocas de uma vez?", "", (v) => {
+      const n = parseInt(v.replace(/\D/g, ""), 10);
+      if (!isNaN(n) && n > 0) addTrocas(idx, n);
     });
   };
   const removeTroca = (idx: number, ti: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.filter((_, j) => j !== ti) } : item));
@@ -544,117 +547,109 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
     const n = parseInt(val); const v = isNaN(n) ? null : Math.max(0, n);
     setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.map((t, j) => j === ti ? { ...t, min: v } : t) } : item));
   };
-  const toggleItem = (idx: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, collapsed: !item.collapsed } : item));
+  const updateTrocaQtd = (idx: number, ti: number, qtd: number) => {
+    const n = Math.max(1, Math.min(999, qtd));
+    setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.map((t, j) => j === ti ? { ...t, qtd: n } : t) } : item));
+  };
+  const toggleItemConsumo = (idx: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, collapsed: !item.collapsed } : item));
   const collapseAllItens = () => setItens(prev => prev.map(it => ({ ...it, collapsed: true })));
-  const addItem = () => setInputModal({ title: "Novo item", placeholder: "Nome do item", onConfirm: (val) => { setItens(prev => [...prev, { label: val, trocas: [], collapsed: false }]); setInputModal(null); } });
-  const removeItem = (idx: number) => { if (confirm("Remover este item?")) setItens(prev => prev.filter((_, i) => i !== idx)); };
-
-  const addParada = (sec: keyof ParadasMap) => setParadasMap(prev => ({ ...prev, [sec]: [...prev[sec], { desc: "", ini: "", fim: "", nota: "", collapsed: false }] }));
-  const updateParada = (sec: keyof ParadasMap, i: number, field: keyof Parada, val: string) => setParadasMap(prev => ({ ...prev, [sec]: prev[sec].map((p, j) => j === i ? { ...p, [field]: val } : p) }));
-  const toggleParada = (sec: keyof ParadasMap, i: number) => setParadasMap(prev => ({ ...prev, [sec]: prev[sec].map((p, j) => j === i ? { ...p, collapsed: !p.collapsed } : p) }));
-  const removeParada = (sec: keyof ParadasMap, i: number) => setParadasMap(prev => ({ ...prev, [sec]: prev[sec].filter((_, j) => j !== i) }));
-  const totalParadas = (sec: keyof ParadasMap) => paradasMap[sec].reduce((s, p) => s + getMin(p), 0);
-
-  const updateBobina = (set: React.Dispatch<React.SetStateAction<BobinaTombador[]>>, id: string, field: keyof BobinaTombador, val: string) => {
-    set(prev => prev.map(b => {
-      if (b.id !== id) return b;
-      if (field === "origem") return { ...b, origem: val, motivo: "", causa: "" };
-      if (field === "motivo") return { ...b, motivo: val, causa: "" };
-      return { ...b, [field]: val };
-    }));
-  };
-  const removeBobina = (set: React.Dispatch<React.SetStateAction<BobinaTombador[]>>, id: string) => set(prev => prev.filter(b => b.id !== id));
-
-  // ── Labels impressos ──
-  const addLabelCodigo = (codigo: string) => {
-    if (!codigo.trim()) return;
-    setLabels(prev => [...prev, newLabel(codigo.trim())]);
-    setNovoLabel("");
-  };
-  const removeLabel = (id: string) => setLabels(prev => prev.filter(l => l.id !== id));
-  const updateLabel = (id: string, codigo: string) => setLabels(prev => prev.map(l => l.id === id ? { ...l, codigo } : l));
-
-  const addParadaTomb = () => setParadasTomb(prev => [...prev, { desc: "", ini: "", fim: "", nota: "", collapsed: false }]);
-  const updateParadaTomb = (i: number, field: keyof Parada, val: string) => setParadasTomb(prev => prev.map((p, j) => j === i ? { ...p, [field]: val } : p));
-  const toggleParadaTomb = (i: number) => setParadasTomb(prev => prev.map((p, j) => j === i ? { ...p, collapsed: !p.collapsed } : p));
-  const removeParadaTomb = (i: number) => setParadasTomb(prev => prev.filter((_, j) => j !== i));
-  const totalParadasTomb = () => paradasTomb.reduce((s, p) => s + getMin(p), 0);
-
-  const buildTombadorTxt = () => {
-    if (retrabalhadas.length === 0 && rejeitadas.length === 0 && labels.length === 0) return "";
-    let txt = "\n•Tombador\n";
-    if (retrabalhadas.length > 0) {
-      txt += "Bobinas Retrabalhadas\n";
-      retrabalhadas.forEach(b => { if (b.idUnit) txt += `${b.idUnit}${b.motivo ? " - " + b.motivo : ""}${b.causa ? "/" + b.causa : ""}${b.origem ? "/ " + b.origem : ""}\n`; });
-      txt += "\n";
-    }
-    if (rejeitadas.length > 0) {
-      txt += "Bobinas Rejeitadas\n";
-      rejeitadas.forEach(b => { if (b.idUnit) txt += `${b.idUnit}${b.motivo ? " - " + b.motivo : ""}${b.causa ? "/" + b.causa : ""}${b.origem ? "/ " + b.origem : ""}\n`; });
-      txt += "\n";
-    }
-    if (labels.length > 0) {
-      txt += "Impressão de Label\n";
-      labels.forEach(l => { if (l.codigo) txt += `${l.codigo}\n`; });
-      txt += "\n";
-    }
-    if (obsTomb) txt += `Obs: ${obsTomb}\n`;
-    const paradasTombTxt = buildParadasTxt(paradasTomb);
-    if (paradasTombTxt) txt += `\nObs:\n${paradasTombTxt}Parada total: ${formatMin(totalParadasTomb())}.\n`;
-    return txt;
+  const addItemConsumo = () => setInputModal({ title: "Novo item", placeholder: "Nome do item", onConfirm: (val) => { setItens(prev => [...prev, { label: val, trocas: [], collapsed: false }]); setInputModal(null); } });
+  const removeItemConsumo = (idx: number) => setItens(prev => prev.filter((_, i) => i !== idx));
+  const moveItemConsumo = (idx: number, dir: -1 | 1) => {
+    setItens(prev => {
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= prev.length) return prev;
+      const arr = [...prev];
+      [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+      return arr;
+    });
   };
 
+  // ── Novo relatório ──
+  const handleNovo = () => {
+    localStorage.removeItem(RASCUNHO_KEY);
+    setRebobNum("1"); setDest((() => { try { return localStorage.getItem("rebobinadeira_last_dest") ?? ""; } catch { return ""; } })()); setTurno("2"); setLetra("D"); setHorario("08:20 x 16:20 hr");
+    setResps(["Everton"]); setIdMaquina(""); setParametros(loadParamsBase());
+    setItens(ITENS_BASE.map(l => ({ label: l, trocas: [], collapsed: false })));
+    setJumbos([]); setRascunhoJumbo(null); setClQtd(0); setObsCL(""); setParadasCL([]);
+    setRcId(0); setRcSid(0); setObsRC(""); setParadasRC([]);
+    setObsRebob(""); setParadasRebob([]); setShowPrevia(false);
+    setHeaderCollapsed(false); setParamsCollapsed(false); setJumbosCollapsed(false);
+    setConsumidosCollapsed(false); setClCollapsed(true); setRcCollapsed(true); setObsCollapsed(false);
+    toast({ title: "✅ Novo relatório iniciado!" });
+  };
+
+  // ── Gerar texto ──
   const gerarTexto = useCallback(() => {
-    let consumidos = "";
-    itens.forEach(item => { const q = item.trocas.reduce((a, t) => a + (t.qtd ?? 1), 0); if (q > 0) consumidos += ` ${String(q).padStart(2, "0")} ${item.label}\n`; });
-    const totalEmb = formatMin(calcTotalEmb());
-    const paradasEmb = buildParadasTxt(paradasMap.emb);
-    const totalPEmb = formatMin(totalParadas("emb"));
-    const paradasCL = buildParadasTxt(paradasMap.cl);
-    const totalPCL = formatMin(totalParadas("cl"));
-    const paradasRC = buildParadasTxt(paradasMap.rc);
-    const totalPRC = formatMin(totalParadas("rc"));
-    let coreLinkSection = "";
-    if (clQtd > 0 || obsCL || paradasCL) {
-      coreLinkSection += "\n•Core Link\n";
-      if (clQtd > 0) coreLinkSection += ` ${String(clQtd).padStart(2, "0")} Cargas de Tubetes\n`;
-      if (obsCL) coreLinkSection += `Obs: ${obsCL}\n`;
-      if (paradasCL) coreLinkSection += `\nObs:\n${paradasCL}Parada total: ${totalPCL}.\n`;
-    }
-    let rollCutterSection = "";
-    if (rcId > 0 || rcSid > 0 || obsRC || paradasRC) {
-      rollCutterSection += "\n•Roll Cutter\n";
-      if (rcId > 0) rollCutterSection += ` ${String(rcId).padStart(2, "0")} bobinas com id.\n`;
-      if (rcSid > 0) rollCutterSection += ` ${String(rcSid).padStart(2, "0")} sem id.\n`;
-      if (obsRC) rollCutterSection += `Obs: ${obsRC}\n`;
-      if (paradasRC) rollCutterSection += `\nObs:\n${paradasRC}Parada total: ${totalPRC}.\n`;
-    }
-    if (modoTombador) {
-      return `${getSaudacao()}, ${dest},\nSegue relatório do tombador.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}\n${buildTombadorTxt()}`.trim();
-    }
-    return `${getSaudacao()}, ${dest},\nSegue Relatório da linha de bobinas.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}\n\n• Embaladeira ${embaladeiraNum}\n✔ Consumidos:\n${consumidos || " (sem consumos)\n"}\n✔ Total de Tempo de Parada: ${totalEmb}.${obsEmb ? "\n\nObs:\n" + obsEmb : ""}${paradasEmb ? "\n\nObs:\n" + paradasEmb + "Parada total: " + totalPEmb + "." : ""}${coreLinkSection}${rollCutterSection}${buildTombadorTxt()}`.trim();
-  }, [dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, obsCL, rcId, rcSid, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, embaladeiraNum, db]);
+    const paramsTexto = parametros.filter(p => p.valor).map(p => `• ${p.label}: ${p.valor}${p.unidade ? " " + p.unidade : ""}`).join("\n");
+    const jumbosTexto = jumbos.map((j, i) => {
+      let linha = `${i + 1}. Jumbo ${j.codigo || "—"}`;
+      if (j.largura || j.diametro) linha += ` /${j.largura} ${j.diametro}`;
+      return linha;
+    }).join("\n");
 
-  const handlePrevia = () => { setPrevia(gerarTexto()); setShowPrevia(true); };
-  const handleShare = async () => {
-    const text = gerarTexto();
-    if (navigator.share) { try { await navigator.share({ title: `Relatório Turno ${turno}`, text }); } catch {} }
-    else { await navigator.clipboard.writeText(text); toast({ title: "✅ Copiado!", description: "Relatório copiado para a área de transferência." }); }
-  };
+    let consumidosTxt = "";
+    itens.forEach(item => { const q = item.trocas.reduce((a, t) => a + (t.qtd ?? 1), 0); if (q > 0) consumidosTxt += ` ${String(q).padStart(2, "0")} ${item.label}\n`; });
+    const totalConsumidos = formatMin(calcTotalConsumidos());
+    const consumidosSection = consumidosTxt
+      ? `\n\n✔ Consumidos:\n${consumidosTxt}✔ Total de Tempo de Parada: ${totalConsumidos}.`
+      : "";
+
+    let clSection = "";
+    if (clQtd > 0 || obsCL || paradasCL.length > 0) {
+      clSection += "\n\nCore Link\n";
+      if (clQtd > 0) clSection += ` ${String(clQtd).padStart(2,"0")} Cargas de Tubetes\n`;
+      if (obsCL) clSection += `Obs: ${obsCL}\n`;
+      if (paradasCL.length > 0) {
+        const ptxt = paradasCL.map(paradaTexto).filter(Boolean).join("\n");
+        clSection += `\n${ptxt}\nParada total: ${formatMin(totalParadas(paradasCL))}.`;
+      }
+    }
+
+    let rcSection = "";
+    if (rcId > 0 || rcSid > 0 || obsRC || paradasRC.length > 0) {
+      rcSection += "\n\nRoll Cutter\n";
+      if (rcId > 0) rcSection += ` ${String(rcId).padStart(2,"0")} bobinas com id.\n`;
+      if (rcSid > 0) rcSection += ` ${String(rcSid).padStart(2,"0")} sem id.\n`;
+      if (obsRC) rcSection += `Obs: ${obsRC}\n`;
+      if (paradasRC.length > 0) {
+        const ptxt = paradasRC.map(paradaTexto).filter(Boolean).join("\n");
+        rcSection += `\n${ptxt}\nParada total: ${formatMin(totalParadas(paradasRC))}.`;
+      }
+    }
+
+    let obsSection = "";
+    if (obsRebob) obsSection += `\n\nObs: ${obsRebob}`;
+    if (paradasRebob.length > 0) {
+      const ptxt = paradasRebob.map(paradaTexto).filter(Boolean).join("\n");
+      obsSection += `\n\n${ptxt}\nParada total: ${formatMin(totalParadas(paradasRebob))}.`;
+    }
+
+    return `${getSaudacao()}${dest ? ", " + dest : ""},\nSegue relatório da Rebobinadeira ${rebobNum}.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}${idMaquina ? `\n\nPARÂMETROS DA REBOBINADEIRA: ${idMaquina}` : "\n\nPARÂMETROS DA REBOBINADEIRA:"}${paramsTexto ? "\n" + paramsTexto : ""}${jumbosTexto ? "\n\nPROGRAMAÇÃO:\n" + jumbosTexto : ""}${consumidosSection}${clSection}${rcSection}${obsSection}`.trim();
+  }, [rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, itens, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob]);
+
   const handleSaveNote = () => {
     const text = gerarTexto();
-    const title = modoTombador ? `Turno ${turno} Relatório Tombador - Letra ${letra}` : `Turno ${turno} Relatório - Letra ${letra}`;
-    const state = { dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, rcId, rcSid, obsCL, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, modoTombador, embaladeiraNum, fontSize };
-    // Salva o estado no localStorage com chave baseada no título
-    const stateKey = `relatorio_state_${title.replace(/\s/g, "_")}`;
+    const title = `Relatório Rebobinadeira ${rebobNum} - Letra ${letra}`;
+    const stateKey = `rebobinadeira_state_${title.replace(/\s/g, "_")}`;
+    const state = { rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, itens, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob, fontSize };
     localStorage.setItem(stateKey, JSON.stringify(state));
+    // Guarda o destinatário atual como "último usado", pra próxima vez que abrir
+    // um relatório novo já vir preenchido sozinho (só precisa trocar quando mudar de turma)
+    if (dest.trim()) localStorage.setItem("rebobinadeira_last_dest", dest.trim());
     // Embute o estado no próprio texto da nota (marcador invisível), para que
     // reabrir o formulário funcione mesmo após limpeza de cache ou em outro aparelho.
-    const marker = `\n\n<!--relatorio-turno-state:${JSON.stringify(state)}-->`;
+    const marker = `\n\n<!--relatorio-rebobinadeira-state:${JSON.stringify(state)}-->`;
     onSaveAsNote(title, text + marker);
     toast({ title: "✅ Salvo nas notas!" });
     localStorage.removeItem(RASCUNHO_KEY);
     onClose();
+  };
+
+  const handleShare = async () => {
+    const text = gerarTexto();
+    if (navigator.share) { try { await navigator.share({ title: `Relatório Rebobinadeira ${rebobNum}`, text }); } catch {} }
+    else { await navigator.clipboard.writeText(text); toast({ title: "✅ Copiado!" }); }
   };
 
   // ── Tema ──
@@ -670,260 +665,258 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
     sectionBtnBg: darkMode ? "#2A2A45" : "#F5F5F5",
     sectionBtnBorder: darkMode ? "#333355" : "#EBEBEB",
     headerBg: darkMode ? "rgba(26,26,46,0.98)" : "rgba(247,245,242,0.98)",
-    footerBg: darkMode ? "rgba(26,26,46,0.98)" : "rgba(247,245,242,0.98)",
   };
 
-  // ── Estilos ──
-  const btnStyle: React.CSSProperties = { width: 36, height: 36, padding: 0, fontSize: 18, borderRadius: 10, border: `1px solid ${theme.inputBorder}`, background: theme.sectionBtnBg, cursor: "pointer", color: theme.text };
-  const sectionBtn: React.CSSProperties = { fontSize: 11, padding: "3px 10px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, cursor: "pointer", color: theme.text };
-  const manageBtn: React.CSSProperties = { fontSize: 10, padding: "2px 8px", borderRadius: 14, border: `1px solid ${theme.inputBorder}`, background: theme.card, color: theme.textSub, cursor: "pointer", whiteSpace: "nowrap" };
   const inputStyle: React.CSSProperties = { width: "100%", marginTop: 4, boxSizing: "border-box", fontSize: fz, borderRadius: 8, padding: "6px 10px", border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text };
-  const cardStyle: React.CSSProperties = { background: theme.card, border: `1px solid ${theme.cardBorder}`, borderRadius: 16, padding: "14px 16px", marginBottom: 12 };
   const selectStyle: React.CSSProperties = { ...inputStyle, appearance: "none", WebkitAppearance: "none" };
+  const cardStyle: React.CSSProperties = { background: theme.card, border: `1px solid ${theme.cardBorder}`, borderRadius: 16, padding: "14px 16px", marginBottom: 12 };
+  const sectionBtn: React.CSSProperties = { fontSize: 11, padding: "3px 10px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, cursor: "pointer", color: theme.text };
+  const btnStyle: React.CSSProperties = { width: 36, height: 36, padding: 0, fontSize: 18, borderRadius: 10, border: `1px solid ${theme.inputBorder}`, background: theme.sectionBtnBg, cursor: "pointer", color: theme.text };
 
-  const renderParadas = (sec: keyof ParadasMap, label: string) => (
-    <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #F0F0F0" }}>
+  // ── Render paradas ──
+  const renderParadas = (list: Parada[], setList: React.Dispatch<React.SetStateAction<Parada[]>>, label: string) => (
+    <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${theme.cardBorder}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: "#9E9E9E" }}>⏱ {label}</span>
-        <button onClick={() => addParada(sec)} style={{ ...sectionBtn, color: "#2D9E7F", fontWeight: 600 }}>+ Adicionar</button>
+        <span style={{ fontSize: 12, fontWeight: 600, color: theme.textSub }}>⏱ {label}</span>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={() => addParadaAutomatica(setList)} style={{ ...sectionBtn, color: "#E53935", fontWeight: 600 }}>🔴 Iniciar agora</button>
+          <button onClick={() => addParada(setList)} style={{ ...sectionBtn, color: "#2D9E7F", fontWeight: 600 }}>+ Adicionar</button>
+        </div>
       </div>
-      {paradasMap[sec].map((p, i) => {
-        const min = getMin(p); const tempoLabel = min > 0 ? ` · ${min} min` : "";
+      {list.map((p, i) => {
+        const min = getMin(p); const tl = min > 0 ? ` · ${formatMin(min)}` : "";
+
+        // Parada "em andamento": iniciada automaticamente e ainda sem horário de fim
+        if (p.emAndamento) {
+          const elapsed = p.iniciadaEm ? Math.max(0, Math.floor((Date.now() - p.iniciadaEm) / 60000)) : 0;
+          return (
+            <div key={i} style={{ border: "1.5px solid #E53935", borderRadius: 12, padding: 10, marginBottom: 8, background: "rgba(229,57,53,0.06)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#E53935" }}>🔴 Parada {i + 1} em andamento · desde {p.ini}</span>
+                <button onClick={() => removeParada(setList, i)} style={{ padding: "0 8px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+              </div>
+              <input type="text" placeholder="Motivo da parada (pode preencher depois)" value={p.desc} onChange={e => updateParada(setList, i, "desc", e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
+              <div style={{ fontSize: 22, fontWeight: 700, color: "#E53935", textAlign: "center", padding: "6px 0 10px" }}>{formatMin(elapsed)}</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => finalizarParadaAgora(setList, i)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "#2D9E7F", color: "#FFF", border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✅ Finalizar agora</button>
+                <button
+                  onClick={() => setInputModal({
+                    title: "Tempo parado",
+                    subtitle: "Informe quantos minutos a máquina ficou parada",
+                    placeholder: "Ex: 45",
+                    onConfirm: (v) => {
+                      const n = parseInt(v.replace(/\D/g, ""), 10);
+                      if (!isNaN(n) && n >= 0) finalizarParadaManual(setList, i, n);
+                      setInputModal(null);
+                    }
+                  })}
+                  style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: theme.sectionBtnBg, color: theme.text, border: `1px solid ${theme.inputBorder}`, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                >✏️ Informar tempo</button>
+              </div>
+            </div>
+          );
+        }
+
         if (p.collapsed) return (
-          <div key={i} style={{ border: "1px solid #F0F0F0", borderRadius: 12, padding: 10, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 13, fontWeight: 500, flex: 1, color: min > 0 ? "#2D9E7F" : "#1A1A2E" }}>{p.desc || `Parada ${i + 1}`}{tempoLabel}</span>
-            <button onClick={() => toggleParada(sec, i)} style={sectionBtn}>▼ Expandir</button>
-            <button onClick={() => removeParada(sec, i)} style={{ padding: "0 8px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+          <div key={i} style={{ border: `1px solid ${theme.cardBorder}`, borderRadius: 12, padding: 10, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 500, flex: 1, color: min > 0 ? "#2D9E7F" : theme.text }}>{p.desc || `Parada ${i+1}`}{tl}</span>
+            <button onClick={() => toggleParada(setList, i)} style={sectionBtn}>▼</button>
+            <button onClick={() => removeParada(setList, i)} style={{ padding: "0 8px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
           </div>
         );
         return (
-          <div key={i} style={{ border: "1px solid #F0F0F0", borderRadius: 12, padding: 10, marginBottom: 8 }}>
+          <div key={i} style={{ border: `1px solid ${theme.cardBorder}`, borderRadius: 12, padding: 10, marginBottom: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#9E9E9E" }}>Parada {i + 1}{tempoLabel}</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: theme.textSub }}>Parada {i+1}{tl}</span>
               <div style={{ display: "flex", gap: 4 }}>
-                <button onClick={() => toggleParada(sec, i)} style={sectionBtn}>▲ Minimizar</button>
-                <button onClick={() => removeParada(sec, i)} style={{ padding: "0 8px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+                <button onClick={() => toggleParada(setList, i)} style={sectionBtn}>▲</button>
+                <button onClick={() => removeParada(setList, i)} style={{ padding: "0 8px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
               </div>
             </div>
-            <input type="text" placeholder="Descrição da parada" value={p.desc} onChange={e => updateParada(sec, i, "desc", e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
+            <input type="text" placeholder="Descrição" value={p.desc} onChange={e => updateParada(setList, i, "desc", e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-              <div><label style={{ fontSize: 11, color: theme.textSub }}>Início</label><input type="time" value={p.ini} onChange={e => updateParada(sec, i, "ini", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
-              <div><label style={{ fontSize: 11, color: theme.textSub }}>Fim</label><input type="time" value={p.fim} onChange={e => updateParada(sec, i, "fim", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
+              <div><label style={{ fontSize: 11, color: theme.textSub }}>Início</label><input type="time" value={p.ini} onChange={e => updateParada(setList, i, "ini", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
+              <div><label style={{ fontSize: 11, color: theme.textSub }}>Fim</label><input type="time" value={p.fim} onChange={e => updateParada(setList, i, "fim", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
             </div>
-            {min > 0 && <div style={{ fontSize: 13, fontWeight: 600, color: "#2D9E7F", padding: "6px 10px", background: "rgba(45,158,127,0.08)", borderRadius: 8, marginBottom: 8 }}>⏱ Parada total: {min} minutos (das {p.ini} às {p.fim}).</div>}
-            <input type="text" placeholder="Nota (ex: Aberto nota n° 1433966)" value={p.nota} onChange={e => updateParada(sec, i, "nota", e.target.value)} style={inputStyle} />
+            {min > 0 && (
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#2D9E7F", padding: "6px 10px", background: "rgba(45,158,127,0.08)", borderRadius: 8, marginBottom: 8 }}>
+                ⏱ {formatMin(min)}{p.ini && p.fim ? ` (das ${p.ini} às ${p.fim})` : p.ini ? ` (iniciada às ${p.ini})` : typeof p.manualMin === "number" ? " (informado manualmente)" : ""}
+              </div>
+            )}
+            <input type="text" placeholder="Nota adicional" value={p.nota} onChange={e => updateParada(setList, i, "nota", e.target.value)} style={inputStyle} />
           </div>
         );
       })}
-      {paradasMap[sec].length > 0 && (
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-          <span style={{ fontSize: 12, color: "#9E9E9E" }}>Total</span>
-          <span style={{ fontSize: 14, fontWeight: 700 }}>{formatMin(totalParadas(sec))}</span>
-        </div>
-      )}
+      {list.length > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}><span style={{ fontSize: 12, color: theme.textSub }}>Total</span><span style={{ fontSize: 14, fontWeight: 700, color: theme.text }}>{formatMin(totalParadas(list))}</span></div>}
     </div>
   );
 
-  // ── Render bobinas do Tombador ──
-  const renderBobinaForm = (b: BobinaTombador, setLista: React.Dispatch<React.SetStateAction<BobinaTombador[]>>, cor: string) => {
-    const motivosDisponiveis = b.origem ? (db.motivos[b.origem] || []) : [];
-    const causasDisponiveis = b.motivo ? (db.causas[b.motivo] || []) : [];
-    return (
-      <div style={{ position: "fixed", inset: 0, zIndex: 160, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end" }} onClick={() => setEditandoBobina(null)}>
-        <div style={{ background: "#FFF", borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "85vh", overflowY: "auto", padding: "20px 16px 32px" }} onClick={e => e.stopPropagation()}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: cor }}>Editar Bobina</span>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => { removeBobina(setLista, b.id); setEditandoBobina(null); }} style={{ fontSize: 12, color: "#E53935", background: "rgba(229,57,53,0.1)", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontWeight: 600 }}>🗑 Remover</button>
-              <button onClick={() => setEditandoBobina(null)} style={{ width: 32, height: 32, borderRadius: "50%", background: "#F0F0F0", border: "none", cursor: "pointer" }}>✕</button>
-            </div>
+  // ── Render form jumbo ──
+  const renderJumboForm = (j: Jumbo) => (
+    <div style={{ position: "fixed", inset: 0, zIndex: 160, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end" }} onClick={closeJumboForm}>
+      <div style={{ background: theme.card, borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "85vh", overflowY: "auto", padding: "20px 16px 32px" }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "#2D9E7F" }}>🧻 Jumbo {rascunhoJumbo && rascunhoJumbo.id === j.id ? jumbos.length + 1 : jumbos.findIndex(x => x.id === j.id) + 1}</span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => removeJumbo(j.id)} style={{ fontSize: 12, color: "#E53935", background: "rgba(229,57,53,0.1)", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontWeight: 600 }}>🗑 Remover</button>
+            <button onClick={closeJumboForm} style={{ width: 32, height: 32, borderRadius: "50%", background: "#F0F0F0", border: "none", cursor: "pointer" }}>✕</button>
           </div>
+        </div>
 
-          <label style={{ fontSize: 11, color: theme.textSub }}>ID Unit</label>
-          <div style={{ display: "flex", gap: 6, marginTop: 4, marginBottom: 12 }}>
-            <input type="text" placeholder="Ex: 266F282614" value={b.idUnit} onChange={e => updateBobina(setLista, b.id, "idUnit", e.target.value)} style={{ ...inputStyle, marginTop: 0, flex: 1, fontWeight: 700, letterSpacing: 1 }} />
-            <BarcodeScannerBtn onScan={val => updateBobina(setLista, b.id, "idUnit", val)} />
+        {/* ID do Jumbo */}
+        <label style={{ fontSize: 11, color: theme.textSub }}>ID do Jumbo</label>
+        <div style={{ display: "flex", gap: 6, marginTop: 4, marginBottom: 12 }}>
+          <input type="text" placeholder="Ex: 265H0110" value={j.codigo} onChange={e => updateJumbo(j.id, "codigo", e.target.value)} style={{ ...inputStyle, marginTop: 0, flex: 1, fontWeight: 700, letterSpacing: 1 }} />
+          <BarcodeScannerBtn onScan={val => updateJumbo(j.id, "codigo", val)} />
+        </div>
+
+        {/* Formato Largura/Diâmetro */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <label style={{ fontSize: 11, color: theme.textSub }}>Formato (Largura/Diâmetro)</label>
+          <button onClick={() => setShowFormatoModal(true)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 14, border: `1px solid ${theme.inputBorder}`, background: theme.card, color: theme.textSub, cursor: "pointer" }}>✎ Gerenciar</button>
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+          {formatos.map(f => (
+            <button key={f.id} onClick={() => applyFormato(j.id, f)} style={{ fontSize: 12, padding: "6px 12px", borderRadius: 20, border: j.largura === f.largura && j.diametro === f.diametro ? "1.5px solid #2D9E7F" : `1px solid ${theme.inputBorder}`, background: j.largura === f.largura && j.diametro === f.diametro ? "rgba(45,158,127,0.1)" : theme.inputBg, color: j.largura === f.largura && j.diametro === f.diametro ? "#2D9E7F" : theme.text, fontWeight: 600, cursor: "pointer" }}>
+              {f.largura}/{f.diametro}
+            </button>
+          ))}
+          <button onClick={() => {
+            updateJumbo(j.id, "largura", "");
+            updateJumbo(j.id, "diametro", "");
+            setInputModal({
+              title: "Largura personalizada", placeholder: "Ex: 600",
+              onConfirm: (vLargura) => {
+                updateJumbo(j.id, "largura", vLargura);
+                setInputModal({
+                  title: "Diâmetro personalizado", placeholder: "Ex: 1500",
+                  onConfirm: (vDiametro) => {
+                    updateJumbo(j.id, "diametro", vDiametro);
+                    setFormatos(prev => prev.some(f => f.largura === vLargura && f.diametro === vDiametro)
+                      ? prev
+                      : [...prev, { id: Math.random().toString(36).slice(2), largura: vLargura, diametro: vDiametro }]);
+                    setInputModal(null);
+                  }
+                });
+              }
+            });
+          }} style={{ fontSize: 12, padding: "6px 12px", borderRadius: 20, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.textSub, cursor: "pointer" }}>Outro</button>
+        </div>
+
+        {/* Diâmetro manual se Outro */}
+        {j.largura && !formatos.find(f => f.largura === j.largura && f.diametro === j.diametro) && (
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 11, color: theme.textSub }}>Diâmetro</label>
+            <input type="text" placeholder="Ex: 1500" value={j.diametro} onChange={e => updateJumbo(j.id, "diametro", e.target.value)} style={inputStyle} />
           </div>
+        )}
 
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <label style={{ fontSize: 11, color: theme.textSub }}>Origem</label>
-            <button onClick={openManageOrigens} style={manageBtn}>✎ Gerenciar</button>
+        {/* Parâmetros custom */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, padding: "8px 10px", borderRadius: 10, background: theme.inputBg, border: `1px solid ${theme.inputBorder}` }}>
+          <input type="checkbox" id={`custom-${j.id}`} checked={j.parametrosCustom} onChange={e => updateJumbo(j.id, "parametrosCustom", e.target.checked)} style={{ width: 16, height: 16 }} />
+          <label htmlFor={`custom-${j.id}`} style={{ fontSize: 13, color: theme.text, cursor: "pointer" }}>Produção especial — parâmetros diferentes</label>
+        </div>
+
+        {j.parametrosCustom && (
+          <div style={{ padding: 12, borderRadius: 12, background: "rgba(245,124,0,0.06)", border: "1px solid rgba(245,124,0,0.2)", marginBottom: 12 }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: "#F57C00", margin: "0 0 10px" }}>⚙️ Parâmetros específicos</p>
+            {j.parametrosEspecificos.map((p, idx) => (
+              <div key={p.id} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
+                  <button onClick={() => moveJumboParam(j.id, p.id, -1)} disabled={idx === 0} style={{ fontSize: 10, width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === 0 ? "default" : "pointer", opacity: idx === 0 ? 0.3 : 1 }}>▲</button>
+                  <button onClick={() => moveJumboParam(j.id, p.id, 1)} disabled={idx === j.parametrosEspecificos.length - 1} style={{ fontSize: 10, width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === j.parametrosEspecificos.length - 1 ? "default" : "pointer", opacity: idx === j.parametrosEspecificos.length - 1 ? 0.3 : 1 }}>▼</button>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 11, color: theme.textSub }}>{p.label}{p.unidade ? ` (${p.unidade})` : ""}</label>
+                  <input type="text" value={p.valor} onChange={e => updateJumboParam(j.id, p.id, "valor", e.target.value)} style={inputStyle} />
+                </div>
+                <button onClick={() => removeJumboParam(j.id, p.id)} style={{ color: "#E53935", background: "none", border: "none", cursor: "pointer", fontSize: 14, flexShrink: 0, alignSelf: "flex-end", marginBottom: 6 }}>✕</button>
+              </div>
+            ))}
+            <button onClick={() => addJumboParam(j.id)} style={{ marginTop: 4, fontSize: 12, color: "#F57C00", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar parâmetro</button>
           </div>
-          <div style={{ display: "flex", gap: 4, marginTop: 4, marginBottom: 12 }}>
-            <select value={b.origem} onChange={e => updateBobina(setLista, b.id, "origem", e.target.value)} style={{ ...selectStyle, marginTop: 0, flex: 1 }}>
-              <option value="">Selecionar origem</option>
-              {db.origens.map(o => <option key={o}>{o}</option>)}
-            </select>
-            <button onClick={addOrigem} style={{ ...btnStyle, fontSize: 14, color: "#2D9E7F" }}>+</button>
-          </div>
+        )}
 
-          {b.origem && (<>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <label style={{ fontSize: 11, color: theme.textSub }}>Motivo</label>
-              <button onClick={() => openManageMotivos(b.origem)} style={manageBtn}>✎ Gerenciar</button>
-            </div>
-            <div style={{ display: "flex", gap: 4, marginTop: 4, marginBottom: 12 }}>
-              <select value={b.motivo} onChange={e => updateBobina(setLista, b.id, "motivo", e.target.value)} style={{ ...selectStyle, marginTop: 0, flex: 1 }}>
-                <option value="">Selecionar motivo</option>
-                {motivosDisponiveis.map(m => <option key={m}>{m}</option>)}
-              </select>
-              <button onClick={() => addMotivo(b.origem)} style={{ ...btnStyle, fontSize: 14, color: "#2D9E7F" }}>+</button>
-            </div>
-          </>)}
+        {/* Obs do jumbo */}
+        <label style={{ fontSize: 11, color: theme.textSub }}>Observações</label>
+        <textarea value={j.obsJumbo} onChange={e => updateJumbo(j.id, "obsJumbo", e.target.value)} rows={2} placeholder="Obs deste jumbo..." style={{ ...inputStyle, resize: "vertical", marginTop: 4, marginBottom: 16 }} />
 
-          {b.motivo && (<>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <label style={{ fontSize: 11, color: theme.textSub }}>Causa</label>
-              <button onClick={() => openManageCausas(b.motivo)} style={manageBtn}>✎ Gerenciar</button>
-            </div>
-            <div style={{ display: "flex", gap: 4, marginTop: 4, marginBottom: 12 }}>
-              <select value={b.causa} onChange={e => updateBobina(setLista, b.id, "causa", e.target.value)} style={{ ...selectStyle, marginTop: 0, flex: 1 }}>
-                <option value="">Selecionar causa</option>
-                {causasDisponiveis.map(c => <option key={c}>{c}</option>)}
-              </select>
-              <button onClick={() => addCausa(b.motivo)} style={{ ...btnStyle, fontSize: 14, color: "#2D9E7F" }}>+</button>
-            </div>
-          </>)}
-
-          <label style={{ fontSize: 11, color: theme.textSub }}>Observações</label>
-          <textarea value={b.obs} onChange={e => updateBobina(setLista, b.id, "obs", e.target.value)} rows={2} placeholder="Observações..." style={{ ...inputStyle, resize: "vertical", marginTop: 4, marginBottom: 16 }} />
-
-          <button onClick={() => setEditandoBobina(null)} style={{ width: "100%", padding: "12px 0", borderRadius: 12, background: cor, color: "#FFF", fontWeight: 700, fontSize: 14, border: "none", cursor: "pointer" }}>✓ Confirmar</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => removeJumbo(j.id)} style={{ padding: "12px 16px", borderRadius: 12, background: "rgba(229,57,53,0.1)", color: "#E53935", fontWeight: 700, fontSize: 14, border: "1px solid rgba(229,57,53,0.3)", cursor: "pointer" }}>🗑</button>
+          <button onClick={closeJumboForm} style={{ flex: 1, padding: "12px 0", borderRadius: 12, background: "#2D9E7F", color: "#FFF", fontWeight: 700, fontSize: 14, border: "none", cursor: "pointer" }}>✓ Confirmar</button>
         </div>
       </div>
-    );
+    </div>
+  );
+
+  // ── Teclado Numérico ──
+  const abrirTeclado = (label: string, valorAtual: string, onConfirm: (v: string) => void) => {
+    setNumValor(valorAtual);
+    setNumTeclado({ label, valor: valorAtual, onConfirm });
   };
 
-  const renderBobinas = (lista: BobinaTombador[], setLista: React.Dispatch<React.SetStateAction<BobinaTombador[]>>, titulo: string, cor: string, listaKey: "ret"|"rej") => (
-    <div style={{ marginBottom: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: cor }}>{titulo}</span>
-        <button
-          onClick={() => {
-            const nova = newBobina();
-            setLista(prev => [...prev, nova]);
-            setEditandoBobina({ id: nova.id, lista: listaKey });
-          }}
-          style={{ fontSize: 12, color: cor, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}
-        >+ Adicionar bobina</button>
-      </div>
+  const tecladoDigito = (d: string) => {
+    setNumValor(prev => {
+      if (d === "," && prev.includes(",")) return prev;
+      if (d === "," && prev === "") return "0,";
+      return prev + d;
+    });
+  };
 
-      {lista.length === 0 && <p style={{ fontSize: 12, color: "#BDBDBD", fontStyle: "italic", marginBottom: 4 }}>Nenhuma bobina registrada.</p>}
+  const tecladoApagar = () => setNumValor(prev => prev.slice(0, -1));
 
-      {/* Lista compacta */}
-      {lista.map((b, idx) => (
-        <div
-          key={b.id}
-          onClick={() => setEditandoBobina({ id: b.id, lista: listaKey })}
-          style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", marginBottom: 6, borderRadius: 12, background: "#FAFAFA", border: "1px solid #F0F0F0", cursor: "pointer" }}
-        >
-          <span style={{ fontSize: 12, fontWeight: 700, color: "#BDBDBD", minWidth: 20 }}>{idx + 1}.</span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#1A1A2E", letterSpacing: 0.5 }}>{b.idUnit || <span style={{ color: "#BDBDBD", fontWeight: 400 }}>Sem código</span>}</div>
-            {(b.motivo || b.origem) && (
-              <div style={{ fontSize: 11, color: "#9E9E9E", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {b.motivo}{b.causa ? `/${b.causa}` : ""}{b.origem ? ` · ${b.origem}` : ""}
-              </div>
-            )}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-            {b.idUnit && <span style={{ fontSize: 10, fontWeight: 700, color: cor, background: `${cor}15`, padding: "2px 8px", borderRadius: 10 }}>✓</span>}
-            <span style={{ fontSize: 12, color: "#BDBDBD" }}>›</span>
-          </div>
-        </div>
-      ))}
-
-      {/* Modal de edição */}
-      {editandoBobina?.lista === listaKey && (() => {
-        const b = lista.find(x => x.id === editandoBobina.id);
-        return b ? renderBobinaForm(b, setLista, cor) : null;
-      })()}
-    </div>
-  );
+  const tecladoConfirmar = () => {
+    if (numTeclado) { numTeclado.onConfirm(numValor); setNumTeclado(null); setNumValor(""); }
+  };
 
   return (
-    <div className="fixed inset-0 z-[110] flex flex-col" style={{ background: theme.bg }}>
-      {/* Header fixo */}
-      <div style={{ background: theme.headerBg, borderBottom: `1px solid ${theme.cardBorder}`, padding: "12px 16px 10px", display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", rowGap: 8 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
-            <FileText size={18} style={{ color: "#1A1A2E", flexShrink: 0 }} />
-            <span style={{ fontWeight: 800, fontSize: 16, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Relatório de Turno</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
-            <button onClick={handleNovoRelatorio} style={{ fontSize: 11, padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: "#E53935", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }} title="Novo relatório">🗑 Novo</button>
-            <button onClick={() => setDarkMode(!darkMode)} style={{ fontSize: 14, width: 30, height: 30, borderRadius: "50%", border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, cursor: "pointer", flexShrink: 0 }} title={darkMode ? "Modo claro" : "Modo escuro"}>{darkMode ? "☀️" : "🌙"}</button>
-            <button onClick={() => setFontSize(f => f === "sm" ? "md" : f === "md" ? "lg" : "sm")} style={{ fontSize: 11, padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, fontWeight: 700, cursor: "pointer", flexShrink: 0 }} title="Tamanho da fonte">{fontSize === "sm" ? "A" : fontSize === "md" ? "A+" : "A++"}</button>
-            <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: "50%", background: theme.sectionBtnBg, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: theme.text, flexShrink: 0 }}>
-              <X size={16} />
-            </button>
-          </div>
+    <div className="fixed inset-0 z-[120] flex flex-col" style={{ background: theme.bg }}>
+      {/* Header */}
+      <div style={{ background: theme.headerBg, borderBottom: `1px solid ${theme.cardBorder}`, padding: "12px 16px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", rowGap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+          <span style={{ fontSize: 18, flexShrink: 0 }}>🧻</span>
+          <span style={{ fontWeight: 800, fontSize: 15, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Rebobinadeira</span>
         </div>
-
-        {/* Navegação: Tombador / Embaladeiras / Rebobinadeira — pílula preenchida quando selecionada */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", rowGap: 6 }}>
-          <button
-            onClick={() => setModoTombador(true)}
-            style={{
-              fontSize: 12, padding: "6px 14px", borderRadius: 999, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
-              border: modoTombador ? "1.5px solid #F57C00" : `1px solid ${theme.sectionBtnBorder}`,
-              background: modoTombador ? "#F57C00" : theme.sectionBtnBg,
-              color: modoTombador ? "#FFF" : theme.textSub,
-            }}
-          >
-            Tombador
-          </button>
-          <button
-            onClick={() => setModoTombador(false)}
-            style={{
-              fontSize: 12, padding: "6px 14px", borderRadius: 999, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
-              border: !modoTombador ? "1.5px solid #2D9E7F" : `1px solid ${theme.sectionBtnBorder}`,
-              background: !modoTombador ? "#2D9E7F" : theme.sectionBtnBg,
-              color: !modoTombador ? "#FFF" : theme.textSub,
-            }}
-          >
-            Embaladeiras
-          </button>
-          <button
-            onClick={onOpenRebobinadeira}
-            style={{
-              fontSize: 12, padding: "6px 14px", borderRadius: 999, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
-              border: `1px solid ${theme.sectionBtnBorder}`,
-              background: theme.sectionBtnBg,
-              color: theme.textSub,
-            }}
-          >
-            Rebobinadeira
-          </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+          <button onClick={handleNovo} style={{ fontSize: 11, padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: "#E53935", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>🗑 Novo</button>
+          <button onClick={() => setDarkMode(!darkMode)} style={{ fontSize: 14, width: 30, height: 30, borderRadius: "50%", border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, cursor: "pointer", flexShrink: 0 }}>{darkMode ? "☀️" : "🌙"}</button>
+          <button onClick={() => setFontSize(f => f === "sm" ? "md" : f === "md" ? "lg" : "sm")} style={{ fontSize: 11, padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>{fontSize === "sm" ? "A" : fontSize === "md" ? "A+" : "A++"}</button>
+          <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: "50%", background: theme.sectionBtnBg, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: theme.text, flexShrink: 0 }}><X size={16} /></button>
         </div>
       </div>
 
-      {/* Conteúdo rolável */}
+      {/* Conteúdo */}
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 100px" }}>
 
-        {/* Cabeçalho do turno */}
+        {/* Cabeçalho */}
         <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: headerCollapsed ? 0 : 12 }}>
-            <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>📋 Turno</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>📋 Turno</span>
+              <select value={rebobNum} onChange={e => setRebobNum(e.target.value as "1"|"2")} style={{ fontSize: fz, fontWeight: 700, border: `1px solid ${theme.inputBorder}`, borderRadius: 8, padding: "2px 8px", background: theme.inputBg, color: theme.text }}>
+                <option value="1">Rebobinadeira 1</option>
+                <option value="2">Rebobinadeira 2</option>
+              </select>
+            </div>
             <button onClick={() => setHeaderCollapsed(!headerCollapsed)} style={sectionBtn}>{headerCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
           </div>
           {!headerCollapsed && <>
             <label style={{ fontSize: 11, color: theme.textSub }}>Destinatário</label>
             <div style={{ display: "flex", gap: 6, marginTop: 4, marginBottom: 8 }}>
-              <input type="text" value={dest} onChange={e => setDest(e.target.value)} style={{ ...inputStyle, marginTop: 0, flex: 1 }} />
-              <button onClick={addDestinatario} style={{ ...btnStyle, fontSize: 14, color: "#2D9E7F" }} title="Salvar como atalho">+</button>
+              <input type="text" placeholder="Nome do destinatário" value={dest} onChange={e => setDest(e.target.value)} style={{ ...inputStyle, marginTop: 0, flex: 1 }} />
+              <button onClick={() => setInputModal({ title: "Novo atalho", placeholder: "Ex: William", onConfirm: (v) => { if (!destinatarios.includes(v)) setDestinatarios(prev => [...prev, v]); setDest(v); setInputModal(null); } })} style={{ ...btnStyle, fontSize: 14, color: "#2D9E7F" }} title="Salvar atalho">+</button>
             </div>
-            {db.destinatarios.length > 0 && (
+            {destinatarios.length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
-                {db.destinatarios.map(d => (
-                  <div key={d} style={{ display: "flex", alignItems: "center", borderRadius: 20, border: d === dest ? "1.5px solid #2D9E7F" : "1px solid #EBEBEB", background: d === dest ? "rgba(45,158,127,0.1)" : "#FAFAFA", overflow: "hidden" }}>
-                    <button onClick={() => setDest(d)} style={{ fontSize: 11, padding: "4px 10px", background: "none", border: "none", color: d === dest ? "#2D9E7F" : "#9E9E9E", fontWeight: 600, cursor: "pointer" }}>{d}</button>
-                    <button onClick={() => setDb(prev => ({ ...prev, destinatarios: prev.destinatarios.filter(x => x !== d) }))} style={{ fontSize: 11, padding: "4px 8px 4px 0", background: "none", border: "none", color: "#E53935", cursor: "pointer" }}>✕</button>
+                {destinatarios.map(d => (
+                  <div key={d} style={{ display: "flex", alignItems: "center", borderRadius: 20, border: d === dest ? "1.5px solid #2D9E7F" : `1px solid ${theme.inputBorder}`, background: d === dest ? "rgba(45,158,127,0.1)" : theme.inputBg, overflow: "hidden" }}>
+                    <button onClick={() => setDest(d)} style={{ fontSize: 11, padding: "4px 10px", background: "none", border: "none", color: d === dest ? "#2D9E7F" : theme.textSub, fontWeight: 600, cursor: "pointer" }}>{d}</button>
+                    <button onClick={() => setDestinatarios(prev => prev.filter(x => x !== d))} style={{ fontSize: 11, padding: "4px 8px 4px 0", background: "none", border: "none", color: "#E53935", cursor: "pointer" }}>✕</button>
                   </div>
                 ))}
               </div>
             )}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, margin: "10px 0" }}>
               <div><label style={{ fontSize: 11, color: theme.textSub }}>Turno</label>
                 <select value={turno} onChange={e => onTurnoChange(e.target.value)} style={selectStyle}>
                   <option value="1">Turno 1</option><option value="2">Turno 2</option><option value="3">Turno 3</option>
@@ -931,7 +924,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
               </div>
               <div><label style={{ fontSize: 11, color: theme.textSub }}>Letra</label>
                 <select value={letra} onChange={e => setLetra(e.target.value)} style={selectStyle}>
-                  <option>A</option><option>B</option><option>C</option><option>D</option><option>E</option>
+                  {["A","B","C","D","E"].map(l => <option key={l}>{l}</option>)}
                 </select>
               </div>
               <div style={{ gridColumn: "span 2" }}><label style={{ fontSize: 11, color: theme.textSub }}>Horário</label><input type="text" value={horario} onChange={e => setHorario(e.target.value)} style={inputStyle} /></div>
@@ -940,58 +933,116 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
             <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6 }}>
               {resps.map((r, i) => (
                 <div key={i} style={{ display: "flex", gap: 6 }}>
-                  <input type="text" value={r} onChange={e => updateResp(i, e.target.value)} style={{ ...inputStyle, flex: 1, marginTop: 0 }} />
-                  <button onClick={() => removeResp(i)} style={{ padding: "0 10px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+                  <input type="text" value={r} onChange={e => setResps(prev => prev.map((x,j) => j===i ? e.target.value : x))} style={{ ...inputStyle, flex: 1, marginTop: 0 }} />
+                  <button onClick={() => setResps(prev => prev.filter((_,j) => j!==i))} style={{ padding: "0 10px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
                 </div>
               ))}
             </div>
-            <button onClick={addResp} style={{ marginTop: 8, fontSize: 12, color: "#2D9E7F", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar responsável</button>
+            <button onClick={() => setResps(prev => [...prev, ""])} style={{ marginTop: 8, fontSize: 12, color: "#2D9E7F", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar responsável</button>
           </>}
         </div>
 
-        {/* Embaladeira */}
-        {!modoTombador && <div style={cardStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: embCollapsed ? 0 : 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>• Embaladeira</span>
-              <select value={embaladeiraNum} onChange={e => setEmbaladeiraNum(e.target.value as "1"|"2")} style={{ fontSize: 13, fontWeight: 700, border: "1px solid #EBEBEB", borderRadius: 8, padding: "2px 8px", background: "#FAFAFA" }}>
-                <option value="1">1</option>
-                <option value="2">2</option>
-              </select>
-            </div>
-            <button onClick={() => setEmbCollapsed(!embCollapsed)} style={sectionBtn}>{embCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
+        {/* Parâmetros */}
+        <div style={cardStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: paramsCollapsed ? 0 : 12 }}>
+            <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>⚙️ Parâmetros da Rebobinadeira</span>
+            <button onClick={() => setParamsCollapsed(!paramsCollapsed)} style={sectionBtn}>{paramsCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
           </div>
-          {!embCollapsed && <>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
-              <p style={{ fontSize: 12, fontWeight: 600, color: "#9E9E9E", margin: 0 }}>Consumidos</p>
-              <button onClick={collapseAllItens} style={sectionBtn}>🗂 Recolher</button>
+          {!paramsCollapsed && <>
+            <label style={{ fontSize: 11, color: theme.textSub }}>ID da máquina</label>
+            <input type="text" placeholder="Ex: 0R30-33220" value={idMaquina} onChange={e => setIdMaquina(e.target.value)} style={inputStyle} />
+            <div style={{ marginTop: 12 }}>
+              {parametros.map((p, idx) => (
+                <div key={p.id} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
+                    <button onClick={() => moveParam(p.id, -1)} disabled={idx === 0} style={{ fontSize: 10, width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === 0 ? "default" : "pointer", opacity: idx === 0 ? 0.3 : 1 }}>▲</button>
+                    <button onClick={() => moveParam(p.id, 1)} disabled={idx === parametros.length - 1} style={{ fontSize: 10, width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === parametros.length - 1 ? "default" : "pointer", opacity: idx === parametros.length - 1 ? 0.3 : 1 }}>▼</button>
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: theme.text, minWidth: 100 }}>• {p.label}</span>
+                  <button
+                    onClick={() => abrirTeclado(p.label, p.valor, (v) => updateParam(p.id, "valor", v))}
+                    style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${p.valor ? "#2D9E7F" : theme.inputBorder}`, background: theme.inputBg, color: p.valor ? theme.text : theme.textSub, fontSize: 15, fontWeight: p.valor ? 700 : 400, textAlign: "left", cursor: "pointer" }}
+                  >{p.valor ? `${p.valor}${p.unidade ? " " + p.unidade : ""}` : "Tocar para digitar"}</button>
+                  <button onClick={() => removeParam(p.id)} style={{ color: "#E53935", background: "none", border: "none", cursor: "pointer", fontSize: 14, flexShrink: 0 }}>✕</button>
+                </div>
+              ))}
             </div>
+            <button onClick={addParam} style={{ marginTop: 4, fontSize: 12, color: "#2D9E7F", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar parâmetro</button>
+            <button onClick={() => { localStorage.setItem(PARAMS_KEY, JSON.stringify(parametros)); toast({ title: "✅ Parâmetros salvos como padrão!" }); }} style={{ marginTop: 4, marginLeft: 16, fontSize: 12, color: "#9E9E9E", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>💾 Salvar como padrão</button>
+          </>}
+        </div>
+
+        {/* Programação Jumbos */}
+        <div style={cardStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: jumbosCollapsed ? 0 : 12 }}>
+            <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>📋 Programação</span>
+            <button onClick={() => setJumbosCollapsed(!jumbosCollapsed)} style={sectionBtn}>{jumbosCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
+          </div>
+          {!jumbosCollapsed && <>
+            {jumbos.length === 0 && <p style={{ fontSize: 12, color: "#BDBDBD", fontStyle: "italic", marginBottom: 8 }}>Nenhum jumbo registrado.</p>}
+            {jumbos.map((j, idx) => (
+              <div key={j.id} onClick={() => setEditandoJumbo(j.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", marginBottom: 6, borderRadius: 12, background: theme.inputBg, border: `1px solid ${theme.cardBorder}`, cursor: "pointer" }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#BDBDBD", minWidth: 24 }}>{idx+1}.</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: theme.text, letterSpacing: 0.5 }}>{j.codigo || <span style={{ color: "#BDBDBD", fontWeight: 400 }}>Sem código</span>}</div>
+                  {(j.largura || j.diametro) && <div style={{ fontSize: 11, color: theme.textSub, marginTop: 2 }}>{j.largura && `Largura: ${j.largura}`}{j.diametro && ` · Ø${j.diametro}`}</div>}
+                </div>
+                {j.codigo && <span style={{ fontSize: 10, fontWeight: 700, color: "#2D9E7F", background: "rgba(45,158,127,0.1)", padding: "2px 8px", borderRadius: 10 }}>✓</span>}
+                <span style={{ fontSize: 12, color: "#BDBDBD" }}>›</span>
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <button onClick={addJumbo} style={{ flex: 1, padding: "10px 0", borderRadius: 12, background: "#2D9E7F", color: "#FFF", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer" }}>+ Adicionar Jumbo</button>
+              <BarcodeScannerBtn onScan={val => { const j = newJumbo(); j.codigo = val; setJumbos(prev => [...prev, j]); setEditandoJumbo(j.id); }} />
+            </div>
+            {/* Form jumbo */}
+            {(editandoJumbo || rascunhoJumbo) && (() => { const j = rascunhoJumbo ?? jumbos.find(x => x.id === editandoJumbo); return j ? renderJumboForm(j) : null; })()}
+          </>}
+        </div>
+
+        {/* Consumidos */}
+        <div style={cardStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: consumidosCollapsed ? 0 : 12, flexWrap: "wrap", gap: 6 }}>
+            <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>✔ Consumidos</span>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <button onClick={collapseAllItens} style={sectionBtn}>🗂 Recolher</button>
+              <button onClick={() => setConsumidosCollapsed(!consumidosCollapsed)} style={sectionBtn}>{consumidosCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
+            </div>
+          </div>
+          {!consumidosCollapsed && <>
             {itens.map((item, idx) => {
               const qtd = item.trocas.reduce((a, t) => a + (t.qtd ?? 1), 0);
               const totalItem = item.trocas.reduce((a, t) => a + (t.min || 0), 0);
               return (
-                <div key={idx} style={{ padding: 10, marginBottom: 6, borderRadius: 12, background: qtd > 0 ? "rgba(45,158,127,0.07)" : "#F9F9F9", border: `1px solid ${qtd > 0 ? "rgba(45,158,127,0.2)" : "transparent"}` }}>
+                <div key={idx} style={{ padding: 10, marginBottom: 6, borderRadius: 12, background: qtd > 0 ? "rgba(45,158,127,0.07)" : theme.inputBg, border: `1px solid ${qtd > 0 ? "rgba(45,158,127,0.2)" : "transparent"}` }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", rowGap: 6 }}>
-                    <span style={{ fontSize: 13, fontWeight: 500, whiteSpace: "nowrap" }}>{item.label}</span>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
+                      <button onClick={() => moveItemConsumo(idx, -1)} disabled={idx === 0} style={{ fontSize: 10, width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === 0 ? "default" : "pointer", opacity: idx === 0 ? 0.3 : 1 }}>▲</button>
+                      <button onClick={() => moveItemConsumo(idx, 1)} disabled={idx === itens.length - 1} style={{ fontSize: 10, width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === itens.length - 1 ? "default" : "pointer", opacity: idx === itens.length - 1 ? 0.3 : 1 }}>▼</button>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: theme.text, whiteSpace: "nowrap" }}>{item.label}</span>
                     {qtd > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: "#2D9E7F", background: "rgba(45,158,127,0.12)", padding: "2px 8px", borderRadius: 20, whiteSpace: "nowrap", flexShrink: 0 }}>{String(qtd).padStart(2, "0")} · {totalItem}min</span>}
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
-                      {qtd > 0 && <button onClick={() => toggleItem(idx)} style={sectionBtn}>{item.collapsed ? "▼" : "▲"}</button>}
+                      {qtd > 0 && <button onClick={() => toggleItemConsumo(idx)} style={sectionBtn}>{item.collapsed ? "▼" : "▲"}</button>}
                       <button onClick={() => addTrocasMultiplas(idx)} style={{ padding: "5px 8px", fontSize: 11, fontWeight: 600, color: "#2D9E7F", background: "rgba(45,158,127,0.1)", border: "1px solid rgba(45,158,127,0.3)", borderRadius: 8, whiteSpace: "nowrap", cursor: "pointer" }} title="Adicionar várias trocas de uma vez">🔢 Várias</button>
                       <button onClick={() => addTroca(idx)} style={{ padding: "5px 10px", fontSize: 11, fontWeight: 600, color: "#fff", background: "#2D9E7F", border: "none", borderRadius: 8, whiteSpace: "nowrap", cursor: "pointer" }}>+ Troca</button>
-                      <button onClick={() => removeItem(idx)} style={{ width: 24, height: 24, padding: 0, fontSize: 13, color: "#E53935", background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>🗑</button>
+                      <button onClick={() => removeItemConsumo(idx)} style={{ width: 24, height: 24, padding: 0, fontSize: 13, color: "#E53935", background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>🗑</button>
                     </div>
                   </div>
                   {!item.collapsed && item.trocas.map((t, ti) => (
-                    <div key={ti} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, padding: "8px 10px", background: "#FFF", borderRadius: 8 }}>
+                    <div key={ti} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, padding: "8px 10px", background: theme.card, borderRadius: 8 }}>
                       <button
-                        onClick={() => editarQtdTroca(idx, ti, t.qtd ?? 1)}
+                        onClick={() => abrirTeclado("Quantidade dessa troca", String(t.qtd ?? 1), (v) => {
+                          const n = parseInt(v.replace(/\D/g, ""), 10);
+                          if (!isNaN(n) && n > 0) updateTrocaQtd(idx, ti, n);
+                        })}
                         style={{ fontSize: 12, fontWeight: 700, color: "#2D9E7F", whiteSpace: "nowrap", minWidth: 56, background: "rgba(45,158,127,0.1)", border: "none", borderRadius: 6, padding: "3px 6px", cursor: "pointer" }}
                         title="Toque para corrigir a quantidade"
                       >
                         Troca {t.qtd ?? 1}
                       </button>
-                      <input type="number" min={0} value={t.min !== null ? t.min : ""} placeholder="min" onChange={e => setTrocaMin(idx, ti, e.target.value)} style={{ width: 64, fontSize: 16, fontWeight: 700, textAlign: "center", borderRadius: 8, padding: 5, border: "1px solid #EBEBEB" }} />
-                      <span style={{ fontSize: 12, color: "#9E9E9E" }}>min</span>
+                      <input type="number" min={0} value={t.min !== null ? t.min : ""} placeholder="min" onChange={e => setTrocaMin(idx, ti, e.target.value)} style={{ width: 64, fontSize: 16, fontWeight: 700, textAlign: "center", borderRadius: 8, padding: 5, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text }} />
+                      <span style={{ fontSize: 12, color: theme.textSub }}>min</span>
                       {t.min !== null && t.min > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: "#2D9E7F", marginLeft: "auto" }}>✓ {t.min}min</span>}
                       <button onClick={() => removeTroca(idx, ti)} style={{ padding: "0 6px", color: "#E53935", fontSize: 13, marginLeft: t.min ? undefined : "auto", background: "none", border: "none", cursor: "pointer" }}>✕</button>
                     </div>
@@ -999,190 +1050,142 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
                 </div>
               );
             })}
-            <button onClick={addItem} style={{ marginTop: 8, fontSize: 12, color: "#2D9E7F", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar item</button>
-            <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 13, color: "#9E9E9E" }}>✔ Total Tempo de Parada</span>
-              <span style={{ fontSize: 17, fontWeight: 700 }}>{formatMin(calcTotalEmb())}</span>
+            <button onClick={addItemConsumo} style={{ marginTop: 8, fontSize: 12, color: "#2D9E7F", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar item</button>
+            <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${theme.cardBorder}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 13, color: theme.textSub }}>✔ Total Tempo de Parada</span>
+              <span style={{ fontSize: 17, fontWeight: 700, color: theme.text }}>{formatMin(calcTotalConsumidos())}</span>
             </div>
-            <div style={{ marginTop: 10 }}>
-              <label style={{ fontSize: 11, color: theme.textSub }}>Obs. Embaladeira</label>
-              <textarea value={obsEmb} onChange={e => setObsEmb(e.target.value)} rows={2} placeholder="Observações..." style={{ ...inputStyle, resize: "vertical", marginTop: 4 }} />
-            </div>
-            {renderParadas("emb", "Paradas Embaladeira")}
           </>}
-        </div>}
+        </div>
 
         {/* Core Link */}
-        {!modoTombador && <div style={cardStyle}>
+        <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: clCollapsed ? 0 : 10 }}>
-            <span style={{ fontSize: 13, fontWeight: 700 }}>• Core Link</span>
+            <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>• Core Link</span>
             <button onClick={() => setClCollapsed(!clCollapsed)} style={sectionBtn}>{clCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
           </div>
           {!clCollapsed && <>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              <span style={{ fontSize: 13, flex: 1 }}>Cargas de Tubetes</span>
-              <button onClick={() => setClQtd(Math.max(0, clQtd - 1))} style={btnStyle}>-</button>
-              <span style={{ fontSize: 18, fontWeight: 700, minWidth: 32, textAlign: "center" }}>{String(clQtd).padStart(2, "0")}</span>
-              <button onClick={() => setClQtd(clQtd + 1)} style={btnStyle}>+</button>
+              <span style={{ fontSize: 13, flex: 1, color: theme.text }}>Cargas de Tubetes</span>
+              <button onClick={() => setClQtd(Math.max(0, clQtd-1))} style={btnStyle}>-</button>
+              <span style={{ fontSize: 18, fontWeight: 700, minWidth: 32, textAlign: "center", color: theme.text }}>{String(clQtd).padStart(2,"0")}</span>
+              <button onClick={() => setClQtd(clQtd+1)} style={btnStyle}>+</button>
             </div>
             <textarea value={obsCL} onChange={e => setObsCL(e.target.value)} rows={2} placeholder="Obs. Core Link..." style={{ ...inputStyle, resize: "vertical" }} />
-            {renderParadas("cl", "Paradas Core Link")}
+            {renderParadas(paradasCL, setParadasCL, "Paradas Core Link")}
           </>}
-        </div>}
+        </div>
 
         {/* Roll Cutter */}
-        {!modoTombador && <div style={cardStyle}>
+        <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: rcCollapsed ? 0 : 10 }}>
             <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>• Roll Cutter</span>
             <button onClick={() => setRcCollapsed(!rcCollapsed)} style={sectionBtn}>{rcCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
           </div>
           {!rcCollapsed && <>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              <span style={{ fontSize: 13, flex: 1 }}>Bobinas com id</span>
-              <button onClick={() => setRcId(Math.max(0, rcId - 1))} style={btnStyle}>-</button>
-              <span style={{ fontSize: 18, fontWeight: 700, minWidth: 32, textAlign: "center" }}>{String(rcId).padStart(2, "0")}</span>
-              <button onClick={() => setRcId(rcId + 1)} style={btnStyle}>+</button>
+              <span style={{ fontSize: 13, flex: 1, color: theme.text }}>Bobinas com id</span>
+              <button onClick={() => setRcId(Math.max(0, rcId-1))} style={btnStyle}>-</button>
+              <span style={{ fontSize: 18, fontWeight: 700, minWidth: 32, textAlign: "center", color: theme.text }}>{String(rcId).padStart(2,"0")}</span>
+              <button onClick={() => setRcId(rcId+1)} style={btnStyle}>+</button>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              <span style={{ fontSize: 13, flex: 1 }}>Bobinas sem id</span>
-              <button onClick={() => setRcSid(Math.max(0, rcSid - 1))} style={btnStyle}>-</button>
-              <span style={{ fontSize: 18, fontWeight: 700, minWidth: 32, textAlign: "center" }}>{String(rcSid).padStart(2, "0")}</span>
-              <button onClick={() => setRcSid(rcSid + 1)} style={btnStyle}>+</button>
+              <span style={{ fontSize: 13, flex: 1, color: theme.text }}>Bobinas sem id</span>
+              <button onClick={() => setRcSid(Math.max(0, rcSid-1))} style={btnStyle}>-</button>
+              <span style={{ fontSize: 18, fontWeight: 700, minWidth: 32, textAlign: "center", color: theme.text }}>{String(rcSid).padStart(2,"0")}</span>
+              <button onClick={() => setRcSid(rcSid+1)} style={btnStyle}>+</button>
             </div>
             <textarea value={obsRC} onChange={e => setObsRC(e.target.value)} rows={2} placeholder="Obs. Roll Cutter..." style={{ ...inputStyle, resize: "vertical" }} />
-            {renderParadas("rc", "Paradas Roll Cutter")}
+            {renderParadas(paradasRC, setParadasRC, "Paradas Roll Cutter")}
           </>}
-        </div>}
+        </div>
 
-        {/* Tombador */}
+        {/* Obs e Paradas Rebobinadeira */}
         <div style={cardStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tombCollapsed ? 0 : 12 }}>
-            <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>🔁 Tombador</span>
-            <button onClick={() => setTombCollapsed(!tombCollapsed)} style={sectionBtn}>{tombCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: obsCollapsed ? 0 : 10 }}>
+            <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>📝 Obs. e Paradas</span>
+            <button onClick={() => setObsCollapsed(!obsCollapsed)} style={sectionBtn}>{obsCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
           </div>
-          {!tombCollapsed && <>
-            {renderBobinas(retrabalhadas, setRetrabalhadas, "♻️ Bobinas Retrabalhadas", "#F57C00", "ret")}
-            <div style={{ height: 1, background: "#F0F0F0", margin: "8px 0 16px" }} />
-            {renderBobinas(rejeitadas, setRejeitadas, "❌ Bobinas Rejeitadas", "#E53935", "rej")}
-            <div style={{ height: 1, background: "#F0F0F0", margin: "8px 0 16px" }} />
-
-            {/* Impressão de Label */}
-            <div>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#1A6FB0" }}>🏷️ Impressão de Label</span>
-              <div style={{ display: "flex", gap: 6, marginTop: 8, marginBottom: 10 }}>
-                <input
-                  type="text"
-                  placeholder="Ex: 266F300111"
-                  value={novoLabel}
-                  onChange={e => setNovoLabel(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter") addLabelCodigo(novoLabel); }}
-                  style={{ ...inputStyle, marginTop: 0, flex: 1, fontWeight: 700, letterSpacing: 1 }}
-                />
-                <BarcodeScannerBtn onScan={val => addLabelCodigo(val)} />
-                <button onClick={() => addLabelCodigo(novoLabel)} style={{ ...btnStyle, fontSize: 14, color: "#1A6FB0" }} title="Adicionar">+</button>
-              </div>
-
-              {labels.length === 0 && <p style={{ fontSize: 12, color: "#BDBDBD", fontStyle: "italic" }}>Nenhum label registrado.</p>}
-              {labels.map((l, idx) => (
-                <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", marginBottom: 6, borderRadius: 10, background: "#F5FAFE", border: "1px solid #E1EFFA" }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "#1A6FB0", minWidth: 22 }}>{idx + 1}.</span>
-                  <input type="text" value={l.codigo} onChange={e => updateLabel(l.id, e.target.value)} style={{ flex: 1, fontSize: 13, fontWeight: 700, letterSpacing: 1, border: "none", background: "transparent", outline: "none", color: "#1A1A2E" }} />
-                  <button onClick={() => removeLabel(l.id)} style={{ color: "#E53935", background: "none", border: "none", cursor: "pointer", fontSize: 13 }}>✕</button>
-                </div>
-              ))}
-              {labels.length > 0 && (
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                  <span style={{ fontSize: 12, color: "#9E9E9E" }}>Total de labels</span>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: "#1A6FB0" }}>{labels.length}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Obs e Paradas Tombador */}
-            <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #F0F0F0" }}>
-              <label style={{ fontSize: 11, color: theme.textSub }}>Obs. Tombador</label>
-              <textarea value={obsTomb} onChange={e => setObsTomb(e.target.value)} rows={2} placeholder="Observações Tombador..." style={{ ...inputStyle, resize: "vertical", marginTop: 4 }} />
-            </div>
-            <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #F0F0F0" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: "#9E9E9E" }}>⏱ Paradas Tombador</span>
-                <button onClick={addParadaTomb} style={{ ...sectionBtn, color: "#2D9E7F", fontWeight: 600 }}>+ Adicionar</button>
-              </div>
-              {paradasTomb.map((p, i) => {
-                const min = getMin(p); const tempoLabel = min > 0 ? ` · ${min} min` : "";
-                if (p.collapsed) return (
-                  <div key={i} style={{ border: "1px solid #F0F0F0", borderRadius: 12, padding: 10, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 500, flex: 1, color: min > 0 ? "#2D9E7F" : "#1A1A2E" }}>{p.desc || `Parada ${i + 1}`}{tempoLabel}</span>
-                    <button onClick={() => toggleParadaTomb(i)} style={sectionBtn}>▼ Expandir</button>
-                    <button onClick={() => removeParadaTomb(i)} style={{ padding: "0 8px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
-                  </div>
-                );
-                return (
-                  <div key={i} style={{ border: "1px solid #F0F0F0", borderRadius: 12, padding: 10, marginBottom: 8 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "#9E9E9E" }}>Parada {i + 1}{tempoLabel}</span>
-                      <div style={{ display: "flex", gap: 4 }}>
-                        <button onClick={() => toggleParadaTomb(i)} style={sectionBtn}>▲ Minimizar</button>
-                        <button onClick={() => removeParadaTomb(i)} style={{ padding: "0 8px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
-                      </div>
-                    </div>
-                    <input type="text" placeholder="Descrição da parada" value={p.desc} onChange={e => updateParadaTomb(i, "desc", e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-                      <div><label style={{ fontSize: 11, color: theme.textSub }}>Início</label><input type="time" value={p.ini} onChange={e => updateParadaTomb(i, "ini", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
-                      <div><label style={{ fontSize: 11, color: theme.textSub }}>Fim</label><input type="time" value={p.fim} onChange={e => updateParadaTomb(i, "fim", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
-                    </div>
-                    {min > 0 && <div style={{ fontSize: 13, fontWeight: 600, color: "#2D9E7F", padding: "6px 10px", background: "rgba(45,158,127,0.08)", borderRadius: 8, marginBottom: 8 }}>⏱ Parada total: {min} minutos (das {p.ini} às {p.fim}).</div>}
-                    <input type="text" placeholder="Nota (ex: Aberto nota n° 1433966)" value={p.nota} onChange={e => updateParadaTomb(i, "nota", e.target.value)} style={inputStyle} />
-                  </div>
-                );
-              })}
-              {paradasTomb.length > 0 && (
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                  <span style={{ fontSize: 12, color: "#9E9E9E" }}>Total</span>
-                  <span style={{ fontSize: 14, fontWeight: 700 }}>{formatMin(totalParadasTomb())}</span>
-                </div>
-              )}
-            </div>
+          {!obsCollapsed && <>
+            <textarea value={obsRebob} onChange={e => setObsRebob(e.target.value)} rows={2} placeholder="Observações gerais..." style={{ ...inputStyle, resize: "vertical" }} />
+            {renderParadas(paradasRebob, setParadasRebob, "Paradas Rebobinadeira")}
           </>}
         </div>
 
         {/* Prévia */}
         {showPrevia && (
-          <div style={{ background: "#FFF", border: "1px solid #F0F0F0", borderRadius: 16, padding: "14px 16px", marginBottom: 12 }}>
-            <p style={{ fontSize: 11, fontWeight: 600, margin: "0 0 8px", color: "#9E9E9E" }}>PRÉVIA DO RELATÓRIO</p>
-            <pre style={{ fontSize: 12, whiteSpace: "pre-wrap", margin: 0, lineHeight: 1.8, color: "#1A1A2E" }}>{previa}</pre>
+          <div style={{ ...cardStyle, marginBottom: 12 }}>
+            <p style={{ fontSize: 11, fontWeight: 600, margin: "0 0 8px", color: theme.textSub }}>PRÉVIA DO RELATÓRIO</p>
+            <pre style={{ fontSize: 12, whiteSpace: "pre-wrap", margin: 0, lineHeight: 1.8, color: theme.text }}>{previa}</pre>
           </div>
         )}
       </div>
 
-      {/* Rodapé fixo */}
-      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: theme.footerBg, borderTop: `1px solid ${theme.cardBorder}`, padding: "12px 16px", paddingBottom: "calc(12px + env(safe-area-inset-bottom))", display: "flex", gap: 8 }}>
-        <button onClick={handlePrevia} style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 600, borderRadius: 12, background: "#F0F0F0", color: "#1A1A2E", border: "none", cursor: "pointer" }}>👁 Prévia</button>
-        <button onClick={handleSaveNote} style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 600, borderRadius: 12, background: "#1A1A2E", color: "#FFF", border: "none", cursor: "pointer" }}>💾 Salvar nota</button>
+      {/* Rodapé */}
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: theme.headerBg, borderTop: `1px solid ${theme.cardBorder}`, padding: "12px 16px", paddingBottom: "calc(12px + env(safe-area-inset-bottom))", display: "flex", gap: 8 }}>
+        <button onClick={() => { setPrevia(gerarTexto()); setShowPrevia(true); }} style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 600, borderRadius: 12, background: theme.sectionBtnBg, color: theme.text, border: "none", cursor: "pointer" }}>👁 Prévia</button>
+        <button onClick={handleSaveNote} style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 600, borderRadius: 12, background: "#1A1A2E", color: "#FFF", border: "none", cursor: "pointer" }}>💾 Salvar</button>
         <button onClick={handleShare} style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 600, borderRadius: 12, background: "#2D9E7F", color: "#FFF", border: "none", cursor: "pointer" }}>📤 Enviar</button>
       </div>
 
-      {/* Modais */}
-      <InputModal
-        open={!!inputModal}
-        title={inputModal?.title || ""}
-        subtitle={inputModal?.subtitle}
-        placeholder={inputModal?.placeholder}
-        initialValue={inputModal?.initialValue}
-        inputMode={inputModal?.inputMode}
-        onConfirm={(v) => inputModal?.onConfirm(v)}
-        onCancel={() => setInputModal(null)}
-      />
-      {manageModal && (
-        <ManageListModal
-          open={!!manageModal}
-          title={manageModal.title}
-          items={manageModal.items}
-          onClose={() => setManageModal(null)}
-          onEdit={(o, n) => { manageModal.onEdit(o, n); setManageModal(prev => prev ? { ...prev, items: prev.items.map(i => i === o ? n : i) } : null); }}
-          onDelete={(v) => { manageModal.onDelete(v); setManageModal(prev => prev ? { ...prev, items: prev.items.filter(i => i !== v) } : null); }}
-        />
+      {/* Modal gerenciar formatos */}
+      {showFormatoModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 250, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end" }} onClick={() => setShowFormatoModal(false)}>
+          <div style={{ background: "#FFF", borderRadius: "20px 20px 0 0", padding: 20, width: "100%", maxHeight: "70vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <p style={{ fontWeight: 700, fontSize: 15, color: "#1A1A2E", margin: 0 }}>Gerenciar Formatos</p>
+              <button onClick={() => setShowFormatoModal(false)} style={{ width: 30, height: 30, borderRadius: "50%", background: "#F0F0F0", border: "none", cursor: "pointer" }}>✕</button>
+            </div>
+            {formatos.map(f => (
+              <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", marginBottom: 6, borderRadius: 10, background: "#FAFAFA", border: "1px solid #F0F0F0" }}>
+                <span style={{ fontSize: 13, flex: 1, fontWeight: 600 }}>{f.largura} / {f.diametro}</span>
+                <button onClick={() => removeFormato(f.id)} style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(229,57,53,0.1)", border: "none", color: "#E53935", cursor: "pointer" }}>✕</button>
+              </div>
+            ))}
+            <p style={{ fontSize: 12, fontWeight: 700, color: "#9E9E9E", margin: "12px 0 8px" }}>Novo formato</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+              <div>
+                <label style={{ fontSize: 11, color: "#9E9E9E" }}>Largura</label>
+                <input type="text" inputMode="numeric" placeholder="Ex: 500" value={novoFormato.largura} onChange={e => setNovoFormato(p => ({ ...p, largura: e.target.value }))} style={{ width: "100%", boxSizing: "border-box", fontSize: 15, borderRadius: 8, padding: "8px 10px", border: "1px solid #EBEBEB", marginTop: 4 }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: "#9E9E9E" }}>Diâmetro</label>
+                <input type="text" inputMode="numeric" placeholder="Ex: 1480" value={novoFormato.diametro} onChange={e => setNovoFormato(p => ({ ...p, diametro: e.target.value }))} style={{ width: "100%", boxSizing: "border-box", fontSize: 15, borderRadius: 8, padding: "8px 10px", border: "1px solid #EBEBEB", marginTop: 4 }} />
+              </div>
+            </div>
+            <button onClick={addFormato} style={{ width: "100%", padding: "10px 0", borderRadius: 8, background: "#2D9E7F", color: "#FFF", fontWeight: 700, fontSize: 14, border: "none", cursor: "pointer", marginBottom: 12 }}>+ Adicionar formato</button>
+          </div>
+        </div>
       )}
+
+      {/* Teclado Numérico — compacto e centralizado */}
+      {numTeclado && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 260, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "rgba(0,0,0,0.5)", position: "absolute", inset: 0 }} onClick={() => setNumTeclado(null)} />
+          <div style={{ position: "relative", background: theme.card, borderRadius: 20, padding: "14px 14px 18px", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", width: "min(88vw, 280px)" }}>
+            {/* Label e display */}
+            <div style={{ marginBottom: 10 }}>
+              <p style={{ fontSize: 12, color: theme.textSub, margin: "0 0 6px", fontWeight: 600, textAlign: "center" }}>{numTeclado.label}</p>
+              <div style={{ background: theme.inputBg, border: `2px solid #2D9E7F`, borderRadius: 10, padding: "8px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 22, fontWeight: 700, color: theme.text, letterSpacing: 2 }}>{numValor || <span style={{ color: theme.textSub, fontSize: 16, fontWeight: 400 }}>0</span>}</span>
+                <button onClick={tecladoApagar} style={{ width: 34, height: 34, borderRadius: 8, background: theme.sectionBtnBg, border: "none", fontSize: 16, cursor: "pointer", color: theme.text }}>⌫</button>
+              </div>
+            </div>
+            {/* Grid de teclas */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+              {["7","8","9","4","5","6","1","2","3"].map(d => (
+                <button key={d} onClick={() => tecladoDigito(d)} style={{ height: 42, borderRadius: 10, background: theme.sectionBtnBg, border: `1px solid ${theme.inputBorder}`, fontSize: 17, fontWeight: 600, color: theme.text, cursor: "pointer" }}>{d}</button>
+              ))}
+              <button onClick={() => tecladoDigito(",")} style={{ height: 42, borderRadius: 10, background: theme.sectionBtnBg, border: `1px solid ${theme.inputBorder}`, fontSize: 17, fontWeight: 600, color: theme.text, cursor: "pointer" }}>,</button>
+              <button onClick={() => tecladoDigito("0")} style={{ height: 42, borderRadius: 10, background: theme.sectionBtnBg, border: `1px solid ${theme.inputBorder}`, fontSize: 17, fontWeight: 600, color: theme.text, cursor: "pointer" }}>0</button>
+              <button onClick={() => setNumValor("")} style={{ height: 42, borderRadius: 10, background: "rgba(229,57,53,0.1)", border: "none", fontSize: 12, fontWeight: 600, color: "#E53935", cursor: "pointer" }}>C</button>
+              <button onClick={tecladoConfirmar} style={{ height: 42, borderRadius: 10, background: "#2D9E7F", border: "none", fontSize: 13, fontWeight: 700, color: "#FFF", cursor: "pointer" }}>OK</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <InputModal open={!!inputModal} title={inputModal?.title || ""} subtitle={inputModal?.subtitle} placeholder={inputModal?.placeholder} inputMode={(inputModal as any)?.inputMode} onConfirm={v => inputModal?.onConfirm(v)} onCancel={() => setInputModal(null)} />
     </div>
   );
 }
