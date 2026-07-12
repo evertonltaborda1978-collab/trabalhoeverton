@@ -48,7 +48,7 @@ const ITENS_BASE = [
 ];
 
 // ── Interfaces ──
-interface Troca { min: number | null; }
+interface Troca { min: number | null; qtd?: number; }
 interface ItemConsumo { label: string; trocas: Troca[]; collapsed: boolean; }
 interface Parada { desc: string; ini: string; fim: string; nota: string; collapsed: boolean; }
 interface ParadasMap { emb: Parada[]; cl: Parada[]; rc: Parada[]; }
@@ -94,9 +94,9 @@ function newLabel(codigo = ""): LabelImpresso { return { id: Math.random().toStr
 
 // ── Modal genérico para substituir prompt() ──
 function InputModal({
-  open, title, subtitle, placeholder, initialValue = "", onConfirm, onCancel,
+  open, title, subtitle, placeholder, initialValue = "", inputMode, onConfirm, onCancel,
 }: {
-  open: boolean; title: string; subtitle?: string; placeholder?: string; initialValue?: string;
+  open: boolean; title: string; subtitle?: string; placeholder?: string; initialValue?: string; inputMode?: "text" | "numeric" | "decimal";
   onConfirm: (val: string) => void; onCancel: () => void;
 }) {
   const [val, setVal] = useState(initialValue);
@@ -113,6 +113,7 @@ function InputModal({
         <input
           autoFocus
           type="text"
+          inputMode={inputMode ?? "text"}
           value={val}
           placeholder={placeholder}
           onChange={e => setVal(e.target.value)}
@@ -379,7 +380,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   const [db, setDb] = useState<TombadorDB>(loadDB);
 
   // Modais
-  const [inputModal, setInputModal] = useState<{ title: string; subtitle?: string; placeholder?: string; onConfirm: (v: string) => void } | null>(null);
+  const [inputModal, setInputModal] = useState<{ title: string; subtitle?: string; placeholder?: string; initialValue?: string; inputMode?: "text" | "numeric" | "decimal"; onConfirm: (v: string) => void } | null>(null);
   const [manageModal, setManageModal] = useState<{ title: string; items: string[]; onEdit: (o: string, n: string) => void; onDelete: (v: string) => void } | null>(null);
 
   useEffect(() => { saveDB(db); }, [db]);
@@ -505,13 +506,46 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   };
   const calcTotalEmb = () => itens.reduce((s, i) => s + i.trocas.reduce((a, t) => a + (t.min || 0), 0), 0);
 
-  const addTroca = (idx: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: [...item.trocas, { min: null }] } : item));
+  const addTroca = (idx: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: [...item.trocas, { min: null, qtd: 1 }], collapsed: false } : item));
+
+  // Adiciona várias trocas de uma vez (ex: trocou 4 fitas crepe juntas na correria) — vira UM lote, uma linha só
+  const addTrocas = (idx: number, qtd: number) => {
+    const n = Math.max(1, Math.min(999, qtd));
+    setItens(prev => prev.map((item, i) => i === idx
+      ? { ...item, trocas: [...item.trocas, { min: null, qtd: n }], collapsed: false }
+      : item));
+  };
+  const addTrocasMultiplas = (idx: number) => {
+    setInputModal({
+      title: "Quantas trocas de uma vez?", placeholder: "Ex: 4", inputMode: "numeric",
+      onConfirm: (v) => {
+        const n = parseInt(v.replace(/\D/g, ""), 10);
+        if (!isNaN(n) && n > 0) addTrocas(idx, n);
+        setInputModal(null);
+      }
+    });
+  };
+  const updateTrocaQtd = (idx: number, ti: number, qtd: number) => {
+    const n = Math.max(1, Math.min(999, qtd));
+    setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.map((t, j) => j === ti ? { ...t, qtd: n } : t) } : item));
+  };
+  const editarQtdTroca = (idx: number, ti: number, atual: number) => {
+    setInputModal({
+      title: "Corrigir quantidade", placeholder: "Ex: 4", initialValue: String(atual), inputMode: "numeric",
+      onConfirm: (v) => {
+        const n = parseInt(v.replace(/\D/g, ""), 10);
+        if (!isNaN(n) && n > 0) updateTrocaQtd(idx, ti, n);
+        setInputModal(null);
+      }
+    });
+  };
   const removeTroca = (idx: number, ti: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.filter((_, j) => j !== ti) } : item));
   const setTrocaMin = (idx: number, ti: number, val: string) => {
     const n = parseInt(val); const v = isNaN(n) ? null : Math.max(0, n);
-    setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.map((t, j) => j === ti ? { min: v } : t) } : item));
+    setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.map((t, j) => j === ti ? { ...t, min: v } : t) } : item));
   };
   const toggleItem = (idx: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, collapsed: !item.collapsed } : item));
+  const collapseAllItens = () => setItens(prev => prev.map(it => ({ ...it, collapsed: true })));
   const addItem = () => setInputModal({ title: "Novo item", placeholder: "Nome do item", onConfirm: (val) => { setItens(prev => [...prev, { label: val, trocas: [], collapsed: false }]); setInputModal(null); } });
   const removeItem = (idx: number) => { if (confirm("Remover este item?")) setItens(prev => prev.filter((_, i) => i !== idx)); };
 
@@ -572,7 +606,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
 
   const gerarTexto = useCallback(() => {
     let consumidos = "";
-    itens.forEach(item => { if (item.trocas.length > 0) consumidos += ` ${String(item.trocas.length).padStart(2, "0")} ${item.label}\n`; });
+    itens.forEach(item => { const q = item.trocas.reduce((a, t) => a + (t.qtd ?? 1), 0); if (q > 0) consumidos += ` ${String(q).padStart(2, "0")} ${item.label}\n`; });
     const totalEmb = formatMin(calcTotalEmb());
     const paradasEmb = buildParadasTxt(paradasMap.emb);
     const totalPEmb = formatMin(totalParadas("emb"));
@@ -887,22 +921,36 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
             <button onClick={() => setEmbCollapsed(!embCollapsed)} style={sectionBtn}>{embCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
           </div>
           {!embCollapsed && <>
-            <p style={{ fontSize: 12, fontWeight: 600, color: "#9E9E9E", margin: "0 0 8px" }}>Consumidos</p>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
+              <p style={{ fontSize: 12, fontWeight: 600, color: "#9E9E9E", margin: 0 }}>Consumidos</p>
+              <button onClick={collapseAllItens} style={sectionBtn}>🗂 Recolher</button>
+            </div>
             {itens.map((item, idx) => {
-              const qtd = item.trocas.length;
+              const qtd = item.trocas.reduce((a, t) => a + (t.qtd ?? 1), 0);
               const totalItem = item.trocas.reduce((a, t) => a + (t.min || 0), 0);
               return (
                 <div key={idx} style={{ padding: 10, marginBottom: 6, borderRadius: 12, background: qtd > 0 ? "rgba(45,158,127,0.07)" : "#F9F9F9", border: `1px solid ${qtd > 0 ? "rgba(45,158,127,0.2)" : "transparent"}` }}>
+                  {/* Linha 1: nome, badge de quantidade, excluir */}
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 13, flex: 1, fontWeight: 500 }}>{item.label}</span>
-                    {qtd > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: "#2D9E7F", background: "rgba(45,158,127,0.12)", padding: "2px 10px", borderRadius: 20, whiteSpace: "nowrap" }}>{String(qtd).padStart(2, "0")} · {totalItem}min</span>}
-                    <button onClick={() => toggleItem(idx)} style={sectionBtn}>{item.collapsed ? "▼" : "▲"}</button>
-                    <button onClick={() => addTroca(idx)} style={{ padding: "5px 10px", fontSize: 12, fontWeight: 600, color: "#fff", background: "#2D9E7F", border: "none", borderRadius: 8, whiteSpace: "nowrap", cursor: "pointer" }}>+ Troca</button>
-                    <button onClick={() => removeItem(idx)} style={{ width: 28, height: 28, padding: 0, fontSize: 13, color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>🗑</button>
+                    <span style={{ fontSize: 13, flex: 1, minWidth: 0, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</span>
+                    {qtd > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: "#2D9E7F", background: "rgba(45,158,127,0.12)", padding: "2px 8px", borderRadius: 20, whiteSpace: "nowrap", flexShrink: 0 }}>{String(qtd).padStart(2, "0")} · {totalItem}min</span>}
+                    <button onClick={() => removeItem(idx)} style={{ width: 24, height: 24, padding: 0, fontSize: 13, color: "#E53935", background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>🗑</button>
+                  </div>
+                  {/* Linha 2: ações — expandir, adicionar várias, adicionar uma */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, marginTop: 6 }}>
+                    {qtd > 0 && <button onClick={() => toggleItem(idx)} style={{ ...sectionBtn, marginRight: "auto" }}>{item.collapsed ? "▼" : "▲"}</button>}
+                    <button onClick={() => addTrocasMultiplas(idx)} style={{ padding: "5px 8px", fontSize: 11, fontWeight: 600, color: "#2D9E7F", background: "rgba(45,158,127,0.1)", border: "1px solid rgba(45,158,127,0.3)", borderRadius: 8, whiteSpace: "nowrap", cursor: "pointer" }} title="Adicionar várias trocas de uma vez">🔢 Várias</button>
+                    <button onClick={() => addTroca(idx)} style={{ padding: "5px 10px", fontSize: 11, fontWeight: 600, color: "#fff", background: "#2D9E7F", border: "none", borderRadius: 8, whiteSpace: "nowrap", cursor: "pointer" }}>+ Troca</button>
                   </div>
                   {!item.collapsed && item.trocas.map((t, ti) => (
                     <div key={ti} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, padding: "8px 10px", background: "#FFF", borderRadius: 8 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "#9E9E9E", whiteSpace: "nowrap", minWidth: 56 }}>Troca {ti + 1}</span>
+                      <button
+                        onClick={() => editarQtdTroca(idx, ti, t.qtd ?? 1)}
+                        style={{ fontSize: 12, fontWeight: 700, color: "#2D9E7F", whiteSpace: "nowrap", minWidth: 56, background: "rgba(45,158,127,0.1)", border: "none", borderRadius: 6, padding: "3px 6px", cursor: "pointer" }}
+                        title="Toque para corrigir a quantidade"
+                      >
+                        Troca {t.qtd ?? 1}
+                      </button>
                       <input type="number" min={0} value={t.min !== null ? t.min : ""} placeholder="min" onChange={e => setTrocaMin(idx, ti, e.target.value)} style={{ width: 64, fontSize: 16, fontWeight: 700, textAlign: "center", borderRadius: 8, padding: 5, border: "1px solid #EBEBEB" }} />
                       <span style={{ fontSize: 12, color: "#9E9E9E" }}>min</span>
                       {t.min !== null && t.min > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: "#2D9E7F", marginLeft: "auto" }}>✓ {t.min}min</span>}
@@ -1080,6 +1128,9 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
         open={!!inputModal}
         title={inputModal?.title || ""}
         subtitle={inputModal?.subtitle}
+        placeholder={inputModal?.placeholder}
+        initialValue={inputModal?.initialValue}
+        inputMode={inputModal?.inputMode}
         onConfirm={(v) => inputModal?.onConfirm(v)}
         onCancel={() => setInputModal(null)}
       />
