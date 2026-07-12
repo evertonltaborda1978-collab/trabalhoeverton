@@ -872,13 +872,17 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   return (
     <div className="fixed inset-0 z-[120] flex flex-col" style={{ background: theme.bg }}>
       {/* Header */}
-      <div style={{ background: theme.headerBg, borderBottom: `1px solid ${theme.cardBorder}`, padding: "12px 16px", display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 18 }}>🧻</span>
-        <span style={{ fontWeight: 800, fontSize: 15, color: theme.text, flex: 1 }}>Rebobinadeira</span>
-        <button onClick={handleNovo} style={{ fontSize: 11, padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: "#E53935", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>🗑 Novo</button>
-        <button onClick={() => setDarkMode(!darkMode)} style={{ fontSize: 14, width: 30, height: 30, borderRadius: "50%", border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, cursor: "pointer" }}>{darkMode ? "☀️" : "🌙"}</button>
-        <button onClick={() => setFontSize(f => f === "sm" ? "md" : f === "md" ? "lg" : "sm")} style={{ fontSize: 11, padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, fontWeight: 700, cursor: "pointer" }}>{fontSize === "sm" ? "A" : fontSize === "md" ? "A+" : "A++"}</button>
-        <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: "50%", background: theme.sectionBtnBg, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: theme.text }}><X size={16} /></button>
+      <div style={{ background: theme.headerBg, borderBottom: `1px solid ${theme.cardBorder}`, padding: "12px 16px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", rowGap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+          <span style={{ fontSize: 18, flexShrink: 0 }}>🧻</span>
+          <span style={{ fontWeight: 800, fontSize: 15, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Rebobinadeira</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+          <button onClick={handleNovo} style={{ fontSize: 11, padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: "#E53935", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>🗑 Novo</button>
+          <button onClick={() => setDarkMode(!darkMode)} style={{ fontSize: 14, width: 30, height: 30, borderRadius: "50%", border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, cursor: "pointer", flexShrink: 0 }}>{darkMode ? "☀️" : "🌙"}</button>
+          <button onClick={() => setFontSize(f => f === "sm" ? "md" : f === "md" ? "lg" : "sm")} style={{ fontSize: 11, padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>{fontSize === "sm" ? "A" : fontSize === "md" ? "A+" : "A++"}</button>
+          <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: "50%", background: theme.sectionBtnBg, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: theme.text, flexShrink: 0 }}><X size={16} /></button>
+        </div>
       </div>
 
       {/* Conteúdo */}
