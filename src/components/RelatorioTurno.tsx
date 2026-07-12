@@ -844,17 +844,21 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   return (
     <div className="fixed inset-0 z-[110] flex flex-col" style={{ background: theme.bg }}>
       {/* Header fixo */}
-      <div style={{ background: theme.headerBg, borderBottom: `1px solid ${theme.cardBorder}`, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
-        <FileText size={18} style={{ color: "#1A1A2E" }} />
-        <span style={{ fontWeight: 800, fontSize: 16, color: theme.text, flex: 1 }}>Relatório de Turno</span>
-        <button onClick={() => setModoTombador(!modoTombador)} style={{ fontSize: 11, padding: "5px 10px", borderRadius: 20, border: modoTombador ? "1.5px solid #F57C00" : `1px solid ${theme.sectionBtnBorder}`, background: modoTombador ? "rgba(245,124,0,0.12)" : theme.sectionBtnBg, color: modoTombador ? "#F57C00" : theme.textSub, fontWeight: 700, cursor: "pointer", marginRight: 4, whiteSpace: "nowrap" }} title="Modo Tombador">🔁</button>
-        <button onClick={handleNovoRelatorio} style={{ fontSize: 11, padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: "#E53935", fontWeight: 700, cursor: "pointer", marginRight: 2, whiteSpace: "nowrap" }} title="Novo relatório">🗑 Novo</button>
-        <button onClick={onOpenRebobinadeira} style={{ fontSize: 16, width: 30, height: 30, borderRadius: "50%", border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, cursor: "pointer", marginRight: 2 }} title="Relatório Rebobinadeira">🧻</button>
-        <button onClick={() => setDarkMode(!darkMode)} style={{ fontSize: 14, width: 30, height: 30, borderRadius: "50%", border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, cursor: "pointer", marginRight: 2 }} title={darkMode ? "Modo claro" : "Modo escuro"}>{darkMode ? "☀️" : "🌙"}</button>
-        <button onClick={() => setFontSize(f => f === "sm" ? "md" : f === "md" ? "lg" : "sm")} style={{ fontSize: 11, padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, fontWeight: 700, cursor: "pointer", marginRight: 4 }} title="Tamanho da fonte">{fontSize === "sm" ? "A" : fontSize === "md" ? "A+" : "A++"}</button>
-        <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: "50%", background: theme.sectionBtnBg, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: theme.text }}>
+      <div style={{ background: theme.headerBg, borderBottom: `1px solid ${theme.cardBorder}`, padding: "12px 16px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", rowGap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+          <FileText size={18} style={{ color: "#1A1A2E", flexShrink: 0 }} />
+          <span style={{ fontWeight: 800, fontSize: 16, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Relatório de Turno</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
+          <button onClick={() => setModoTombador(!modoTombador)} style={{ fontSize: 11, padding: "5px 10px", borderRadius: 20, border: modoTombador ? "1.5px solid #F57C00" : `1px solid ${theme.sectionBtnBorder}`, background: modoTombador ? "rgba(245,124,0,0.12)" : theme.sectionBtnBg, color: modoTombador ? "#F57C00" : theme.textSub, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }} title="Modo Tombador">🔁</button>
+          <button onClick={handleNovoRelatorio} style={{ fontSize: 11, padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: "#E53935", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }} title="Novo relatório">🗑 Novo</button>
+          <button onClick={onOpenRebobinadeira} style={{ fontSize: 16, width: 30, height: 30, borderRadius: "50%", border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, cursor: "pointer", flexShrink: 0 }} title="Relatório Rebobinadeira">🧻</button>
+          <button onClick={() => setDarkMode(!darkMode)} style={{ fontSize: 14, width: 30, height: 30, borderRadius: "50%", border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, cursor: "pointer", flexShrink: 0 }} title={darkMode ? "Modo claro" : "Modo escuro"}>{darkMode ? "☀️" : "🌙"}</button>
+          <button onClick={() => setFontSize(f => f === "sm" ? "md" : f === "md" ? "lg" : "sm")} style={{ fontSize: 11, padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, fontWeight: 700, cursor: "pointer", flexShrink: 0 }} title="Tamanho da fonte">{fontSize === "sm" ? "A" : fontSize === "md" ? "A+" : "A++"}</button>
+        <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: "50%", background: theme.sectionBtnBg, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: theme.text, flexShrink: 0 }}>
           <X size={16} />
         </button>
+        </div>
       </div>
 
       {/* Conteúdo rolável */}
