@@ -53,9 +53,11 @@ interface NoteCardProps {
   onPinClick?: (note: Note) => void;
   searchQuery?: string;
   fontSize?: number;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }
 
-export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, onPinClick, searchQuery = "", fontSize = 13 }: NoteCardProps) {
+export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, onPinClick, searchQuery = "", fontSize = 13, onMoveUp, onMoveDown }: NoteCardProps) {
   const colors = COLOR_MAP[note.color] || { bg: "#F3E5F5", bar: "#C9B8F0" };
   const isDraft = note.status === "rascunho";
   const hasReminder = !!note.reminderDate;
@@ -79,6 +81,29 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, on
       }}
     >
       <div className="w-1 shrink-0 rounded-l-[18px]" style={{ background: colors.bar }} />
+
+      {note.isPinned && (onMoveUp || onMoveDown) && (
+        <div className="flex flex-col items-center justify-center shrink-0 gap-0.5 pl-1.5" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={onMoveUp}
+            disabled={!onMoveUp}
+            className="flex items-center justify-center rounded"
+            style={{ width: 18, height: 14, color: onMoveUp ? "#F9A825" : "#E0E0E0", cursor: onMoveUp ? "pointer" : "default", fontSize: 10, lineHeight: 1 }}
+            title="Mover para cima"
+          >
+            ▲
+          </button>
+          <button
+            onClick={onMoveDown}
+            disabled={!onMoveDown}
+            className="flex items-center justify-center rounded"
+            style={{ width: 18, height: 14, color: onMoveDown ? "#F9A825" : "#E0E0E0", cursor: onMoveDown ? "pointer" : "default", fontSize: 10, lineHeight: 1 }}
+            title="Mover para baixo"
+          >
+            ▼
+          </button>
+        </div>
+      )}
 
       {note.isPinned && (
         <Pin
