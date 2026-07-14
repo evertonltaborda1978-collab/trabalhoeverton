@@ -1938,6 +1938,60 @@ ${blocksToPlainText(blocks)}`.trim() });
         )}
 
         {/* ── OCR MODAL ── */}
+        {/* Modal de Agendar — estava faltando, botão existia mas não abria nada */}
+        {showScheduleDialog && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowScheduleDialog(false)}>
+            <div className="bg-white rounded-2xl p-6 mx-4 shadow-xl max-w-xs w-full" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-base font-semibold text-gray-800 mb-1 flex items-center gap-2">
+                <CalendarPlus size={18} className="text-gray-600" /> Agendar nota
+              </h3>
+              <p className="text-xs text-gray-500 mb-4">
+                Cria um compromisso na Agenda com o título e o conteúdo desta nota.
+              </p>
+
+              <label className="block text-xs font-medium text-gray-600 mb-1">Data</label>
+              <input
+                type="date"
+                value={scheduleDate}
+                onChange={(e) => setScheduleDate(e.target.value)}
+                className="w-full mb-3 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-800 outline-none focus:border-yellow-400"
+              />
+
+              <label className="block text-xs font-medium text-gray-600 mb-1">Hora</label>
+              <input
+                type="time"
+                value={scheduleTime}
+                onChange={(e) => setScheduleTime(e.target.value)}
+                className="w-full mb-4 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-800 outline-none focus:border-yellow-400"
+              />
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowScheduleDialog(false)}
+                  className="flex-1 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    if (!scheduleDate) {
+                      toast({ title: "Escolha uma data", description: "Selecione a data do compromisso." });
+                      return;
+                    }
+                    onSchedule?.(title || "Nota sem título", blocksToPlainText(blocks), scheduleDate, scheduleTime);
+                    setShowScheduleDialog(false);
+                    toast({ title: "📅 Agendado!", description: "Compromisso criado na Agenda." });
+                  }}
+                  className="flex-1 py-2 rounded-lg text-sm font-semibold text-white transition-colors"
+                  style={{ background: "#2D9E7F" }}
+                >
+                  Agendar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {showOcrModal && (
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40">
             <div className="bg-white rounded-2xl p-6 mx-4 shadow-xl max-w-xs w-full">
