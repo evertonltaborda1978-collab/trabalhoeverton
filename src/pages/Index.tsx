@@ -41,7 +41,7 @@ const Index = () => {
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const activeModalRef = useRef<string | null>(null);
   const onModalCloseRef = useRef<(() => void) | null>(null);
-  const { notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes, refreshNotes } = useNotes();
+  const { notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, reorderPinnedNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes, refreshNotes } = useNotes();
   const { appointments, trashedAppointments, addAppointment, updateAppointment, deleteAppointment, restoreAppointment, permanentDeleteAppointment, emptyAppointmentTrash, activeAlert, dismissAlert, snoozeAlert, fetchAppointments } = useAppointments();
   const { signOut } = useAuth();
   const { currentDevice, fetchDevices } = useDeviceTracking();
@@ -308,6 +308,7 @@ const Index = () => {
             onUpdate={updateNote}
             onSetReminder={setNoteReminder}
             onTogglePin={togglePinNote}
+            onReorderPin={reorderPinnedNote}
             onLockNote={lockNoteWithPin}
             onUnlockNote={unlockNoteWithPin}
             onVerifyPin={verifyNotePin}
