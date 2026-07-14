@@ -20,6 +20,8 @@ import { RelatorioTurno } from "./RelatorioTurno";
 import { RelatorioRebobinadeira } from "./RelatorioRebobinadeira";
 import { ClipboardList } from "lucide-react";
 
+export { getFontClass, getSizeClass } from "./NoteEditor";
+
 interface NotesViewProps {
   notes: Note[];
   onAdd: (title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string, status?: "rascunho" | "publicada") => void;
@@ -27,6 +29,7 @@ interface NotesViewProps {
   onUpdate: (id: string, title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string, status?: "rascunho" | "publicada") => void;
   onSetReminder: (id: string, date: string | null, time: string | null) => void;
   onTogglePin: (id: string) => void;
+  onReorderPin?: (id: string, direction: -1 | 1) => void;
   onLockNote: (id: string, pin: string) => Promise<boolean>;
   onUnlockNote: (id: string, pin: string) => Promise<boolean>;
   onVerifyPin: (id: string, pin: string) => Promise<unknown | null>;
@@ -43,7 +46,7 @@ interface NotesViewProps {
   onEmptyTrash: () => void;
 }
 
-export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onTogglePin, onLockNote, onUnlockNote, onVerifyPin, onAddAppointment, onRefresh, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, trashedNotes, onRestoreNote, onPermanentDeleteNote, onEmptyTrash }: NotesViewProps) {
+export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onTogglePin, onReorderPin, onLockNote, onUnlockNote, onVerifyPin, onAddAppointment, onRefresh, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, trashedNotes, onRestoreNote, onPermanentDeleteNote, onEmptyTrash }: NotesViewProps) {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
@@ -497,19 +500,27 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
         </div>
       ) : (
         <div className="flex flex-col gap-2.5" style={{ transform: "none", animation: "none", visibility: (dialogOpen || !!confirmDeleteId) ? "hidden" : "visible", opacity: (dialogOpen || !!confirmDeleteId) ? 0 : 1, transition: "opacity 0.15s ease" }}>
-          {filtered.map((note) => (
-            <NoteCard
-              key={note.id}
-              note={note}
-              onDelete={handleDeleteWithConfirm}
-              onClick={openEdit}
-              onBellClick={handleBellClick}
-              onLockClick={handleLockClick}
-              onPinClick={handlePinClick}
-              searchQuery={search}
-              fontSize={fontSizeMap[fontSize]}
-            />
-          ))}
+          {(() => {
+            const pinnedIds = filtered.filter((n) => n.isPinned).map((n) => n.id);
+            return filtered.map((note) => {
+              const pinnedIdx = pinnedIds.indexOf(note.id);
+              return (
+                <NoteCard
+                  key={note.id}
+                  note={note}
+                  onDelete={handleDeleteWithConfirm}
+                  onClick={openEdit}
+                  onBellClick={handleBellClick}
+                  onLockClick={handleLockClick}
+                  onPinClick={handlePinClick}
+                  searchQuery={search}
+                  fontSize={fontSizeMap[fontSize]}
+                  onMoveUp={note.isPinned && pinnedIdx > 0 ? () => onReorderPin?.(note.id, -1) : undefined}
+                  onMoveDown={note.isPinned && pinnedIdx < pinnedIds.length - 1 ? () => onReorderPin?.(note.id, 1) : undefined}
+                />
+              );
+            });
+          })()}
         </div>
       )}
 
