@@ -19,7 +19,7 @@ function loadDB(): TombadorDB {
     const raw = localStorage.getItem(DB_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (!parsed.destinatarios) parsed.destinatarios = ["Phablo"];
+      if (!parsed.destinatarios) parsed.destinatarios = [];
     if (!parsed.responsaveis) parsed.responsaveis = ["Everton Luis Taborda", "Luis", "Karlla"];
       return parsed;
     }
@@ -28,7 +28,7 @@ function loadDB(): TombadorDB {
     origens: ["Linha de Bobinas 1", "Linha de Bobinas 2", "Rebobinadeira 1", "Rebobinadeira 2"],
     motivos: { "Linha de Bobinas 1": ["Danificada"], "Linha de Bobinas 2": ["Danificada"], "Rebobinadeira 1": [], "Rebobinadeira 2": [] },
     causas: { "Danificada": ["Transportador"] },
-    destinatarios: ["Phablo"],
+    destinatarios: [],
     responsaveis: ["Everton Luis Taborda", "Luis", "Karlla"],
   };
 }
@@ -50,17 +50,32 @@ const ITENS_BASE = [
 // ── Interfaces ──
 interface Troca { min: number | null; qtd?: number; }
 interface ItemConsumo { label: string; trocas: Troca[]; collapsed: boolean; }
-interface Parada { desc: string; ini: string; fim: string; nota: string; collapsed: boolean; }
+interface Parada {
+  desc: string;
+  ini: string;
+  fim: string;
+  nota: string;
+  collapsed: boolean;
+  manualMin?: number | null;
+  emAndamento?: boolean;
+  iniciadaEm?: number;
+}
 interface ParadasMap { emb: Parada[]; cl: Parada[]; rc: Parada[]; }
 interface BobinaTombador { id: string; idUnit: string; origem: string; motivo: string; causa: string; obs: string; }
 interface LabelImpresso { id: string; codigo: string; }
 
 function getMin(p: Parada): number {
+  if (typeof p.manualMin === "number") return p.manualMin;
   if (!p.ini || !p.fim) return 0;
   const [ih, im] = p.ini.split(":").map(Number);
   const [fh, fm] = p.fim.split(":").map(Number);
   const d = fh * 60 + fm - (ih * 60 + im);
   return d > 0 ? d : 0;
+}
+
+function nowHHMM(): string {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 function formatMin(t: number): string {
@@ -76,7 +91,13 @@ function buildParadasTxt(paradas: Parada[]): string {
     const min = getMin(p);
     if (i > 0) txt += "\n";
     if (p.desc) txt += `${p.desc}\n`;
-    if (min > 0) { txt += `Parada total: ${min} minutos (das ${p.ini} às ${p.fim}).`; if (p.nota) txt += ` ${p.nota}`; }
+    if (min > 0) {
+      let quando = "";
+      if (p.ini && p.fim) quando = ` (das ${p.ini} às ${p.fim})`;
+      else if (p.ini) quando = ` (iniciada às ${p.ini})`;
+      txt += `Parada total: ${formatMin(min)}${quando}.`;
+      if (p.nota) txt += ` ${p.nota}`;
+    }
     txt += "\n";
   });
   return txt;
@@ -345,7 +366,7 @@ interface Props {
 export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebobinadeira }: Props) {
   const saved = initialState || (() => { try { const raw = localStorage.getItem(RASCUNHO_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } })();
 
-  const [dest, setDest] = useState(saved?.dest ?? "Phablo");
+  const [dest, setDest] = useState(saved?.dest ?? (() => { try { return localStorage.getItem("turno_last_dest") ?? ""; } catch { return ""; } })());
   const [turno, setTurno] = useState(saved?.turno ?? "2");
   const [letra, setLetra] = useState(saved?.letra ?? "D");
   const [horario, setHorario] = useState(saved?.horario ?? "08:20 x 16:20 hr");
@@ -354,11 +375,11 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   const [darkMode, setDarkMode] = useState(false);
   const [fontSize, setFontSize] = useState<"sm"|"md"|"lg">(saved?.fontSize ?? "md");
   const [embaladeiraNum, setEmbaladeiraNum] = useState<"1"|"2">(saved?.embaladeiraNum ?? "2");
-  const [headerCollapsed, setHeaderCollapsed] = useState(false);
-  const [embCollapsed, setEmbCollapsed] = useState(false);
-  const [clCollapsed, setClCollapsed] = useState(false);
-  const [rcCollapsed, setRcCollapsed] = useState(false);
-  const [tombCollapsed, setTombCollapsed] = useState(false);
+  const [headerCollapsed, setHeaderCollapsed] = useState(!!saved);
+  const [embCollapsed, setEmbCollapsed] = useState(!!saved);
+  const [clCollapsed, setClCollapsed] = useState(!!saved);
+  const [rcCollapsed, setRcCollapsed] = useState(!!saved);
+  const [tombCollapsed, setTombCollapsed] = useState(!!saved);
   const [itens, setItens] = useState<ItemConsumo[]>(saved?.itens ?? ITENS_BASE.map(l => ({ label: l, trocas: [], collapsed: false })));
   const [obsEmb, setObsEmb] = useState(saved?.obsEmb ?? "");
   const [paradasMap, setParadasMap] = useState<ParadasMap>(saved?.paradasMap ?? { emb: [], cl: [], rc: [] });
@@ -384,6 +405,13 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   const [manageModal, setManageModal] = useState<{ title: string; items: string[]; onEdit: (o: string, n: string) => void; onDelete: (v: string) => void } | null>(null);
 
   useEffect(() => { saveDB(db); }, [db]);
+
+  // Força um re-render periódico para os cronômetros de paradas "em andamento" avançarem na tela
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const iv = setInterval(() => setTick(t => t + 1), 30000);
+    return () => clearInterval(iv);
+  }, []);
 
   // Auto-salvar rascunho
   useEffect(() => {
@@ -458,7 +486,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
 
   const handleNovoRelatorio = () => {
     localStorage.removeItem(RASCUNHO_KEY);
-    setDest("Phablo");
+    setDest((() => { try { return localStorage.getItem("turno_last_dest") ?? ""; } catch { return ""; } })());
     setTurno("2");
     setLetra("D");
     setHorario("08:20 x 16:20 hr");
@@ -479,6 +507,11 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
     setModoTombador(false);
     setEmbaladeiraNum("2");
     setShowPrevia(false);
+    setHeaderCollapsed(false);
+    setEmbCollapsed(false);
+    setClCollapsed(false);
+    setRcCollapsed(false);
+    setTombCollapsed(false);
     toast({ title: "✅ Novo relatório iniciado!" });
   };
 
@@ -547,13 +580,36 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   const toggleItem = (idx: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, collapsed: !item.collapsed } : item));
   const collapseAllItens = () => setItens(prev => prev.map(it => ({ ...it, collapsed: true })));
   const addItem = () => setInputModal({ title: "Novo item", placeholder: "Nome do item", onConfirm: (val) => { setItens(prev => [...prev, { label: val, trocas: [], collapsed: false }]); setInputModal(null); } });
-  const removeItem = (idx: number) => { if (confirm("Remover este item?")) setItens(prev => prev.filter((_, i) => i !== idx)); };
+  const removeItem = (idx: number) => setItens(prev => prev.filter((_, i) => i !== idx));
+  const moveItemConsumo = (idx: number, dir: -1 | 1) => {
+    setItens(prev => {
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= prev.length) return prev;
+      const arr = [...prev];
+      [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+      return arr;
+    });
+  };
 
   const addParada = (sec: keyof ParadasMap) => setParadasMap(prev => ({ ...prev, [sec]: [...prev[sec], { desc: "", ini: "", fim: "", nota: "", collapsed: false }] }));
   const updateParada = (sec: keyof ParadasMap, i: number, field: keyof Parada, val: string) => setParadasMap(prev => ({ ...prev, [sec]: prev[sec].map((p, j) => j === i ? { ...p, [field]: val } : p) }));
   const toggleParada = (sec: keyof ParadasMap, i: number) => setParadasMap(prev => ({ ...prev, [sec]: prev[sec].map((p, j) => j === i ? { ...p, collapsed: !p.collapsed } : p) }));
   const removeParada = (sec: keyof ParadasMap, i: number) => setParadasMap(prev => ({ ...prev, [sec]: prev[sec].filter((_, j) => j !== i) }));
   const totalParadas = (sec: keyof ParadasMap) => paradasMap[sec].reduce((s, p) => s + getMin(p), 0);
+
+  // Inicia uma parada automática: marca o horário atual como início, fica "em andamento" até finalizar
+  const addParadaAutomatica = (sec: keyof ParadasMap) => setParadasMap(prev => ({
+    ...prev,
+    [sec]: [...prev[sec], { desc: "", ini: nowHHMM(), fim: "", nota: "", collapsed: false, manualMin: null, emAndamento: true, iniciadaEm: Date.now() }]
+  }));
+  const finalizarParadaAgora = (sec: keyof ParadasMap, i: number) => setParadasMap(prev => ({
+    ...prev,
+    [sec]: prev[sec].map((p, j) => j === i ? { ...p, fim: nowHHMM(), emAndamento: false, iniciadaEm: undefined } : p)
+  }));
+  const finalizarParadaManual = (sec: keyof ParadasMap, i: number, minutos: number) => setParadasMap(prev => ({
+    ...prev,
+    [sec]: prev[sec].map((p, j) => j === i ? { ...p, manualMin: minutos, emAndamento: false, iniciadaEm: undefined } : p)
+  }));
 
   const updateBobina = (set: React.Dispatch<React.SetStateAction<BobinaTombador[]>>, id: string, field: keyof BobinaTombador, val: string) => {
     set(prev => prev.map(b => {
@@ -579,6 +635,10 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   const toggleParadaTomb = (i: number) => setParadasTomb(prev => prev.map((p, j) => j === i ? { ...p, collapsed: !p.collapsed } : p));
   const removeParadaTomb = (i: number) => setParadasTomb(prev => prev.filter((_, j) => j !== i));
   const totalParadasTomb = () => paradasTomb.reduce((s, p) => s + getMin(p), 0);
+
+  const addParadaTombAutomatica = () => setParadasTomb(prev => [...prev, { desc: "", ini: nowHHMM(), fim: "", nota: "", collapsed: false, manualMin: null, emAndamento: true, iniciadaEm: Date.now() }]);
+  const finalizarParadaTombAgora = (i: number) => setParadasTomb(prev => prev.map((p, j) => j === i ? { ...p, fim: nowHHMM(), emAndamento: false, iniciadaEm: undefined } : p));
+  const finalizarParadaTombManual = (i: number, minutos: number) => setParadasTomb(prev => prev.map((p, j) => j === i ? { ...p, manualMin: minutos, emAndamento: false, iniciadaEm: undefined } : p));
 
   const buildTombadorTxt = () => {
     if (retrabalhadas.length === 0 && rejeitadas.length === 0 && labels.length === 0) return "";
@@ -630,9 +690,9 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
       if (paradasRC) rollCutterSection += `\nObs:\n${paradasRC}Parada total: ${totalPRC}.\n`;
     }
     if (modoTombador) {
-      return `${getSaudacao()}, ${dest},\nSegue relatório do tombador.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}\n${buildTombadorTxt()}`.trim();
+      return `${getSaudacao()}${dest ? ", " + dest : ""},\nSegue relatório do tombador.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}\n${buildTombadorTxt()}`.trim();
     }
-    return `${getSaudacao()}, ${dest},\nSegue Relatório da linha de bobinas.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}\n\n• Embaladeira ${embaladeiraNum}\n✔ Consumidos:\n${consumidos || " (sem consumos)\n"}\n✔ Total de Tempo de Parada: ${totalEmb}.${obsEmb ? "\n\nObs:\n" + obsEmb : ""}${paradasEmb ? "\n\nObs:\n" + paradasEmb + "Parada total: " + totalPEmb + "." : ""}${coreLinkSection}${rollCutterSection}${buildTombadorTxt()}`.trim();
+    return `${getSaudacao()}${dest ? ", " + dest : ""},\nSegue Relatório da linha de bobinas.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}\n\n• Embaladeira ${embaladeiraNum}\n✔ Consumidos:\n${consumidos || " (sem consumos)\n"}\n✔ Total de Tempo de Parada: ${totalEmb}.${obsEmb ? "\n\nObs:\n" + obsEmb : ""}${paradasEmb ? "\n\nObs:\n" + paradasEmb + "Parada total: " + totalPEmb + "." : ""}${coreLinkSection}${rollCutterSection}${buildTombadorTxt()}`.trim();
   }, [dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, obsCL, rcId, rcSid, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, embaladeiraNum, db]);
 
   const handlePrevia = () => { setPrevia(gerarTexto()); setShowPrevia(true); };
@@ -643,11 +703,15 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   };
   const handleSaveNote = () => {
     const text = gerarTexto();
-    const title = modoTombador ? `Turno ${turno} Relatório Tombador - Letra ${letra}` : `Turno ${turno} Relatório - Letra ${letra}`;
+    const title = modoTombador
+      ? `Relatório Tombador - Letra ${letra}`
+      : `Relatório Embaladeira ${embaladeiraNum} - Letra ${letra}`;
     const state = { dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, rcId, rcSid, obsCL, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, modoTombador, embaladeiraNum, fontSize };
     // Salva o estado no localStorage com chave baseada no título
     const stateKey = `relatorio_state_${title.replace(/\s/g, "_")}`;
     localStorage.setItem(stateKey, JSON.stringify(state));
+    // Guarda o destinatário atual como "último usado" (igual na Rebobinadeira)
+    if (dest.trim()) localStorage.setItem("turno_last_dest", dest.trim());
     // Embute o estado no próprio texto da nota (marcador invisível), para que
     // reabrir o formulário funcione mesmo após limpeza de cache ou em outro aparelho.
     const marker = `\n\n<!--relatorio-turno-state:${JSON.stringify(state)}-->`;
@@ -683,12 +747,44 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
 
   const renderParadas = (sec: keyof ParadasMap, label: string) => (
     <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #F0F0F0" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: "#9E9E9E" }}>⏱ {label}</span>
-        <button onClick={() => addParada(sec)} style={{ ...sectionBtn, color: "#2D9E7F", fontWeight: 600 }}>+ Adicionar</button>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={() => addParadaAutomatica(sec)} style={{ ...sectionBtn, color: "#E53935", fontWeight: 600 }}>🔴 Iniciar agora</button>
+          <button onClick={() => addParada(sec)} style={{ ...sectionBtn, color: "#2D9E7F", fontWeight: 600 }}>+ Adicionar</button>
+        </div>
       </div>
       {paradasMap[sec].map((p, i) => {
-        const min = getMin(p); const tempoLabel = min > 0 ? ` · ${min} min` : "";
+        const min = getMin(p); const tempoLabel = min > 0 ? ` · ${formatMin(min)}` : "";
+
+        if (p.emAndamento) {
+          const elapsed = p.iniciadaEm ? Math.max(0, Math.floor((Date.now() - p.iniciadaEm) / 60000)) : 0;
+          return (
+            <div key={i} style={{ border: "1.5px solid #E53935", borderRadius: 12, padding: 10, marginBottom: 8, background: "rgba(229,57,53,0.06)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#E53935" }}>🔴 Parada {i + 1} em andamento · desde {p.ini}</span>
+                <button onClick={() => removeParada(sec, i)} style={{ padding: "0 8px", color: "#E53935", fontSize: 13, background: "none", border: "none", cursor: "pointer" }}>✕</button>
+              </div>
+              <input type="text" placeholder="Descrição da parada (pode preencher depois)" value={p.desc} onChange={e => updateParada(sec, i, "desc", e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
+              <div style={{ fontSize: 22, fontWeight: 700, color: "#E53935", textAlign: "center", padding: "6px 0 10px" }}>{formatMin(elapsed)}</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => finalizarParadaAgora(sec, i)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "#2D9E7F", color: "#FFF", border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✅ Finalizar agora</button>
+                <button
+                  onClick={() => setInputModal({
+                    title: "Tempo parado", subtitle: "Informe quantos minutos a máquina ficou parada", placeholder: "Ex: 45", inputMode: "numeric",
+                    onConfirm: (v) => {
+                      const n = parseInt(v.replace(/\D/g, ""), 10);
+                      if (!isNaN(n) && n >= 0) finalizarParadaManual(sec, i, n);
+                      setInputModal(null);
+                    }
+                  })}
+                  style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: theme.sectionBtnBg, color: theme.text, border: `1px solid ${theme.inputBorder}`, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                >✏️ Informar tempo</button>
+              </div>
+            </div>
+          );
+        }
+
         if (p.collapsed) return (
           <div key={i} style={{ border: "1px solid #F0F0F0", borderRadius: 12, padding: 10, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 13, fontWeight: 500, flex: 1, color: min > 0 ? "#2D9E7F" : "#1A1A2E" }}>{p.desc || `Parada ${i + 1}`}{tempoLabel}</span>
@@ -710,7 +806,11 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
               <div><label style={{ fontSize: 11, color: theme.textSub }}>Início</label><input type="time" value={p.ini} onChange={e => updateParada(sec, i, "ini", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
               <div><label style={{ fontSize: 11, color: theme.textSub }}>Fim</label><input type="time" value={p.fim} onChange={e => updateParada(sec, i, "fim", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
             </div>
-            {min > 0 && <div style={{ fontSize: 13, fontWeight: 600, color: "#2D9E7F", padding: "6px 10px", background: "rgba(45,158,127,0.08)", borderRadius: 8, marginBottom: 8 }}>⏱ Parada total: {min} minutos (das {p.ini} às {p.fim}).</div>}
+            {min > 0 && (
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#2D9E7F", padding: "6px 10px", background: "rgba(45,158,127,0.08)", borderRadius: 8, marginBottom: 8 }}>
+                ⏱ {formatMin(min)}{p.ini && p.fim ? ` (das ${p.ini} às ${p.fim})` : p.ini ? ` (iniciada às ${p.ini})` : typeof p.manualMin === "number" ? " (informado manualmente)" : ""}
+              </div>
+            )}
             <input type="text" placeholder="Nota (ex: Aberto nota n° 1433966)" value={p.nota} onChange={e => updateParada(sec, i, "nota", e.target.value)} style={inputStyle} />
           </div>
         );
@@ -910,7 +1010,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
           {!headerCollapsed && <>
             <label style={{ fontSize: 11, color: theme.textSub }}>Destinatário</label>
             <div style={{ display: "flex", gap: 6, marginTop: 4, marginBottom: 8 }}>
-              <input type="text" value={dest} onChange={e => setDest(e.target.value)} style={{ ...inputStyle, marginTop: 0, flex: 1 }} />
+              <input type="text" placeholder="Nome do destinatário" value={dest} onChange={e => setDest(e.target.value)} style={{ ...inputStyle, marginTop: 0, flex: 1 }} />
               <button onClick={addDestinatario} style={{ ...btnStyle, fontSize: 14, color: "#2D9E7F" }} title="Salvar como atalho">+</button>
             </div>
             {db.destinatarios.length > 0 && (
@@ -972,6 +1072,10 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
               return (
                 <div key={idx} style={{ padding: 10, marginBottom: 6, borderRadius: 12, background: qtd > 0 ? "rgba(45,158,127,0.07)" : "#F9F9F9", border: `1px solid ${qtd > 0 ? "rgba(45,158,127,0.2)" : "transparent"}` }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", rowGap: 6 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
+                      <button onClick={() => moveItemConsumo(idx, -1)} disabled={idx === 0} style={{ fontSize: 10, width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === 0 ? "default" : "pointer", opacity: idx === 0 ? 0.3 : 1 }}>▲</button>
+                      <button onClick={() => moveItemConsumo(idx, 1)} disabled={idx === itens.length - 1} style={{ fontSize: 10, width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === itens.length - 1 ? "default" : "pointer", opacity: idx === itens.length - 1 ? 0.3 : 1 }}>▼</button>
+                    </div>
                     <span style={{ fontSize: 13, fontWeight: 500, whiteSpace: "nowrap" }}>{item.label}</span>
                     {qtd > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: "#2D9E7F", background: "rgba(45,158,127,0.12)", padding: "2px 8px", borderRadius: 20, whiteSpace: "nowrap", flexShrink: 0 }}>{String(qtd).padStart(2, "0")} · {totalItem}min</span>}
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
@@ -1104,12 +1208,44 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
               <textarea value={obsTomb} onChange={e => setObsTomb(e.target.value)} rows={2} placeholder="Observações Tombador..." style={{ ...inputStyle, resize: "vertical", marginTop: 4 }} />
             </div>
             <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #F0F0F0" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
                 <span style={{ fontSize: 12, fontWeight: 600, color: "#9E9E9E" }}>⏱ Paradas Tombador</span>
-                <button onClick={addParadaTomb} style={{ ...sectionBtn, color: "#2D9E7F", fontWeight: 600 }}>+ Adicionar</button>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button onClick={addParadaTombAutomatica} style={{ ...sectionBtn, color: "#E53935", fontWeight: 600 }}>🔴 Iniciar agora</button>
+                  <button onClick={addParadaTomb} style={{ ...sectionBtn, color: "#2D9E7F", fontWeight: 600 }}>+ Adicionar</button>
+                </div>
               </div>
               {paradasTomb.map((p, i) => {
-                const min = getMin(p); const tempoLabel = min > 0 ? ` · ${min} min` : "";
+                const min = getMin(p); const tempoLabel = min > 0 ? ` · ${formatMin(min)}` : "";
+
+                if (p.emAndamento) {
+                  const elapsed = p.iniciadaEm ? Math.max(0, Math.floor((Date.now() - p.iniciadaEm) / 60000)) : 0;
+                  return (
+                    <div key={i} style={{ border: "1.5px solid #E53935", borderRadius: 12, padding: 10, marginBottom: 8, background: "rgba(229,57,53,0.06)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: "#E53935" }}>🔴 Parada {i + 1} em andamento · desde {p.ini}</span>
+                        <button onClick={() => removeParadaTomb(i)} style={{ padding: "0 8px", color: "#E53935", fontSize: 13, background: "none", border: "none", cursor: "pointer" }}>✕</button>
+                      </div>
+                      <input type="text" placeholder="Descrição da parada (pode preencher depois)" value={p.desc} onChange={e => updateParadaTomb(i, "desc", e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
+                      <div style={{ fontSize: 22, fontWeight: 700, color: "#E53935", textAlign: "center", padding: "6px 0 10px" }}>{formatMin(elapsed)}</div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button onClick={() => finalizarParadaTombAgora(i)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "#2D9E7F", color: "#FFF", border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✅ Finalizar agora</button>
+                        <button
+                          onClick={() => setInputModal({
+                            title: "Tempo parado", subtitle: "Informe quantos minutos a máquina ficou parada", placeholder: "Ex: 45", inputMode: "numeric",
+                            onConfirm: (v) => {
+                              const n = parseInt(v.replace(/\D/g, ""), 10);
+                              if (!isNaN(n) && n >= 0) finalizarParadaTombManual(i, n);
+                              setInputModal(null);
+                            }
+                          })}
+                          style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: theme.sectionBtnBg, color: theme.text, border: `1px solid ${theme.inputBorder}`, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                        >✏️ Informar tempo</button>
+                      </div>
+                    </div>
+                  );
+                }
+
                 if (p.collapsed) return (
                   <div key={i} style={{ border: "1px solid #F0F0F0", borderRadius: 12, padding: 10, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 13, fontWeight: 500, flex: 1, color: min > 0 ? "#2D9E7F" : "#1A1A2E" }}>{p.desc || `Parada ${i + 1}`}{tempoLabel}</span>
@@ -1131,7 +1267,11 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
                       <div><label style={{ fontSize: 11, color: theme.textSub }}>Início</label><input type="time" value={p.ini} onChange={e => updateParadaTomb(i, "ini", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
                       <div><label style={{ fontSize: 11, color: theme.textSub }}>Fim</label><input type="time" value={p.fim} onChange={e => updateParadaTomb(i, "fim", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
                     </div>
-                    {min > 0 && <div style={{ fontSize: 13, fontWeight: 600, color: "#2D9E7F", padding: "6px 10px", background: "rgba(45,158,127,0.08)", borderRadius: 8, marginBottom: 8 }}>⏱ Parada total: {min} minutos (das {p.ini} às {p.fim}).</div>}
+                    {min > 0 && (
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#2D9E7F", padding: "6px 10px", background: "rgba(45,158,127,0.08)", borderRadius: 8, marginBottom: 8 }}>
+                        ⏱ {formatMin(min)}{p.ini && p.fim ? ` (das ${p.ini} às ${p.fim})` : p.ini ? ` (iniciada às ${p.ini})` : typeof p.manualMin === "number" ? " (informado manualmente)" : ""}
+                      </div>
+                    )}
                     <input type="text" placeholder="Nota (ex: Aberto nota n° 1433966)" value={p.nota} onChange={e => updateParadaTomb(i, "nota", e.target.value)} style={inputStyle} />
                   </div>
                 );
