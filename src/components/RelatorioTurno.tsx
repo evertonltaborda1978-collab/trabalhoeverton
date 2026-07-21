@@ -376,10 +376,10 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   const [fontSize, setFontSize] = useState<"sm"|"md"|"lg">(saved?.fontSize ?? "md");
   const [embaladeiraNum, setEmbaladeiraNum] = useState<"1"|"2">(saved?.embaladeiraNum ?? "2");
   const [headerCollapsed, setHeaderCollapsed] = useState(!!saved);
-  const [embCollapsed, setEmbCollapsed] = useState(!!saved);
-  const [clCollapsed, setClCollapsed] = useState(!!saved);
-  const [rcCollapsed, setRcCollapsed] = useState(!!saved);
-  const [tombCollapsed, setTombCollapsed] = useState(!!saved);
+  const [embCollapsed, setEmbCollapsed] = useState(true);
+  const [clCollapsed, setClCollapsed] = useState(true);
+  const [rcCollapsed, setRcCollapsed] = useState(true);
+  const [tombCollapsed, setTombCollapsed] = useState(true);
   const [itens, setItens] = useState<ItemConsumo[]>(saved?.itens ?? ITENS_BASE.map(l => ({ label: l, trocas: [], collapsed: false })));
   const [obsEmb, setObsEmb] = useState(saved?.obsEmb ?? "");
   const [paradasMap, setParadasMap] = useState<ParadasMap>(saved?.paradasMap ?? { emb: [], cl: [], rc: [] });
