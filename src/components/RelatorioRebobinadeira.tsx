@@ -314,12 +314,12 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   const [horario, setHorario] = useState(saved?.horario ?? "08:20 x 16:20 hr");
   const [resps, setResps] = useState<string[]>(saved?.resps ?? ["Everton"]);
   const [headerCollapsed, setHeaderCollapsed] = useState(!!saved);
-  const [paramsCollapsed, setParamsCollapsed] = useState(!!saved);
-  const [jumbosCollapsed, setJumbosCollapsed] = useState(false);
-  const [consumidosCollapsed, setConsumidosCollapsed] = useState(false);
+  const [paramsCollapsed, setParamsCollapsed] = useState(true);
+  const [jumbosCollapsed, setJumbosCollapsed] = useState(true);
+  const [consumidosCollapsed, setConsumidosCollapsed] = useState(true);
   const [clCollapsed, setClCollapsed] = useState(true);
   const [rcCollapsed, setRcCollapsed] = useState(true);
-  const [obsCollapsed, setObsCollapsed] = useState(false);
+  const [obsCollapsed, setObsCollapsed] = useState(true);
 
   // ── Parâmetros da rebobinadeira ──
   const [idMaquina, setIdMaquina] = useState(saved?.idMaquina ?? "");
