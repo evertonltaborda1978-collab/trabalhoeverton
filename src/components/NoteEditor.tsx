@@ -536,12 +536,14 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (ev) => {
+        const original = ev.target?.result as string;
         const img = new Image();
-        img.onload = () => {
+
+        const drawAndResolve = () => {
           try {
             const canvas = document.createElement("canvas");
-            let w = img.width;
-            let h = img.height;
+            let w = img.naturalWidth || img.width;
+            let h = img.naturalHeight || img.height;
             if (w > maxSize || h > maxSize) {
               if (w > h) { h = Math.round((h * maxSize) / w); w = maxSize; }
               else { w = Math.round((w * maxSize) / h); h = maxSize; }
@@ -551,7 +553,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
             const ctx = canvas.getContext("2d");
             if (!ctx) {
               // Canvas context unavailable — use original file as-is
-              resolve(ev.target?.result as string);
+              resolve(original);
               return;
             }
             // Preenche com fundo branco antes de desenhar — necessário para
@@ -560,28 +562,78 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
             ctx.fillStyle = "#FFFFFF";
             ctx.fillRect(0, 0, w, h);
             ctx.drawImage(img, 0, 0, w, h);
+
+            // Sanity check: amostra alguns pixels pra detectar canvas em branco.
+            // Prints de tela (screenshots) são maiores/mais complexos de decodificar
+            // que fotos normais, e em alguns navegadores/WebViews o evento "load"
+            // pode disparar antes do bitmap estar 100% pronto pra ser desenhado —
+            // isso resulta num canvas todo branco mesmo sem erro nenhum.
+            if (isCanvasBlank(ctx, w, h)) {
+              resolve(original);
+              return;
+            }
+
             const dataUrl = canvas.toDataURL("image/jpeg", quality);
-            // Sanity check: if result is suspiciously small (blank/black canvas),
-            // fall back to the original base64 data
+            // Sanity check adicional: resultado suspeito de pequeno (canvas em branco/preto)
             if (dataUrl.length < 1000) {
-              resolve(ev.target?.result as string);
+              resolve(original);
               return;
             }
             resolve(dataUrl);
           } catch {
             // Any error: fall back to original
-            resolve(ev.target?.result as string);
+            resolve(original);
           }
         };
-        img.onerror = () => {
-          // Image failed to load: fall back to original
-          resolve(ev.target?.result as string);
-        };
-        img.src = ev.target?.result as string;
+
+        // img.decode() garante que o bitmap está totalmente decodificado antes
+        // de desenhar no canvas — evita a corrida com "onload" em imagens grandes
+        // (como screenshots), que pode gerar uma imagem em branco de forma
+        // intermitente. Em navegadores sem suporte a decode(), cai pro onload.
+        if (typeof img.decode === "function") {
+          img.src = original;
+          img
+            .decode()
+            .then(drawAndResolve)
+            .catch(() => {
+              // decode() falhou (imagem corrompida ou navegador recusou) — tenta onload como último recurso
+              img.onload = drawAndResolve;
+              img.onerror = () => resolve(original);
+            });
+        } else {
+          img.onload = drawAndResolve;
+          img.onerror = () => resolve(original);
+          img.src = original;
+        }
       };
       reader.onerror = () => resolve("");
       reader.readAsDataURL(file);
     });
+  };
+
+  // Verifica se um canvas está inteiramente (ou quase) branco, amostrando uma
+  // grade de pixels em vez de ler o canvas inteiro (mais rápido e leve).
+  const isCanvasBlank = (ctx: CanvasRenderingContext2D, w: number, h: number): boolean => {
+    try {
+      const samplesPerAxis = 8;
+      let whiteCount = 0;
+      let total = 0;
+      for (let i = 1; i < samplesPerAxis; i++) {
+        for (let j = 1; j < samplesPerAxis; j++) {
+          const x = Math.floor((w * i) / samplesPerAxis);
+          const y = Math.floor((h * j) / samplesPerAxis);
+          const [r, g, b] = ctx.getImageData(x, y, 1, 1).data;
+          total++;
+          if (r > 250 && g > 250 && b > 250) whiteCount++;
+        }
+      }
+      // Se praticamente todos os pontos amostrados forem brancos, provavelmente
+      // o desenho falhou e sobrou só o fundo branco preenchido antes.
+      return total > 0 && whiteCount / total > 0.97;
+    } catch {
+      // Se não conseguir ler pixels (ex: canvas tainted), não bloqueia o fluxo normal
+      return false;
+    }
   };
 
   const insertImageAtBlock = async (file: File) => {
