@@ -144,6 +144,25 @@ function InputModal({ open, title, subtitle, placeholder, initialValue = "", inp
   );
 }
 
+// ── ConfirmModal ──
+function ConfirmModal({ open, title, subtitle, onConfirm, onCancel }: {
+  open: boolean; title: string; subtitle?: string; onConfirm: () => void; onCancel: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 260, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onCancel}>
+      <div style={{ background: "#FFF", borderRadius: 18, padding: 20, width: "min(100%,340px)" }} onClick={e => e.stopPropagation()}>
+        <p style={{ fontWeight: 700, fontSize: 15, color: "#1A1A2E", margin: "0 0 4px" }}>{title}</p>
+        {subtitle && <p style={{ fontSize: 12, color: "#9E9E9E", margin: "0 0 14px" }}>{subtitle}</p>}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={onCancel} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#F0F0F0", color: "#1A1A2E", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Cancelar</button>
+          <button onClick={onConfirm} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#E53935", color: "#FFF", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Excluir</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── ManageListModal ──
 function ManageListModal({ open, title, items, onClose, onEdit, onDelete }: {
   open: boolean; title: string; items: string[]; onClose: () => void;
@@ -355,6 +374,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
 
   // ── Modais ──
   const [inputModal, setInputModal] = useState<{ title: string; subtitle?: string; placeholder?: string; onConfirm: (v: string) => void } | null>(null);
+  const [confirmDeleteItem, setConfirmDeleteItem] = useState<number | null>(null);
   const [numTeclado, setNumTeclado] = useState<{ label: string; valor: string; onConfirm: (v: string) => void } | null>(null);
   const [numValor, setNumValor] = useState("");
   const [showPrevia, setShowPrevia] = useState(false);
@@ -433,8 +453,14 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   const closeJumboForm = () => { setEditandoJumbo(null); setRascunhoJumbo(null); };
 
   const applyFormato = (jumboId: string, f: FormatoJumbo) => {
-    updateJumbo(jumboId, "largura", f.largura);
-    updateJumbo(jumboId, "diametro", f.diametro);
+    if (rascunhoJumbo && rascunhoJumbo.id === jumboId) {
+      const updated = { ...rascunhoJumbo, largura: f.largura, diametro: f.diametro };
+      setJumbos(prev => [...prev, updated]);
+      setRascunhoJumbo(null);
+      setEditandoJumbo(updated.id);
+      return;
+    }
+    setJumbos(prev => prev.map(j => j.id === jumboId ? { ...j, largura: f.largura, diametro: f.diametro } : j));
   };
 
   const updateJumboParam = (jumboId: string, paramId: string, field: "valor" | "unidade", val: string) => {
@@ -979,8 +1005,12 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
             <button onClick={() => setJumbosCollapsed(!jumbosCollapsed)} style={sectionBtn}>{jumbosCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
           </div>
           {!jumbosCollapsed && <>
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <button onClick={addJumbo} style={{ flex: 1, padding: "10px 0", borderRadius: 12, background: "#2D9E7F", color: "#FFF", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer" }}>+ Adicionar Jumbo</button>
+              <BarcodeScannerBtn onScan={val => { const j = newJumbo(); j.codigo = val; setJumbos(prev => [...prev, j]); setEditandoJumbo(j.id); }} />
+            </div>
             {jumbos.length === 0 && <p style={{ fontSize: 12, color: "#BDBDBD", fontStyle: "italic", marginBottom: 8 }}>Nenhum jumbo registrado.</p>}
-            {jumbos.map((j, idx) => (
+            {jumbos.map((j, idx) => ({ j, idx })).reverse().map(({ j, idx }) => (
               <div key={j.id} onClick={() => setEditandoJumbo(j.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", marginBottom: 6, borderRadius: 12, background: theme.inputBg, border: `1px solid ${theme.cardBorder}`, cursor: "pointer" }}>
                 <span style={{ fontSize: 12, fontWeight: 700, color: "#BDBDBD", minWidth: 24 }}>{idx+1}.</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -991,10 +1021,6 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
                 <span style={{ fontSize: 12, color: "#BDBDBD" }}>›</span>
               </div>
             ))}
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <button onClick={addJumbo} style={{ flex: 1, padding: "10px 0", borderRadius: 12, background: "#2D9E7F", color: "#FFF", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer" }}>+ Adicionar Jumbo</button>
-              <BarcodeScannerBtn onScan={val => { const j = newJumbo(); j.codigo = val; setJumbos(prev => [...prev, j]); setEditandoJumbo(j.id); }} />
-            </div>
             {/* Form jumbo */}
             {(editandoJumbo || rascunhoJumbo) && (() => { const j = rascunhoJumbo ?? jumbos.find(x => x.id === editandoJumbo); return j ? renderJumboForm(j) : null; })()}
           </>}
@@ -1026,7 +1052,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
                       {qtd > 0 && <button onClick={() => toggleItemConsumo(idx)} style={sectionBtn}>{item.collapsed ? "▼" : "▲"}</button>}
                       <button onClick={() => addTrocasMultiplas(idx)} style={{ padding: "5px 8px", fontSize: 11, fontWeight: 600, color: "#2D9E7F", background: "rgba(45,158,127,0.1)", border: "1px solid rgba(45,158,127,0.3)", borderRadius: 8, whiteSpace: "nowrap", cursor: "pointer" }} title="Adicionar várias trocas de uma vez">🔢 Várias</button>
                       <button onClick={() => addTroca(idx)} style={{ padding: "5px 10px", fontSize: 11, fontWeight: 600, color: "#fff", background: "#2D9E7F", border: "none", borderRadius: 8, whiteSpace: "nowrap", cursor: "pointer" }}>+ Troca</button>
-                      <button onClick={() => removeItemConsumo(idx)} style={{ width: 24, height: 24, padding: 0, fontSize: 13, color: "#E53935", background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>🗑</button>
+                      <button onClick={() => setConfirmDeleteItem(idx)} style={{ width: 24, height: 24, padding: 0, fontSize: 13, color: "#E53935", background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>🗑</button>
                     </div>
                   </div>
                   {!item.collapsed && item.trocas.map((t, ti) => (
@@ -1186,6 +1212,13 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
       )}
 
       <InputModal open={!!inputModal} title={inputModal?.title || ""} subtitle={inputModal?.subtitle} placeholder={inputModal?.placeholder} inputMode={(inputModal as any)?.inputMode} onConfirm={v => inputModal?.onConfirm(v)} onCancel={() => setInputModal(null)} />
+      <ConfirmModal
+        open={confirmDeleteItem !== null}
+        title="Excluir item?"
+        subtitle={confirmDeleteItem !== null ? `Tem certeza que quer excluir "${itens[confirmDeleteItem]?.label}"? Essa ação não pode ser desfeita.` : undefined}
+        onConfirm={() => { if (confirmDeleteItem !== null) removeItemConsumo(confirmDeleteItem); setConfirmDeleteItem(null); }}
+        onCancel={() => setConfirmDeleteItem(null)}
+      />
     </div>
   );
 }
