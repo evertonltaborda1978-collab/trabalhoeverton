@@ -22,6 +22,19 @@ import {
   Share2,
   Table2,
   Plus,
+  ArrowUpRight,
+  Minus,
+  Circle,
+  Type,
+  Eraser,
+  ZoomIn,
+  ZoomOut,
+  Palette,
+  Bold as BoldIcon,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Paintbrush,
 } from "lucide-react";
 import {
   Dialog,
@@ -49,13 +62,32 @@ export interface TableItem {
   marcado: boolean;
 }
 
+export interface TextStyle {
+  color?: string;
+  font?: string; // "default" | "serif" | "mono" | "hand"
+  bold?: boolean;
+  align?: "left" | "center" | "right";
+}
+
 export interface ContentBlock {
   type: "text" | "image" | "checklist" | "table";
   content?: string;
   url?: string;
   items?: ChecklistItem[];
   tableItems?: TableItem[];
+  style?: TextStyle;
 }
+
+// Cores disponíveis pra formatação de texto
+export const TEXT_COLORS = ["#1A1A2E", "#E53935", "#2D9E7F", "#1E88E5", "#F9A825", "#8E24AA", "#546E7A"];
+
+// Famílias de fonte disponíveis (usando fontes seguras, sem precisar carregar nada extra)
+export const FONT_OPTIONS: Record<string, { label: string; family: string }> = {
+  default: { label: "Padrão", family: "inherit" },
+  serif: { label: "Serifada", family: "Georgia, 'Times New Roman', serif" },
+  mono: { label: "Monoespaçada", family: "'Courier New', monospace" },
+  hand: { label: "Manuscrita", family: "'Comic Sans MS', 'Comic Sans', cursive" },
+};
 
 // ── Color theme map ────────────────────────────────────
 const COLOR_THEMES: Record<string, { bg: string; lines: string; headerBg: string; toolbarBg: string; textMuted: string; borderAccent: string }> = {
@@ -253,10 +285,321 @@ interface NoteEditorProps {
   onSchedule?: (title: string, content: string, date: string, time: string) => void;
 }
 
+// ── ImageAnnotator: editor de desenho tipo Paint (caneta, seta, linha, ──
+// ── retângulo, círculo, texto, borracha de objeto, cores, zoom/lupa) ──
+type DrawTool = "pen" | "arrow" | "line" | "rect" | "circle" | "text" | "eraser";
+
+type DrawObject =
+  | { type: "pen"; points: { x: number; y: number }[]; color: string; width: number }
+  | { type: "arrow"; x1: number; y1: number; x2: number; y2: number; color: string; width: number }
+  | { type: "line"; x1: number; y1: number; x2: number; y2: number; color: string; width: number }
+  | { type: "rect"; x1: number; y1: number; x2: number; y2: number; color: string; width: number }
+  | { type: "circle"; x1: number; y1: number; x2: number; y2: number; color: string; width: number }
+  | { type: "text"; x: number; y: number; text: string; color: string; size: number };
+
+const DRAW_COLORS = ["#E53935", "#FB8C00", "#FDD835", "#2D9E7F", "#1E88E5", "#8E24AA", "#1A1A2E", "#FFFFFF"];
+
+function distToSegment(p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  let t = len2 === 0 ? 0 : ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  const projX = a.x + t * dx, projY = a.y + t * dy;
+  return Math.hypot(p.x - projX, p.y - projY);
+}
+
+function hitTestObject(obj: DrawObject, p: { x: number; y: number }): boolean {
+  const pad = 14;
+  if (obj.type === "pen") return obj.points.some((pt, i) => i > 0 && distToSegment(p, obj.points[i - 1], pt) < pad);
+  if (obj.type === "line" || obj.type === "arrow") return distToSegment(p, { x: obj.x1, y: obj.y1 }, { x: obj.x2, y: obj.y2 }) < pad;
+  if (obj.type === "rect") {
+    const x1 = Math.min(obj.x1, obj.x2), x2 = Math.max(obj.x1, obj.x2);
+    const y1 = Math.min(obj.y1, obj.y2), y2 = Math.max(obj.y1, obj.y2);
+    return p.x >= x1 - pad && p.x <= x2 + pad && p.y >= y1 - pad && p.y <= y2 + pad &&
+      (p.x < x1 + pad || p.x > x2 - pad || p.y < y1 + pad || p.y > y2 - pad);
+  }
+  if (obj.type === "circle") {
+    const rx = Math.abs(obj.x2 - obj.x1) / 2, ry = Math.abs(obj.y2 - obj.y1) / 2;
+    const cx = (obj.x1 + obj.x2) / 2, cy = (obj.y1 + obj.y2) / 2;
+    if (rx === 0 || ry === 0) return false;
+    const norm = ((p.x - cx) / rx) ** 2 + ((p.y - cy) / ry) ** 2;
+    return norm > 0.75 && norm < 1.25;
+  }
+  if (obj.type === "text") return p.x >= obj.x - pad && p.x <= obj.x + obj.text.length * obj.size * 0.6 + pad && p.y >= obj.y - pad && p.y <= obj.y + obj.size + pad;
+  return false;
+}
+
+function drawObjectOnCanvas(ctx: CanvasRenderingContext2D, obj: DrawObject) {
+  ctx.strokeStyle = obj.color;
+  ctx.fillStyle = obj.color;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  if (obj.type === "pen") {
+    ctx.lineWidth = obj.width;
+    if (obj.points.length < 2) {
+      if (obj.points.length === 1) { ctx.beginPath(); ctx.arc(obj.points[0].x, obj.points[0].y, obj.width / 2, 0, Math.PI * 2); ctx.fill(); }
+      return;
+    }
+    ctx.beginPath();
+    ctx.moveTo(obj.points[0].x, obj.points[0].y);
+    obj.points.forEach((p) => ctx.lineTo(p.x, p.y));
+    ctx.stroke();
+  } else if (obj.type === "line" || obj.type === "arrow") {
+    ctx.lineWidth = obj.width;
+    ctx.beginPath();
+    ctx.moveTo(obj.x1, obj.y1);
+    ctx.lineTo(obj.x2, obj.y2);
+    ctx.stroke();
+    if (obj.type === "arrow") {
+      const angle = Math.atan2(obj.y2 - obj.y1, obj.x2 - obj.x1);
+      const headLen = Math.max(14, obj.width * 3.5);
+      ctx.beginPath();
+      ctx.moveTo(obj.x2, obj.y2);
+      ctx.lineTo(obj.x2 - headLen * Math.cos(angle - Math.PI / 6), obj.y2 - headLen * Math.sin(angle - Math.PI / 6));
+      ctx.moveTo(obj.x2, obj.y2);
+      ctx.lineTo(obj.x2 - headLen * Math.cos(angle + Math.PI / 6), obj.y2 - headLen * Math.sin(angle + Math.PI / 6));
+      ctx.stroke();
+    }
+  } else if (obj.type === "rect") {
+    ctx.lineWidth = obj.width;
+    ctx.strokeRect(Math.min(obj.x1, obj.x2), Math.min(obj.y1, obj.y2), Math.abs(obj.x2 - obj.x1), Math.abs(obj.y2 - obj.y1));
+  } else if (obj.type === "circle") {
+    ctx.lineWidth = obj.width;
+    const rx = Math.abs(obj.x2 - obj.x1) / 2, ry = Math.abs(obj.y2 - obj.y1) / 2;
+    const cx = (obj.x1 + obj.x2) / 2, cy = (obj.y1 + obj.y2) / 2;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, Math.max(rx, 1), Math.max(ry, 1), 0, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (obj.type === "text") {
+    ctx.font = `700 ${obj.size}px sans-serif`;
+    ctx.textBaseline = "top";
+    ctx.fillText(obj.text, obj.x, obj.y);
+  }
+}
+
+function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSave: (dataUrl: string) => void; onCancel: () => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const drawingRef = useRef<{ active: boolean; current: DrawObject | null }>({ active: false, current: null });
+  const [tool, setTool] = useState<DrawTool>("pen");
+  const [color, setColor] = useState("#E53935");
+  const [strokeWidth, setStrokeWidth] = useState(5);
+  const [objects, setObjects] = useState<DrawObject[]>([]);
+  const [zoom, setZoom] = useState(1);
+  const [canvasSize, setCanvasSize] = useState({ w: 300, h: 300 });
+  const [ready, setReady] = useState(false);
+  const [textPrompt, setTextPrompt] = useState<{ x: number; y: number } | null>(null);
+  const [textInput, setTextInput] = useState("");
+
+  useEffect(() => {
+    const img = new Image();
+    img.onload = () => {
+      imgRef.current = img;
+      setCanvasSize({ w: img.naturalWidth || 300, h: img.naturalHeight || 300 });
+      setReady(true);
+    };
+    img.src = imageUrl;
+  }, [imageUrl]);
+
+  const redraw = useCallback(() => {
+    const canvas = canvasRef.current;
+    const img = imgRef.current;
+    if (!canvas || !img) return;
+    if (canvas.width !== canvasSize.w) canvas.width = canvasSize.w;
+    if (canvas.height !== canvasSize.h) canvas.height = canvasSize.h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const all = drawingRef.current.current ? [...objects, drawingRef.current.current] : objects;
+    all.forEach((obj) => drawObjectOnCanvas(ctx, obj));
+  }, [objects, canvasSize]);
+
+  useEffect(() => { if (ready) redraw(); }, [ready, redraw]);
+
+  function getPoint(e: React.PointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+  }
+
+  function handlePointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
+    e.preventDefault();
+    const p = getPoint(e);
+
+    if (tool === "text") { setTextPrompt(p); return; }
+
+    if (tool === "eraser") {
+      // Remove o objeto desenhado mais próximo do toque (apaga a forma inteira, não pixel a pixel)
+      setObjects((prev) => {
+        for (let i = prev.length - 1; i >= 0; i--) {
+          if (hitTestObject(prev[i], p)) return prev.filter((_, idx) => idx !== i);
+        }
+        return prev;
+      });
+      return;
+    }
+
+    drawingRef.current.active = true;
+    if (tool === "pen") drawingRef.current.current = { type: "pen", points: [p], color, width: strokeWidth };
+    else if (tool === "arrow") drawingRef.current.current = { type: "arrow", x1: p.x, y1: p.y, x2: p.x, y2: p.y, color, width: strokeWidth };
+    else if (tool === "line") drawingRef.current.current = { type: "line", x1: p.x, y1: p.y, x2: p.x, y2: p.y, color, width: strokeWidth };
+    else if (tool === "rect") drawingRef.current.current = { type: "rect", x1: p.x, y1: p.y, x2: p.x, y2: p.y, color, width: strokeWidth };
+    else if (tool === "circle") drawingRef.current.current = { type: "circle", x1: p.x, y1: p.y, x2: p.x, y2: p.y, color, width: strokeWidth };
+    redraw();
+  }
+
+  function handlePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!drawingRef.current.active || !drawingRef.current.current) return;
+    e.preventDefault();
+    const p = getPoint(e);
+    const cur = drawingRef.current.current;
+    if (cur.type === "pen") cur.points.push(p);
+    else { (cur as any).x2 = p.x; (cur as any).y2 = p.y; }
+    redraw();
+  }
+
+  function handlePointerUp() {
+    if (!drawingRef.current.active || !drawingRef.current.current) return;
+    setObjects((prev) => [...prev, drawingRef.current.current!]);
+    drawingRef.current.active = false;
+    drawingRef.current.current = null;
+  }
+
+  function confirmText() {
+    if (textPrompt && textInput.trim()) {
+      setObjects((prev) => [...prev, { type: "text", x: textPrompt.x, y: textPrompt.y, text: textInput.trim(), color, size: 18 + strokeWidth * 3 }]);
+    }
+    setTextPrompt(null);
+    setTextInput("");
+  }
+
+  function handleSave() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    onSave(canvas.toDataURL("image/jpeg", 0.88));
+  }
+
+  const TOOLS: { id: DrawTool; icon: JSX.Element; label: string }[] = [
+    { id: "pen", icon: <Paintbrush size={18} />, label: "Caneta" },
+    { id: "arrow", icon: <ArrowUpRight size={18} />, label: "Seta" },
+    { id: "line", icon: <Minus size={18} />, label: "Linha" },
+    { id: "rect", icon: <Square size={18} />, label: "Retângulo" },
+    { id: "circle", icon: <Circle size={18} />, label: "Círculo" },
+    { id: "text", icon: <Type size={18} />, label: "Texto" },
+    { id: "eraser", icon: <Eraser size={18} />, label: "Apagar" },
+  ];
+
+  return (
+    <div className="absolute inset-0 z-[85] flex flex-col bg-black" style={{ touchAction: "none" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", flexShrink: 0 }}>
+        <button onClick={onCancel} style={{ color: "#FFF", fontSize: 14, fontWeight: 600, background: "none", border: "none" }}>Cancelar</button>
+        <span style={{ color: "#FFF", fontWeight: 700, fontSize: 14 }}>✏️ Editar imagem</span>
+        <button onClick={handleSave} style={{ color: "#2D9E7F", fontSize: 14, fontWeight: 700, background: "none", border: "none" }}>Salvar</button>
+      </div>
+
+      {/* Canvas area */}
+      <div style={{ flex: 1, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center", padding: 8 }}>
+        {ready ? (
+          <canvas
+            ref={canvasRef}
+            style={{ width: canvasSize.w * zoom, maxWidth: zoom <= 1 ? "100%" : "none", height: "auto", touchAction: "none", background: "#fff", borderRadius: 4 }}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
+          />
+        ) : (
+          <Loader2 size={32} className="animate-spin text-white" />
+        )}
+      </div>
+
+      {/* Text input prompt */}
+      {textPrompt && (
+        <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 95, padding: 20 }} onClick={() => { setTextPrompt(null); setTextInput(""); }}>
+          <div style={{ background: "#FFF", borderRadius: 14, padding: 16, width: "100%", maxWidth: 320 }} onClick={(e) => e.stopPropagation()}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: "#1A1A2E", margin: "0 0 8px" }}>Digite o texto</p>
+            <input
+              autoFocus
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") confirmText(); }}
+              placeholder="Escreva aqui..."
+              style={{ width: "100%", padding: "8px 10px", border: "1px solid #E0E0E0", borderRadius: 8, fontSize: 14, outline: "none" }}
+            />
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <button onClick={() => { setTextPrompt(null); setTextInput(""); }} style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: "none", background: "#F0F0F0", color: "#1A1A2E", fontWeight: 600, fontSize: 13 }}>Cancelar</button>
+              <button onClick={confirmText} style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: "none", background: "#2D9E7F", color: "#FFF", fontWeight: 600, fontSize: 13 }}>Adicionar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bottom toolbar */}
+      <div style={{ padding: "10px 10px calc(10px + env(safe-area-inset-bottom))", background: "#161616", display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
+        {/* Tools */}
+        <div style={{ display: "flex", gap: 6, overflowX: "auto" }} className="no-scrollbar">
+          {TOOLS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTool(t.id)}
+              title={t.label}
+              style={{ padding: 8, borderRadius: 8, background: tool === t.id ? "#2D9E7F" : "#2E2E2E", color: "#FFF", flexShrink: 0, border: "none" }}
+            >
+              {t.icon}
+            </button>
+          ))}
+          <div style={{ width: 1, background: "#3A3A3A", margin: "0 2px" }} />
+          <button onClick={() => setObjects((prev) => prev.slice(0, -1))} title="Desfazer último" style={{ padding: 8, borderRadius: 8, background: "#2E2E2E", color: "#FFF", flexShrink: 0, border: "none" }}>
+            <Undo2 size={18} />
+          </button>
+          <button onClick={() => setObjects([])} title="Limpar tudo" style={{ padding: 8, borderRadius: 8, background: "#2E2E2E", color: "#FFF", flexShrink: 0, border: "none", fontSize: 11, fontWeight: 700 }}>
+            Limpar
+          </button>
+        </div>
+
+        {/* Colors + width + zoom */}
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {DRAW_COLORS.map((c) => (
+            <button
+              key={c}
+              onClick={() => setColor(c)}
+              style={{ width: 24, height: 24, borderRadius: "50%", background: c, border: color === c ? "2px solid #2D9E7F" : "2px solid #444", flexShrink: 0 }}
+            />
+          ))}
+          <label style={{ position: "relative", width: 24, height: 24, borderRadius: "50%", overflow: "hidden", border: "2px solid #444", flexShrink: 0, display: "flex" }}>
+            <Palette size={14} style={{ margin: "auto", color: "#FFF" }} />
+            <input type="color" value={color} onChange={(e) => setColor(e.target.value)} style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }} />
+          </label>
+          <input
+            type="range" min={2} max={20} value={strokeWidth}
+            onChange={(e) => setStrokeWidth(Number(e.target.value))}
+            style={{ flex: 1, marginLeft: 4 }}
+          />
+          <button onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))} title="Diminuir zoom (lupa)" style={{ padding: 6, borderRadius: 8, background: "#2E2E2E", color: "#FFF", border: "none", flexShrink: 0 }}>
+            <ZoomOut size={16} />
+          </button>
+          <span style={{ color: "#FFF", fontSize: 11, minWidth: 34, textAlign: "center" }}>{Math.round(zoom * 100)}%</span>
+          <button onClick={() => setZoom((z) => Math.min(4, +(z + 0.25).toFixed(2)))} title="Aumentar zoom (lupa)" style={{ padding: 6, borderRadius: 8, background: "#2E2E2E", color: "#FFF", border: "none", flexShrink: 0 }}>
+            <ZoomIn size={16} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Component ──────────────────────────────────────────
 export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, onSetReadOnly, initialSharedData, onSave, onSchedule }: NoteEditorProps) {
   const [title, setTitle] = useState("");
   const [blocks, setBlocks] = useState<ContentBlock[]>([{ type: "text", content: "" }]);
+  const [editingImageIdx, setEditingImageIdx] = useState<number | null>(null);
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
+  const [viewZoom, setViewZoom] = useState(1);
+  const [activeBlockIdx, setActiveBlockIdx] = useState<number | null>(null);
   const [selectedColor, setSelectedColor] = useState(NOTE_COLORS[0].value);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -529,6 +872,29 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     historyTimer.current = setTimeout(() => {
       setBlocks((current) => { pushHistory(current); return current; });
     }, 500);
+  };
+
+  // Atualiza a imagem de um bloco (usado depois de editar/desenhar em cima dela)
+  const updateImageBlock = (index: number, newUrl: string) => {
+    setBlocks((prev) => {
+      const next = [...prev];
+      if (next[index]?.type !== "image") return prev;
+      next[index] = { ...next[index], url: newUrl };
+      pushHistory(next);
+      return next;
+    });
+    toast({ title: "✏️ Imagem editada", description: "As marcações foram salvas na imagem." });
+  };
+
+  // Aplica formatação (cor, fonte, negrito, alinhamento) ao bloco de texto em foco
+  const applyTextStyle = (index: number, partial: Partial<TextStyle>) => {
+    setBlocks((prev) => {
+      const next = [...prev];
+      if (next[index]?.type !== "text") return prev;
+      next[index] = { ...next[index], style: { ...(next[index].style || {}), ...partial } };
+      pushHistory(next);
+      return next;
+    });
   };
 
   // Compress image before inserting (max 1200px, quality 0.7)
@@ -1337,6 +1703,78 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
             </div>
           </div>
 
+          {/* ── Barra de formatação de texto (aparece com um bloco de texto em foco) ── */}
+          {!readOnly && activeBlockIdx !== null && blocks[activeBlockIdx]?.type === "text" && (
+            <div
+              className="flex items-center gap-2 px-3 py-2 overflow-x-auto no-scrollbar shrink-0"
+              style={{ background: theme.toolbarBg, borderBottom: `1px solid ${theme.lines}` }}
+            >
+              {/* Cores */}
+              {TEXT_COLORS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => applyTextStyle(activeBlockIdx, { color: c })}
+                  style={{
+                    width: 22, height: 22, borderRadius: "50%", background: c, flexShrink: 0,
+                    border: (blocks[activeBlockIdx].style?.color || textColor) === c ? "2px solid #2D9E7F" : "2px solid transparent",
+                  }}
+                  title="Cor do texto"
+                />
+              ))}
+
+              <div style={{ width: 1, height: 20, background: theme.lines, flexShrink: 0 }} />
+
+              {/* Fonte (cicla entre as opções) */}
+              <button
+                onClick={() => {
+                  const keys = Object.keys(FONT_OPTIONS);
+                  const cur = blocks[activeBlockIdx].style?.font || "default";
+                  const next = keys[(keys.indexOf(cur) + 1) % keys.length];
+                  applyTextStyle(activeBlockIdx, { font: next });
+                }}
+                title="Trocar fonte"
+                style={{ fontSize: 11, fontWeight: 700, padding: "4px 8px", borderRadius: 8, background: "transparent", border: `1px solid ${theme.lines}`, color: theme.text, flexShrink: 0, whiteSpace: "nowrap" }}
+              >
+                {FONT_OPTIONS[blocks[activeBlockIdx].style?.font || "default"].label}
+              </button>
+
+              {/* Negrito */}
+              <button
+                onClick={() => applyTextStyle(activeBlockIdx, { bold: !blocks[activeBlockIdx].style?.bold })}
+                title="Negrito"
+                style={{
+                  width: 30, height: 30, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                  background: blocks[activeBlockIdx].style?.bold ? theme.borderAccent : "transparent",
+                  border: `1px solid ${theme.lines}`, color: theme.text,
+                }}
+              >
+                <BoldIcon size={15} />
+              </button>
+
+              <div style={{ width: 1, height: 20, background: theme.lines, flexShrink: 0 }} />
+
+              {/* Alinhamento */}
+              {([
+                { v: "left", icon: <AlignLeft size={15} /> },
+                { v: "center", icon: <AlignCenter size={15} /> },
+                { v: "right", icon: <AlignRight size={15} /> },
+              ] as const).map((a) => (
+                <button
+                  key={a.v}
+                  onClick={() => applyTextStyle(activeBlockIdx, { align: a.v })}
+                  title={`Alinhar à ${a.v === "left" ? "esquerda" : a.v === "center" ? "centro" : "direita"}`}
+                  style={{
+                    width: 30, height: 30, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                    background: (blocks[activeBlockIdx].style?.align || "left") === a.v ? theme.borderAccent : "transparent",
+                    border: `1px solid ${theme.lines}`, color: theme.text,
+                  }}
+                >
+                  {a.icon}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* ── LINED PAPER BODY ── */}
           <div
             ref={scrollContainerRef}
@@ -1376,7 +1814,10 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                           lineHeight: `${editorFontSize * 2}px`,
                           minHeight: `${editorFontSize * 2}px`,
                           fontSize: `${editorFontSize}px`,
-                          color: block.content ? textColor : placeholderColor,
+                          color: block.style?.color || (block.content ? textColor : placeholderColor),
+                          fontFamily: FONT_OPTIONS[block.style?.font || "default"].family,
+                          fontWeight: block.style?.bold ? 700 : 400,
+                          textAlign: block.style?.align || "left",
                           whiteSpace: "pre-wrap",
                           wordBreak: "break-word",
                           cursor: "text",
@@ -1385,7 +1826,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                         }}
                       >
                         {block.content
-                          ? renderTextWithLinks(block.content, block.content ? textColor : placeholderColor, editorFontSize)
+                          ? renderTextWithLinks(block.content, block.style?.color || textColor, editorFontSize)
                           : (idx === 0 && blocks.length === 1 ? "Comece a escrever sua nota..." : "")}
                       </div>
                     );
@@ -1401,6 +1842,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                       onFocus={() => {
                         focusedBlockRef.current = idx;
                         activeFieldRef.current = "content";
+                        setActiveBlockIdx(idx);
                       }}
                       onPaste={handleMobilePaste}
                       placeholder={idx === 0 && blocks.length === 1 ? "Comece a escrever sua nota..." : ""}
@@ -1410,7 +1852,10 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                         minHeight: `${editorFontSize * 2}px`,
                         fontSize: `${editorFontSize}px`,
                         overflow: "hidden",
-                        color: textColor,
+                        color: block.style?.color || textColor,
+                        fontFamily: FONT_OPTIONS[block.style?.font || "default"].family,
+                        fontWeight: block.style?.bold ? 700 : 400,
+                        textAlign: block.style?.align || "left",
                         "--placeholder-color": placeholderColor,
                       } as React.CSSProperties}
                       ref={(el) => {
@@ -1659,6 +2104,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                         <img
                           src={block.url}
                           alt=""
+                          onClick={() => { setViewingImage(block.url!); setViewZoom(1); }}
                           style={{
                             width: "100%",
                             height: "auto",
@@ -1668,18 +2114,41 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                             boxShadow: "0 4px 16px rgba(0,0,0,0.18)",
                             display: "block",
                             margin: "0 auto",
+                            cursor: "zoom-in",
                           }}
                         />
-                        {!readOnly && (
+                        <div style={{ position: "absolute", top: -8, right: -8, display: "flex", gap: 6 }}>
                           <button
-                            onClick={() => removeImageBlock(idx)}
-                            className="absolute -top-2 -right-2 rounded-full text-white transition-all hover:bg-black/80 active:scale-95"
+                            onClick={() => { setViewingImage(block.url!); setViewZoom(1); }}
+                            className="rounded-full text-white transition-all hover:bg-black/80 active:scale-95"
                             style={{ background: "rgba(0,0,0,0.7)", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 6px rgba(0,0,0,0.2)" }}
-                            aria-label="Remover imagem"
+                            aria-label="Ver com lupa"
+                            title="Ver ampliado"
                           >
-                            <X size={16} />
+                            <ScanSearch size={14} />
                           </button>
-                        )}
+                          {!readOnly && (
+                            <button
+                              onClick={() => setEditingImageIdx(idx)}
+                              className="rounded-full text-white transition-all hover:bg-black/80 active:scale-95"
+                              style={{ background: "rgba(0,0,0,0.7)", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 6px rgba(0,0,0,0.2)" }}
+                              aria-label="Desenhar na imagem"
+                              title="Editar / desenhar"
+                            >
+                              <Paintbrush size={14} />
+                            </button>
+                          )}
+                          {!readOnly && (
+                            <button
+                              onClick={() => removeImageBlock(idx)}
+                              className="rounded-full text-white transition-all hover:bg-black/80 active:scale-95"
+                              style={{ background: "rgba(0,0,0,0.7)", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 6px rgba(0,0,0,0.2)" }}
+                              aria-label="Remover imagem"
+                            >
+                              <X size={16} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -2117,6 +2586,46 @@ ${blocksToPlainText(blocks)}`.trim() });
           <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/30 gap-3">
             <Loader2 size={32} className="animate-spin text-white" />
             <p className="text-white text-sm font-medium">Extraindo texto da imagem...</p>
+          </div>
+        )}
+
+        {/* Editor de desenho (tipo Paint) em cima da imagem */}
+        {editingImageIdx !== null && blocks[editingImageIdx]?.url && (
+          <ImageAnnotator
+            imageUrl={blocks[editingImageIdx].url!}
+            onSave={(newUrl) => { updateImageBlock(editingImageIdx, newUrl); setEditingImageIdx(null); }}
+            onCancel={() => setEditingImageIdx(null)}
+          />
+        )}
+
+        {/* Visualizador com lupa (ver a imagem ampliada, sem editar) */}
+        {viewingImage && (
+          <div
+            className="absolute inset-0 z-[85] flex flex-col bg-black"
+            onClick={() => setViewingImage(null)}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", flexShrink: 0 }}>
+              <span style={{ color: "#FFF", fontWeight: 700, fontSize: 14 }}>🔍 Ver ampliado</span>
+              <button onClick={() => setViewingImage(null)} style={{ color: "#FFF", background: "none", border: "none" }}>
+                <X size={22} />
+              </button>
+            </div>
+            <div style={{ flex: 1, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={(e) => e.stopPropagation()}>
+              <img
+                src={viewingImage}
+                alt=""
+                style={{ width: `${viewZoom * 100}%`, maxWidth: viewZoom <= 1 ? "100%" : "none", height: "auto", transition: "width 0.15s ease" }}
+              />
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "center", padding: "10px 16px calc(10px + env(safe-area-inset-bottom))", flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+              <button onClick={() => setViewZoom((z) => Math.max(0.5, +(z - 0.5).toFixed(2)))} style={{ padding: 8, borderRadius: 8, background: "#2E2E2E", color: "#FFF", border: "none" }}>
+                <ZoomOut size={18} />
+              </button>
+              <span style={{ color: "#FFF", fontSize: 13, minWidth: 44, textAlign: "center" }}>{Math.round(viewZoom * 100)}%</span>
+              <button onClick={() => setViewZoom((z) => Math.min(5, +(z + 0.5).toFixed(2)))} style={{ padding: 8, borderRadius: 8, background: "#2E2E2E", color: "#FFF", border: "none" }}>
+                <ZoomIn size={18} />
+              </button>
+            </div>
           </div>
         )}
       </DialogContent>
