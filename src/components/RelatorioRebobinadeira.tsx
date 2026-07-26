@@ -610,7 +610,9 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
     const paramsTexto = parametros.filter(p => p.valor).map(p => `• ${p.label}: ${p.valor}${p.unidade ? " " + p.unidade : ""}`).join("\n");
     const jumbosTexto = jumbos.map((j, i) => {
       let linha = `${i + 1}. Jumbo ${j.codigo || "—"}`;
-      if (j.largura || j.diametro) linha += ` /${j.largura} ${j.diametro}`;
+      if (j.largura && j.diametro) linha += ` — ${j.largura} x ${j.diametro}`;
+      else if (j.largura) linha += ` — ${j.largura}`;
+      else if (j.diametro) linha += ` — Ø${j.diametro}`;
       return linha;
     }).join("\n");
 
