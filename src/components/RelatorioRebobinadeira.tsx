@@ -680,6 +680,9 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
     else { await navigator.clipboard.writeText(text); toast({ title: "✅ Copiado!" }); }
   };
 
+  const [showSendConfirm, setShowSendConfirm] = useState(false);
+  const confirmarEnvio = () => { setShowSendConfirm(false); handleShare(); };
+
   // ── Tema ──
   const fz = fontSize === "sm" ? 12 : fontSize === "lg" ? 16 : 14;
   const theme = {
@@ -1153,7 +1156,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: theme.headerBg, borderTop: `1px solid ${theme.cardBorder}`, padding: "12px 16px", paddingBottom: "calc(12px + env(safe-area-inset-bottom))", display: "flex", gap: 8 }}>
         <button onClick={() => { setPrevia(gerarTexto()); setShowPrevia(true); }} style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 600, borderRadius: 12, background: theme.sectionBtnBg, color: theme.text, border: "none", cursor: "pointer" }}>👁 Prévia</button>
         <button onClick={handleSaveNote} style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 600, borderRadius: 12, background: "#1A1A2E", color: "#FFF", border: "none", cursor: "pointer" }}>💾 Salvar</button>
-        <button onClick={handleShare} style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 600, borderRadius: 12, background: "#2D9E7F", color: "#FFF", border: "none", cursor: "pointer" }}>📤 Enviar</button>
+        <button onClick={() => setShowSendConfirm(true)} style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 600, borderRadius: 12, background: "#2D9E7F", color: "#FFF", border: "none", cursor: "pointer" }}>📤 Enviar</button>
       </div>
 
       {/* Modal gerenciar formatos */}
@@ -1221,6 +1224,33 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
         onConfirm={() => { if (confirmDeleteItem !== null) removeItemConsumo(confirmDeleteItem); setConfirmDeleteItem(null); }}
         onCancel={() => setConfirmDeleteItem(null)}
       />
+
+      {/* Confirmação antes de enviar o relatório */}
+      {showSendConfirm && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 260, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => setShowSendConfirm(false)}>
+          <div style={{ background: theme.card, borderRadius: 18, padding: 20, width: "min(100%,340px)" }} onClick={e => e.stopPropagation()}>
+            <p style={{ fontWeight: 700, fontSize: 15, color: theme.text, margin: "0 0 12px" }}>Confirmar envio?</p>
+
+            <div style={{ background: theme.inputBg, border: `1px solid ${theme.inputBorder}`, borderRadius: 12, padding: "10px 12px", marginBottom: 16, display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ fontSize: 13, color: theme.text }}>
+                <span style={{ color: theme.textSub }}>Destinatário: </span>
+                <strong>{dest || "—"}</strong>
+              </div>
+              <div style={{ fontSize: 13, color: theme.text }}>
+                <strong>Relatório da Rebobinadeira {rebobNum}</strong>
+              </div>
+              <div style={{ fontSize: 13, color: theme.text }}>
+                Turno {turno} - Letra {letra} - {horario}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setShowSendConfirm(false)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: theme.sectionBtnBg, color: theme.text, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Voltar</button>
+              <button onClick={confirmarEnvio} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#2D9E7F", color: "#FFF", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Confirmar Envio</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
