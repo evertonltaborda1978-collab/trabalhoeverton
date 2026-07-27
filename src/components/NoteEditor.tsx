@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useLayoutEffect, Component, type ReactNode } from "react";
 import { Note } from "@/hooks/useNotes";
 import {
   Camera,
@@ -391,12 +391,27 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
   const [textPrompt, setTextPrompt] = useState<{ x: number; y: number } | null>(null);
   const [textInput, setTextInput] = useState("");
 
+  const [loadError, setLoadError] = useState(false);
+
   useEffect(() => {
     const img = new Image();
+    img.crossOrigin = "anonymous";
     img.onload = () => {
       imgRef.current = img;
       setCanvasSize({ w: img.naturalWidth || 300, h: img.naturalHeight || 300 });
       setReady(true);
+    };
+    img.onerror = () => {
+      // Se a imagem vier de outro domínio sem permissão de CORS, tenta de novo sem
+      // marcar como cross-origin (perde a capacidade de salvar depois, mas não trava).
+      const fallback = new Image();
+      fallback.onload = () => {
+        imgRef.current = fallback;
+        setCanvasSize({ w: fallback.naturalWidth || 300, h: fallback.naturalHeight || 300 });
+        setReady(true);
+      };
+      fallback.onerror = () => setLoadError(true);
+      fallback.src = imageUrl;
     };
     img.src = imageUrl;
   }, [imageUrl]);
@@ -476,10 +491,17 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
     setTextInput("");
   }
 
+  const [saveError, setSaveError] = useState(false);
+
   function handleSave() {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    onSave(canvas.toDataURL("image/jpeg", 0.88));
+    try {
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
+      onSave(dataUrl);
+    } catch (err) {
+      setSaveError(true);
+    }
   }
 
   const TOOLS: { id: DrawTool; icon: JSX.Element; label: string }[] = [
@@ -503,7 +525,12 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
 
       {/* Canvas area */}
       <div style={{ flex: 1, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center", padding: 8 }}>
-        {ready ? (
+        {loadError ? (
+          <div style={{ textAlign: "center", padding: 20, color: "#FFF" }}>
+            <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>😕 Não consegui carregar essa imagem pra editar.</p>
+            <p style={{ fontSize: 12, color: "#AAA" }}>Toque em "Cancelar" e tente novamente.</p>
+          </div>
+        ) : ready ? (
           <canvas
             ref={canvasRef}
             style={{ width: canvasSize.w * zoom, maxWidth: zoom <= 1 ? "100%" : "none", height: "auto", touchAction: "none", background: "#fff", borderRadius: 4 }}
@@ -516,6 +543,17 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
           <Loader2 size={32} className="animate-spin text-white" />
         )}
       </div>
+
+      {/* Aviso se não conseguir salvar (bloqueio de segurança do navegador) */}
+      {saveError && (
+        <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 96, padding: 20 }} onClick={() => setSaveError(false)}>
+          <div style={{ background: "#FFF", borderRadius: 14, padding: 18, maxWidth: 300, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: "#1A1A2E", margin: "0 0 8px" }}>😕 Não consegui salvar</p>
+            <p style={{ fontSize: 12, color: "#9E9E9E", margin: "0 0 14px" }}>O navegador bloqueou o salvamento por segurança (a imagem vem de outro endereço). Tente tirar a foto de novo, ou avise o suporte.</p>
+            <button onClick={() => setSaveError(false)} style={{ width: "100%", padding: "8px 0", borderRadius: 8, border: "none", background: "#2D9E7F", color: "#FFF", fontWeight: 600, fontSize: 13 }}>Entendi</button>
+          </div>
+        </div>
+      )}
 
       {/* Text input prompt */}
       {textPrompt && (
@@ -590,6 +628,37 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
       </div>
     </div>
   );
+}
+
+// ── Rede de segurança: se o editor de desenho der algum erro inesperado, ──
+// ── mostra um aviso só ali dentro, em vez de derrubar o app inteiro (tela branca). ──
+class AnnotatorErrorBoundary extends Component<
+  { children: ReactNode; onCancel: () => void },
+  { hasError: boolean }
+> {
+  constructor(props: { children: ReactNode; onCancel: () => void }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: unknown) {
+    console.error("Erro no editor de desenho:", error);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="absolute inset-0 z-[85] flex flex-col items-center justify-center bg-black gap-4 px-8">
+          <p style={{ color: "#FFF", fontSize: 14, fontWeight: 600, textAlign: "center" }}>😕 Não consegui abrir o editor de desenho pra essa imagem.</p>
+          <button onClick={this.props.onCancel} style={{ padding: "10px 24px", borderRadius: 10, border: "none", background: "#2D9E7F", color: "#FFF", fontWeight: 600, fontSize: 13 }}>
+            Voltar
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 // ── Component ──────────────────────────────────────────
@@ -2591,11 +2660,13 @@ ${blocksToPlainText(blocks)}`.trim() });
 
         {/* Editor de desenho (tipo Paint) em cima da imagem */}
         {editingImageIdx !== null && blocks[editingImageIdx]?.url && (
-          <ImageAnnotator
-            imageUrl={blocks[editingImageIdx].url!}
-            onSave={(newUrl) => { updateImageBlock(editingImageIdx, newUrl); setEditingImageIdx(null); }}
-            onCancel={() => setEditingImageIdx(null)}
-          />
+          <AnnotatorErrorBoundary onCancel={() => setEditingImageIdx(null)}>
+            <ImageAnnotator
+              imageUrl={blocks[editingImageIdx].url!}
+              onSave={(newUrl) => { updateImageBlock(editingImageIdx, newUrl); setEditingImageIdx(null); }}
+              onCancel={() => setEditingImageIdx(null)}
+            />
+          </AnnotatorErrorBoundary>
         )}
 
         {/* Visualizador com lupa (ver a imagem ampliada, sem editar) */}
