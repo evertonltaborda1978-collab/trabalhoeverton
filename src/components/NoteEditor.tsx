@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useLayoutEffect, Component, type ReactNode } from "react";
+import { useState, useRef, useCallback, useEffect, useLayoutEffect, Component, ReactNode } from "react";
 import { Note } from "@/hooks/useNotes";
 import {
   Camera,
@@ -1555,7 +1555,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); else onOpenChange(v); }} modal={false}>
-      <DialogContent className="!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !w-screen !max-w-none !max-h-none !rounded-none !shadow-none !border-0 !p-0 !gap-0 !bg-transparent z-50"
+      <DialogContent className="!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !w-screen !max-w-none !max-h-none !rounded-none !shadow-none !border-0 !p-0 !gap-0 !bg-transparent z-50 sm:!inset-auto sm:!left-1/2 sm:!top-1/2 sm:!-translate-x-1/2 sm:!-translate-y-1/2 sm:!w-full sm:!max-w-[480px] sm:!h-auto sm:!max-h-[92vh] sm:!rounded-2xl sm:!shadow-2xl sm:!overflow-hidden"
         style={{ height: "100dvh" }}
         aria-describedby={undefined}
         onOpenAutoFocus={(e) => e.preventDefault()}
@@ -2186,7 +2186,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                             cursor: "zoom-in",
                           }}
                         />
-                        <div style={{ position: "absolute", top: -8, right: -8, display: "flex", gap: 6 }}>
+                        <div style={{ position: "absolute", top: 8, right: 8, display: "flex", gap: 6, zIndex: 5 }}>
                           <button
                             onClick={() => { setViewingImage(block.url!); setViewZoom(1); }}
                             className="rounded-full text-white transition-all hover:bg-black/80 active:scale-95"
