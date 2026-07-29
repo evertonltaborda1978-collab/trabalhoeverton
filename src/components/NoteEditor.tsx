@@ -36,6 +36,10 @@ import {
   AlignRight,
   Paintbrush,
   Scissors,
+  Contrast,
+  Volume2,
+  VolumeX,
+  BookOpen,
 } from "lucide-react";
 import {
   Dialog,
@@ -756,7 +760,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [editorFontSize, setEditorFontSize] = useState<number>(() => {
     const stored = parseInt(localStorage.getItem("editor_font_size") || "", 10);
-    return [14, 16, 20, 24].includes(stored) ? stored : 16;
+    return [14, 16, 20, 24, 30].includes(stored) ? stored : 16;
   });
   const changeEditorFontSize = (size: number) => {
     setEditorFontSize(size);
@@ -963,9 +967,62 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     setHistoryIdx(-1);
   }, [open, editingNote?.id, initialSharedData?.title, initialSharedData?.content]);
 
-  const theme = getTheme(selectedColor);
+  const [highContrast, setHighContrast] = useState<boolean>(() => localStorage.getItem("editor_high_contrast") === "true");
+  const toggleHighContrast = () => {
+    setHighContrast((prev) => { localStorage.setItem("editor_high_contrast", String(!prev)); return !prev; });
+  };
+
+  const [readingMode, setReadingMode] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  const getPlainTextForSpeech = () => {
+    const parts: string[] = [];
+    if (title.trim()) parts.push(title.trim());
+    blocks.forEach((b) => {
+      if (b.type === "text" && b.content?.trim()) parts.push(b.content.trim());
+      else if (b.type === "checklist" && b.items) {
+        b.items.forEach((it) => { if (it.text?.trim()) parts.push(`${it.checked ? "concluído" : "pendente"}: ${it.text.trim()}`); });
+      } else if (b.type === "table" && b.tableItems) {
+        b.tableItems.forEach((it) => { if (it.nome?.trim()) parts.push(`${it.nome.trim()}: ${it.valor || "0"}`); });
+      }
+    });
+    return parts.join(". ");
+  };
+
+  const toggleReadAloud = () => {
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+    const text = getPlainTextForSpeech();
+    if (!text.trim()) {
+      toast({ title: "Nada pra ler", description: "Essa nota ainda está vazia." });
+      return;
+    }
+    try {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "pt-BR";
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+      setIsSpeaking(true);
+    } catch {
+      toast({ title: "Não consegui ler em voz alta", description: "Esse navegador pode não ter suporte a essa função." });
+    }
+  };
+
+  useEffect(() => {
+    return () => { window.speechSynthesis?.cancel(); };
+  }, []);
+
+  const themeBase = getTheme(selectedColor);
   const isDark = selectedColor === "bg-gray-800";
-  const textColor = isDark ? "#E0E0E0" : "#1A1A2E";
+  const theme = highContrast
+    ? { ...themeBase, textMuted: isDark ? "#EEEEEE" : "#000000", lines: isDark ? "#888888" : "#444444" }
+    : themeBase;
+  const textColor = highContrast ? (isDark ? "#FFFFFF" : "#000000") : (isDark ? "#E0E0E0" : "#1A1A2E");
   const placeholderColor = isDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.3)";
 
   // ── Undo / Redo ──────────────────────────────────────
@@ -1889,7 +1946,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
               )}
             </span>
             <div className="flex items-center gap-1">
-              {[14, 16, 20, 24].map((size, i) => (
+              {[14, 16, 20, 24, 30].map((size, i) => (
                 <button
                   key={size}
                   onClick={() => changeEditorFontSize(size)}
@@ -1909,6 +1966,48 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                   A
                 </button>
               ))}
+
+              <button
+                onClick={toggleHighContrast}
+                title="Alto contraste"
+                style={{
+                  width: 24, height: 24, borderRadius: 6, marginLeft: 4, flexShrink: 0,
+                  background: highContrast ? theme.borderAccent : "transparent",
+                  border: `0.5px solid ${theme.lines}`,
+                  color: highContrast ? (isDark ? "#1A1A2E" : "#fff") : theme.textMuted,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <Contrast size={13} />
+              </button>
+
+              <button
+                onClick={toggleReadAloud}
+                title="Ouvir a nota em voz alta"
+                style={{
+                  width: 24, height: 24, borderRadius: 6, flexShrink: 0,
+                  background: isSpeaking ? theme.borderAccent : "transparent",
+                  border: `0.5px solid ${theme.lines}`,
+                  color: isSpeaking ? (isDark ? "#1A1A2E" : "#fff") : theme.textMuted,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                {isSpeaking ? <VolumeX size={13} /> : <Volume2 size={13} />}
+              </button>
+
+              <button
+                onClick={() => setReadingMode(true)}
+                title="Modo de leitura simplificado"
+                style={{
+                  width: 24, height: 24, borderRadius: 6, flexShrink: 0,
+                  background: "transparent",
+                  border: `0.5px solid ${theme.lines}`,
+                  color: theme.textMuted,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <BookOpen size={13} />
+              </button>
             </div>
           </div>
 
@@ -2205,7 +2304,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                                 }
                               }}
                               placeholder="Item da lista..."
-                              className="flex-1 bg-transparent border-0 outline-none"
+                              className="flex-1 min-w-0 bg-transparent border-0 outline-none"
                               style={{
                                 lineHeight: `${cFont * 2}px`,
                                 fontSize: cFont,
@@ -2878,6 +2977,82 @@ ${blocksToPlainText(blocks)}`.trim() });
               <button onClick={() => setViewZoom((z) => Math.min(5, +(z + 0.5).toFixed(2)))} style={{ padding: 8, borderRadius: 8, background: "#2E2E2E", color: "#FFF", border: "none" }}>
                 <ZoomIn size={18} />
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Modo de leitura simplificado — tela limpa, só o texto, bem grande */}
+        {readingMode && (
+          <div
+            className="absolute inset-0 z-[90] flex flex-col"
+            style={{ background: highContrast ? (isDark ? "#000" : "#FFF") : theme.bg }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${theme.lines}`, flexShrink: 0 }}>
+              <button onClick={() => setReadingMode(false)} style={{ background: "none", border: "none", color: textColor, display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 600 }}>
+                <X size={20} /> Fechar
+              </button>
+              <button
+                onClick={toggleReadAloud}
+                style={{ background: isSpeaking ? theme.borderAccent : "transparent", border: `1px solid ${theme.lines}`, borderRadius: 10, padding: "8px 14px", color: isSpeaking ? "#FFF" : textColor, display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600 }}
+              >
+                {isSpeaking ? <VolumeX size={16} /> : <Volume2 size={16} />} {isSpeaking ? "Parar" : "Ouvir"}
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-6">
+              {title.trim() && (
+                <h1 style={{ fontSize: Math.max(28, editorFontSize * 1.4), fontWeight: 700, color: textColor, marginBottom: 20, lineHeight: 1.3 }}>
+                  {title}
+                </h1>
+              )}
+              {blocks.map((b, i) => {
+                if (b.type === "text" && b.content?.trim()) {
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        fontSize: Math.max(20, editorFontSize * 1.15),
+                        lineHeight: 1.8,
+                        color: b.style?.color || textColor,
+                        fontWeight: b.style?.bold ? 700 : 400,
+                        textAlign: b.style?.align || "left",
+                        marginBottom: 16,
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {b.contentHtml ? <span dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(b.contentHtml) }} /> : b.content}
+                    </div>
+                  );
+                }
+                if (b.type === "checklist" && b.items) {
+                  return (
+                    <div key={i} style={{ marginBottom: 16 }}>
+                      {b.items.map((it) => (
+                        <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", fontSize: Math.max(18, editorFontSize), color: textColor, opacity: it.checked ? 0.6 : 1, fontWeight: it.bold ? 700 : 400 }}>
+                          {it.checked ? <CheckSquare size={22} color="#4CAF50" /> : <Square size={22} />}
+                          <span style={{ textDecoration: it.checked ? "line-through" : "none" }}>{it.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                }
+                if (b.type === "table" && b.tableItems) {
+                  return (
+                    <div key={i} style={{ marginBottom: 16 }}>
+                      {b.tableItems.map((it) => (
+                        <div key={it.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: Math.max(18, editorFontSize), color: textColor, borderBottom: `1px solid ${theme.lines}` }}>
+                          <span>{it.nome}</span>
+                          <strong>{it.valor}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                }
+                if (b.type === "image" && b.url) {
+                  return <img key={i} src={b.url} alt="" style={{ width: "100%", borderRadius: 12, marginBottom: 16 }} />;
+                }
+                return null;
+              })}
             </div>
           </div>
         )}
