@@ -35,6 +35,7 @@ import {
   AlignCenter,
   AlignRight,
   Paintbrush,
+  Scissors,
 } from "lucide-react";
 import {
   Dialog,
@@ -53,6 +54,7 @@ export interface ChecklistItem {
   id: string;
   text: string;
   checked: boolean;
+  bold?: boolean;
 }
 
 export interface TableItem {
@@ -72,6 +74,7 @@ export interface TextStyle {
 export interface ContentBlock {
   type: "text" | "image" | "checklist" | "table";
   content?: string;
+  contentHtml?: string; // versão com formatação por trecho (cor/negrito), gerada pelo editor rico
   url?: string;
   items?: ChecklistItem[];
   tableItems?: TableItem[];
@@ -185,6 +188,74 @@ function handleMobilePaste(e: React.ClipboardEvent<HTMLInputElement | HTMLTextAr
     const newPos = start + cleaned.length;
     target.setSelectionRange(newPos, newPos);
   }
+}
+
+// Limpeza de segurança básica do HTML gerado pelo editor de texto rico —
+// como o conteúdo vem só do próprio navegador (execCommand), o risco é baixo,
+// mas ainda removemos qualquer coisa perigosa por precaução.
+function sanitizeRichHtml(html: string): string {
+  return (html || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/ on\w+="[^"]*"/gi, "")
+    .replace(/ on\w+='[^']*'/gi, "")
+    .replace(/javascript:/gi, "")
+    .replace(/<(?!\/?(span|br|div|b|strong|i|em|u)\b)[^>]+>/gi, "");
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+// Converte texto simples (sem formatação ainda) em HTML seguro pra semear o editor rico
+function textToHtml(text: string): string {
+  return escapeHtml(text || "").replace(/\n/g, "<br>");
+}
+
+// Posiciona o cursor num contentEditable numa posição de caractere específica
+// (equivalente ao setSelectionRange de uma textarea, que não existe em contentEditable)
+function placeCaretAt(el: HTMLElement, offset: number) {
+  const selection = window.getSelection();
+  if (!selection) return;
+  const range = document.createRange();
+  let remaining = offset;
+  let placed = false;
+
+  function walk(node: Node) {
+    if (placed) return;
+    if (node.nodeType === Node.TEXT_NODE) {
+      const len = node.textContent?.length ?? 0;
+      if (remaining <= len) {
+        range.setStart(node, Math.max(0, remaining));
+        placed = true;
+      } else {
+        remaining -= len;
+      }
+    } else {
+      for (const child of Array.from(node.childNodes)) {
+        walk(child);
+        if (placed) return;
+      }
+    }
+  }
+
+  walk(el);
+  if (!placed) {
+    range.selectNodeContents(el);
+    range.collapse(false);
+  } else {
+    range.collapse(true);
+  }
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function htmlToPlainText(html: string): string {
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html.replace(/<br\s*\/?>/gi, "\n");
+  return tmp.textContent || "";
 }
 
 function serializeBlocks(blocks: ContentBlock[]): string {
@@ -707,7 +778,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const focusedBlockRef = useRef<number>(0);
   const activeFieldRef = useRef<"title" | "content">("content");
   const titleInputRef = useRef<HTMLInputElement>(null);
-  const textAreaRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
+  const richTextRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const pendingFocusRef = useRef<"title" | "content" | null>(null);
   const pendingCursorRef = useRef<number | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -931,16 +1002,35 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   }, [open, undo, redo]);
 
   // ── Block operations ─────────────────────────────────
-  const updateTextBlock = (index: number, text: string) => {
+  // Sincroniza o texto rico (com cores/negrito por trecho) depois de digitar
+  const updateTextBlockRich = (index: number) => {
+    const el = richTextRefs.current[index];
+    if (!el) return;
+    const html = el.innerHTML;
+    const plain = el.innerText;
     setBlocks((prev) => {
       const next = [...prev];
-      next[index] = { ...next[index], content: text };
+      next[index] = { ...next[index], content: plain, contentHtml: html };
       return next;
     });
     clearTimeout(historyTimer.current);
     historyTimer.current = setTimeout(() => {
       setBlocks((current) => { pushHistory(current); return current; });
     }, 500);
+  };
+
+  // Aplica cor/negrito só no trecho selecionado (ou no que for digitado a partir
+  // do cursor, se nada estiver selecionado) — é o mesmo mecanismo usado em editores
+  // de texto de verdade (Gmail, Word Online, etc.)
+  const applyInlineFormat = (index: number, command: "foreColor" | "bold", value?: string) => {
+    const el = richTextRefs.current[index];
+    if (!el) return;
+    el.focus();
+    try {
+      document.execCommand("styleWithCSS", false as any, "true" as any);
+      document.execCommand(command, false, value);
+    } catch { /* navegador sem suporte a esse comando específico */ }
+    updateTextBlockRich(index);
   };
 
   // Atualiza a imagem de um bloco (usado depois de editar/desenhar em cima dela)
@@ -964,6 +1054,58 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
       pushHistory(next);
       return next;
     });
+  };
+
+  // Divide um bloco de texto em dois, no ponto onde está o cursor — assim cada
+  // metade pode ter uma cor/fonte/formatação diferente da outra.
+  const splitBlockAtCursor = (index: number) => {
+    const el = richTextRefs.current[index];
+    const block = blocks[index];
+    if (!el || !block || block.type !== "text") return;
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !el.contains(selection.getRangeAt(0).startContainer)) {
+      toast({ title: "Toque no texto primeiro", description: "Toque no ponto onde quer dividir antes de usar esse botão." });
+      return;
+    }
+    const cursorRange = selection.getRangeAt(0);
+
+    const beforeRange = document.createRange();
+    beforeRange.setStart(el, 0);
+    beforeRange.setEnd(cursorRange.startContainer, cursorRange.startOffset);
+    const beforeContainer = document.createElement("div");
+    beforeContainer.appendChild(beforeRange.cloneContents());
+    const beforeHtml = beforeContainer.innerHTML;
+    const beforeText = htmlToPlainText(beforeHtml);
+
+    const afterRange = document.createRange();
+    afterRange.setStart(cursorRange.startContainer, cursorRange.startOffset);
+    afterRange.setEnd(el, el.childNodes.length);
+    const afterContainer = document.createElement("div");
+    afterContainer.appendChild(afterRange.cloneContents());
+    const afterHtml = afterContainer.innerHTML;
+    const afterText = htmlToPlainText(afterHtml);
+
+    if (!beforeText.trim() || !afterText.trim()) {
+      toast({ title: "Posicione o cursor no meio do texto", description: "Toque no ponto exato onde quer separar as duas partes antes de dividir." });
+      return;
+    }
+
+    setBlocks((prev) => {
+      const next = [...prev];
+      next.splice(index, 1,
+        { type: "text", content: beforeText, contentHtml: beforeHtml, style: block.style },
+        { type: "text", content: afterText, contentHtml: afterHtml, style: block.style },
+      );
+      pushHistory(next);
+      return next;
+    });
+
+    setActiveBlockIdx(index + 1);
+    focusedBlockRef.current = index + 1;
+    pendingFocusRef.current = "content";
+    pendingCursorRef.current = 0;
+    toast({ title: "✂️ Texto dividido em dois blocos", description: "Agora cada parte pode ter sua própria formatação." });
   };
 
   // Compress image before inserting (max 1200px, quality 0.7)
@@ -1431,17 +1573,23 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
       if (!pendingFocusRef.current) return; // already handled by ref callback
       const target = pendingFocusRef.current;
       pendingFocusRef.current = null;
-      const el = target === "title"
-        ? titleInputRef.current
-        : textAreaRefs.current[focusedBlockRef.current];
+      if (target === "title") {
+        const el = titleInputRef.current;
+        if (!el) return;
+        el.focus({ preventScroll: true });
+        const pos = pendingCursorRef.current ?? el.value.length;
+        pendingCursorRef.current = null;
+        const safePos = Math.min(pos, el.value.length);
+        el.setSelectionRange(safePos, safePos);
+        el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        return;
+      }
+      const el = richTextRefs.current[focusedBlockRef.current];
       if (!el) return;
       el.focus({ preventScroll: true });
-      if ("setSelectionRange" in el) {
-        const pos = pendingCursorRef.current ?? (el as HTMLTextAreaElement).value.length;
-        pendingCursorRef.current = null;
-        const safePos = Math.min(pos, (el as HTMLTextAreaElement).value.length);
-        (el as HTMLTextAreaElement).setSelectionRange(safePos, safePos);
-      }
+      const pos = pendingCursorRef.current ?? (el.innerText || "").length;
+      pendingCursorRef.current = null;
+      placeCaretAt(el, pos);
       el.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }, 150);
     return () => clearTimeout(timer);
@@ -1541,15 +1689,6 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const wordCount = plainText.trim().split(/\s+/).filter(Boolean).length;
   const charCount = plainText.length;
 
-  const autoResize = (el: HTMLTextAreaElement) => {
-    const scrollEl = scrollContainerRef.current;
-    const scrollTop = scrollEl?.scrollTop ?? 0;
-    el.style.height = "auto";
-    el.style.height = el.scrollHeight + "px";
-    // Restore scroll synchronously to prevent jump
-    if (scrollEl) scrollEl.scrollTop = scrollTop;
-  };
-
   const canUndo = historyIdx > 0;
   const canRedo = historyIdx < history.length - 1;
 
@@ -1563,6 +1702,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
         onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogTitle className="sr-only">Editor de Nota</DialogTitle>
+        <style>{`.rich-text-editable[data-empty="true"]:before { content: attr(data-placeholder); color: ${placeholderColor}; pointer-events: none; }`}</style>
         {/* ── NOTEPAD CONTAINER ── */}
         <div
           className="flex flex-col"
@@ -1578,7 +1718,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
           {!readOnly && editingNote && (
             <div className="flex items-center justify-center gap-2 px-3 py-1.5 shrink-0" style={{ background: "#2D9E7F", transition: "background 0.3s ease" }}>
               <Pencil size={13} style={{ color: "#FFF" }} />
-              <span className="text-[12px] font-bold text-white">Editando...</span>
+              <span className="text-[14px] font-bold text-white">Editando...</span>
             </div>
           )}
 
@@ -1739,7 +1879,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
           )}
 
           {/* ── Sub-header ── */}
-          <div className="flex items-center justify-between px-4 py-1.5 text-[11px] shrink-0" style={{ color: theme.textMuted, transition: "color 0.3s ease" }}>
+          <div className="flex items-center justify-between px-4 py-1.5 text-[13px] shrink-0" style={{ color: theme.textMuted, transition: "color 0.3s ease" }}>
             <span className="font-medium">
               {readOnly ? "👁️ Visualização" : (editingNote ? "✏️ Editando" : "Nova nota")}
               {isListening && (
@@ -1778,22 +1918,23 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
               className="flex items-center gap-2 px-3 py-2 overflow-x-auto no-scrollbar shrink-0"
               style={{ background: theme.toolbarBg, borderBottom: `1px solid ${theme.lines}` }}
             >
-              {/* Cores */}
+              {/* Cores — aplicam só no trecho selecionado (ou no que for digitado a partir do cursor) */}
               {TEXT_COLORS.map((c) => (
                 <button
                   key={c}
-                  onClick={() => applyTextStyle(activeBlockIdx, { color: c })}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => applyInlineFormat(activeBlockIdx, "foreColor", c)}
                   style={{
                     width: 22, height: 22, borderRadius: "50%", background: c, flexShrink: 0,
-                    border: (blocks[activeBlockIdx].style?.color || textColor) === c ? "2px solid #2D9E7F" : "2px solid transparent",
+                    border: "2px solid transparent",
                   }}
-                  title="Cor do texto"
+                  title="Cor do texto selecionado"
                 />
               ))}
 
               <div style={{ width: 1, height: 20, background: theme.lines, flexShrink: 0 }} />
 
-              {/* Fonte (cicla entre as opções) */}
+              {/* Fonte (cicla entre as opções) — vale pro parágrafo inteiro */}
               <button
                 onClick={() => {
                   const keys = Object.keys(FONT_OPTIONS);
@@ -1801,19 +1942,20 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                   const next = keys[(keys.indexOf(cur) + 1) % keys.length];
                   applyTextStyle(activeBlockIdx, { font: next });
                 }}
-                title="Trocar fonte"
+                title="Trocar fonte (parágrafo inteiro)"
                 style={{ fontSize: 11, fontWeight: 700, padding: "4px 8px", borderRadius: 8, background: "transparent", border: `1px solid ${theme.lines}`, color: theme.text, flexShrink: 0, whiteSpace: "nowrap" }}
               >
                 {FONT_OPTIONS[blocks[activeBlockIdx].style?.font || "default"].label}
               </button>
 
-              {/* Negrito */}
+              {/* Negrito — aplica só no trecho selecionado */}
               <button
-                onClick={() => applyTextStyle(activeBlockIdx, { bold: !blocks[activeBlockIdx].style?.bold })}
-                title="Negrito"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => applyInlineFormat(activeBlockIdx, "bold")}
+                title="Negrito no texto selecionado"
                 style={{
                   width: 30, height: 30, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                  background: blocks[activeBlockIdx].style?.bold ? theme.borderAccent : "transparent",
+                  background: "transparent",
                   border: `1px solid ${theme.lines}`, color: theme.text,
                 }}
               >
@@ -1822,7 +1964,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
               <div style={{ width: 1, height: 20, background: theme.lines, flexShrink: 0 }} />
 
-              {/* Alinhamento */}
+              {/* Alinhamento — vale pro parágrafo inteiro */}
               {([
                 { v: "left", icon: <AlignLeft size={15} /> },
                 { v: "center", icon: <AlignCenter size={15} /> },
@@ -1841,6 +1983,21 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                   {a.icon}
                 </button>
               ))}
+
+              <div style={{ width: 1, height: 20, background: theme.lines, flexShrink: 0 }} />
+
+              {/* Dividir bloco no cursor — permite ter cores/formatos diferentes em cada parte */}
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => splitBlockAtCursor(activeBlockIdx)}
+                title="Dividir texto aqui (cada parte pode ter formatação diferente)"
+                style={{
+                  display: "flex", alignItems: "center", gap: 4, padding: "6px 8px", borderRadius: 8, flexShrink: 0,
+                  background: "transparent", border: `1px solid ${theme.lines}`, color: theme.text, fontSize: 11, fontWeight: 600, whiteSpace: "nowrap",
+                }}
+              >
+                <Scissors size={14} /> Dividir aqui
+              </button>
             </div>
           )}
 
@@ -1894,59 +2051,68 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                           WebkitUserSelect: "text",
                         }}
                       >
-                        {block.content
-                          ? renderTextWithLinks(block.content, block.style?.color || textColor, editorFontSize)
-                          : (idx === 0 && blocks.length === 1 ? "Comece a escrever sua nota..." : "")}
+                        {block.contentHtml ? (
+                          <span dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(block.contentHtml) }} />
+                        ) : block.content ? (
+                          renderTextWithLinks(block.content, block.style?.color || textColor, editorFontSize)
+                        ) : (
+                          idx === 0 && blocks.length === 1 ? "Comece a escrever sua nota..." : ""
+                        )}
                       </div>
                     );
                   }
                   return (
-                    <textarea
+                    <div
                       key={`text-${idx}`}
-                      value={block.content || ""}
-                      onChange={(e) => {
-                        updateTextBlock(idx, e.target.value);
-                        autoResize(e.target);
-                      }}
+                      contentEditable
+                      suppressContentEditableWarning
+                      onInput={() => updateTextBlockRich(idx)}
                       onFocus={() => {
                         focusedBlockRef.current = idx;
                         activeFieldRef.current = "content";
                         setActiveBlockIdx(idx);
                       }}
-                      onPaste={handleMobilePaste}
-                      placeholder={idx === 0 && blocks.length === 1 ? "Comece a escrever sua nota..." : ""}
-                      className="w-full bg-transparent border-0 outline-none resize-none text-base"
+                      onPaste={(e) => {
+                        e.preventDefault();
+                        const text = e.clipboardData.getData("text/plain");
+                        document.execCommand("insertText", false, text);
+                      }}
+                      data-empty={!block.content && !block.contentHtml ? "true" : "false"}
+                      data-placeholder={idx === 0 && blocks.length === 1 ? "Comece a escrever sua nota..." : ""}
+                      className="w-full bg-transparent border-0 outline-none text-base rich-text-editable"
                       style={{
                         lineHeight: `${editorFontSize * 2}px`,
                         minHeight: `${editorFontSize * 2}px`,
                         fontSize: `${editorFontSize}px`,
-                        overflow: "hidden",
-                        color: block.style?.color || textColor,
+                        color: textColor,
                         fontFamily: FONT_OPTIONS[block.style?.font || "default"].family,
-                        fontWeight: block.style?.bold ? 700 : 400,
                         textAlign: block.style?.align || "left",
-                        "--placeholder-color": placeholderColor,
-                      } as React.CSSProperties}
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-word",
+                      }}
                       ref={(el) => {
-                        textAreaRefs.current[idx] = el;
-                        if (el) {
-                          autoResize(el);
-                          // Focus immediately when mounted if this is the pending focus block
-                          if (pendingFocusRef.current === "content" && focusedBlockRef.current === idx) {
-                            pendingFocusRef.current = null;
-                            requestAnimationFrame(() => {
-                              el.focus({ preventScroll: true });
-                              // Use tap position if available, otherwise go to end
-                              const pos = pendingCursorRef.current ?? el.value.length;
-                              pendingCursorRef.current = null;
-                              const safePos = Math.min(pos, el.value.length);
-                              el.setSelectionRange(safePos, safePos);
-                              // Restore scroll position immediately
-                              if (scrollContainerRef.current && savedScrollRef.current > 0) {
-                                scrollContainerRef.current.scrollTop = savedScrollRef.current;
-                              }
-                            });
-                          }
+                        richTextRefs.current[idx] = el;
+                        if (!el) return;
+                        const desiredHtml = block.contentHtml ?? textToHtml(block.content || "");
+                        // Só re-semeia se estiver fora de sincronia (edição externa: desfazer,
+                        // dividir bloco, carregar nota) — nunca enquanto a pessoa está digitando,
+                        // pra não fazer o cursor pular de lugar.
+                        if (el.innerHTML !== desiredHtml && document.activeElement !== el) {
+                          el.innerHTML = desiredHtml;
+                        }
+                        // Focus immediately when mounted if this is the pending focus block
+                        if (pendingFocusRef.current === "content" && focusedBlockRef.current === idx) {
+                          pendingFocusRef.current = null;
+                          requestAnimationFrame(() => {
+                            el.focus({ preventScroll: true });
+                            const pos = pendingCursorRef.current ?? (el.innerText || "").length;
+                            pendingCursorRef.current = null;
+                            placeCaretAt(el, pos);
+                            // Restore scroll position immediately
+                            if (scrollContainerRef.current && savedScrollRef.current > 0) {
+                              scrollContainerRef.current.scrollTop = savedScrollRef.current;
+                            }
+                          });
                         }
                       }}
                     />
@@ -1957,6 +2123,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                   const total = block.items.length;
                   const checked = block.items.filter((i) => i.checked).length;
                   const progress = total > 0 ? Math.round((checked / total) * 100) : 0;
+                  const cFont = editorFontSize; // segue o mesmo ajuste A/A+/A++ do resto da nota
                   return (
                     <div key={`checklist-${idx}`} className="my-2">
                       {/* Progress bar */}
@@ -1968,7 +2135,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                               style={{ width: `${progress}%`, background: progress === 100 ? "#4CAF50" : "#2D9E7F" }}
                             />
                           </div>
-                          <span className="text-[10px] font-bold shrink-0" style={{ color: progress === 100 ? "#4CAF50" : theme.textMuted }}>
+                          <span className="font-bold shrink-0" style={{ color: progress === 100 ? "#4CAF50" : theme.textMuted, fontSize: cFont * 0.7 }}>
                             {checked}/{total} {progress === 100 && "✓"}
                           </span>
                         </div>
@@ -2005,14 +2172,14 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                           >
                             {/* Drag handle */}
                             {!readOnly && (
-                              <span className="cursor-grab opacity-0 group-hover/check:opacity-40 transition-opacity text-xs select-none" style={{ color: theme.textMuted }}>⠿</span>
+                              <span className="cursor-grab opacity-0 group-hover/check:opacity-40 transition-opacity select-none" style={{ color: theme.textMuted, fontSize: cFont * 0.8 }}>⠿</span>
                             )}
                             <button
                               onClick={() => updateChecklistItem(idx, item.id, { checked: !item.checked })}
                               className="shrink-0 transition-all duration-200"
                               style={{ color: item.checked ? "#4CAF50" : (isDark ? "#888" : "#BDBDBD") }}
                             >
-                              {item.checked ? <CheckSquare size={18} /> : <Square size={18} />}
+                              {item.checked ? <CheckSquare size={cFont * 1.15} /> : <Square size={cFont * 1.15} />}
                             </button>
                             <input
                               value={item.text}
@@ -2038,9 +2205,11 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                                 }
                               }}
                               placeholder="Item da lista..."
-                              className="flex-1 bg-transparent border-0 outline-none text-sm"
+                              className="flex-1 bg-transparent border-0 outline-none"
                               style={{
-                                lineHeight: "28px",
+                                lineHeight: `${cFont * 2}px`,
+                                fontSize: cFont,
+                                fontWeight: item.bold ? 700 : 400,
                                 color: item.checked ? "#999" : textColor,
                                 textDecoration: item.checked ? "line-through" : "none",
                                 opacity: item.checked ? 0.7 : 1,
@@ -2048,11 +2217,21 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                             />
                             {!readOnly && (
                               <button
+                                onClick={() => updateChecklistItem(idx, item.id, { bold: !item.bold })}
+                                className="shrink-0 transition-opacity p-1 rounded hover:bg-black/5"
+                                style={{ color: item.bold ? "#2D9E7F" : "#BDBDBD" }}
+                                title="Negrito"
+                              >
+                                <BoldIcon size={cFont * 0.85} />
+                              </button>
+                            )}
+                            {!readOnly && (
+                              <button
                                 onClick={() => removeChecklistItem(idx, item.id)}
                                 className="shrink-0 opacity-0 group-hover/check:opacity-100 transition-opacity p-1 rounded hover:bg-black/5"
                                 style={{ color: "#BDBDBD" }}
                               >
-                                <Trash2 size={14} />
+                                <Trash2 size={cFont * 0.78} />
                               </button>
                             )}
                           </div>
@@ -2061,8 +2240,8 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                       {!readOnly && (
                         <button
                           onClick={() => addChecklistItemAfter(idx)}
-                          className="flex items-center gap-1 text-xs ml-7 py-1 hover:opacity-80 transition-opacity"
-                          style={{ color: theme.textMuted }}
+                          className="flex items-center gap-1 ml-7 py-1 hover:opacity-80 transition-opacity"
+                          style={{ color: theme.textMuted, fontSize: cFont * 0.85 }}
                         >
                           + Adicionar item
                         </button>
@@ -2073,11 +2252,12 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
                 if (block.type === "table" && block.tableItems) {
                   const total = calcularTotalTabela(block.tableItems);
+                  const tFont = editorFontSize; // tamanho base — segue o mesmo ajuste A/A+/A++ do resto da nota
                   return (
                     <div key={`table-${idx}`} className="my-2">
                       <div className="flex items-center gap-1.5 mb-2 px-1">
-                        <Table2 size={14} style={{ color: theme.textMuted }} />
-                        <span className="text-xs font-bold" style={{ color: theme.textMuted }}>Tabela Manual</span>
+                        <Table2 size={tFont} style={{ color: theme.textMuted }} />
+                        <span className="font-bold" style={{ color: theme.textMuted, fontSize: tFont * 0.85 }}>Tabela Manual</span>
                       </div>
                       <div className="space-y-2">
                         {block.tableItems.map((item) => {
@@ -2098,7 +2278,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                                 style={{ color: item.marcado ? "#4CAF50" : (isDark ? "#888" : "#BDBDBD") }}
                                 disabled={readOnly}
                               >
-                                {item.marcado ? <CheckSquare size={16} /> : <Square size={16} />}
+                                {item.marcado ? <CheckSquare size={tFont} /> : <Square size={tFont} />}
                               </button>
                               <input
                                 value={item.nome}
@@ -2108,8 +2288,8 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                                 readOnly={readOnly}
                                 tabIndex={readOnly ? -1 : 0}
                                 placeholder="Nome"
-                                className="flex-1 min-w-0 bg-transparent border-0 outline-none text-xs font-medium"
-                                style={{ color: textColor, opacity: item.marcado ? 1 : 0.6 }}
+                                className="flex-1 min-w-0 bg-transparent border-0 outline-none font-medium"
+                                style={{ color: textColor, opacity: item.marcado ? 1 : 0.6, fontSize: tFont }}
                               />
                               <input
                                 value={item.valor}
@@ -2120,10 +2300,12 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                                 tabIndex={readOnly ? -1 : 0}
                                 inputMode="decimal"
                                 placeholder="Valor"
-                                className="w-14 shrink-0 bg-transparent border-0 outline-none text-xs text-right font-semibold"
+                                className="shrink-0 bg-transparent border-0 outline-none text-right font-semibold"
                                 style={{
                                   color: numero < 0 ? "#E53935" : (isDark ? "#81C784" : "#2D9E7F"),
                                   opacity: item.marcado ? 1 : 0.6,
+                                  fontSize: tFont,
+                                  width: Math.max(56, tFont * 4),
                                 }}
                               />
                               {!readOnly && (
@@ -2133,7 +2315,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                                   style={{ color: "#BDBDBD", padding: 2 }}
                                   aria-label="Remover item"
                                 >
-                                  <Trash2 size={13} />
+                                  <Trash2 size={tFont * 0.9} />
                                 </button>
                               )}
                             </div>
@@ -2144,10 +2326,10 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                       {!readOnly && (
                         <button
                           onClick={() => addTableItemAfter(idx)}
-                          className="flex items-center gap-1 text-xs mt-2 py-1 hover:opacity-80 transition-opacity"
-                          style={{ color: theme.textMuted }}
+                          className="flex items-center gap-1 mt-2 py-1 hover:opacity-80 transition-opacity"
+                          style={{ color: theme.textMuted, fontSize: tFont * 0.85 }}
                         >
-                          <Plus size={13} /> Adicionar item
+                          <Plus size={tFont * 0.9} /> Adicionar item
                         </button>
                       )}
 
@@ -2159,8 +2341,8 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                           boxShadow: "0 -2px 10px rgba(0,0,0,0.15)",
                         }}
                       >
-                        <span className="text-[11px] font-medium" style={{ color: "#BDBDBD" }}>Total da tabela</span>
-                        <span className="text-sm font-bold" style={{ color: "#FFF" }}>{formatarMoedaBRL(total)}</span>
+                        <span className="font-medium" style={{ color: "#BDBDBD", fontSize: tFont * 0.75 }}>Total da tabela</span>
+                        <span className="font-bold" style={{ color: "#FFF", fontSize: tFont * 1.05 }}>{formatarMoedaBRL(total)}</span>
                       </div>
                     </div>
                   );
@@ -2229,10 +2411,10 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
             {/* Word/char counter */}
             <div className="flex justify-end gap-3 pb-2">
-              <span className="text-[10px]" style={{ color: theme.textMuted }}>
+              <span className="text-[13px]" style={{ color: theme.textMuted }}>
                 {wordCount} {wordCount === 1 ? "palavra" : "palavras"}
               </span>
-              <span className="text-[10px]" style={{ color: theme.textMuted }}>
+              <span className="text-[13px]" style={{ color: theme.textMuted }}>
                 {charCount} caracteres
               </span>
             </div>
@@ -2342,7 +2524,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                 paddingBottom: "calc(60px + env(safe-area-inset-bottom))",
               }}
             >
-              <span className="text-xs font-semibold" style={{ color: theme.textMuted }}>👁️ Modo visualização</span>
+              <span className="text-sm font-semibold" style={{ color: theme.textMuted }}>👁️ Modo visualização</span>
               {editingNote && (
                 <button
                   onClick={enterEditMode}
@@ -2397,7 +2579,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                   </button>
                   <button
                     onClick={() => setShowUnsavedPrompt(false)}
-                    className="w-full text-center text-xs font-medium py-2 rounded-lg hover:bg-gray-50 transition-colors"
+                    className="w-full text-center text-sm font-medium py-2 rounded-lg hover:bg-gray-50 transition-colors"
                     style={{ color: "#9E9E9E" }}
                   >
                     Continuar editando
@@ -2439,7 +2621,7 @@ ${blocksToPlainText(blocks)}`.trim());
                 </div>
                 <div className="text-left">
                   <div className="text-sm font-semibold" style={{ color: "#1A1A2E" }}>WhatsApp</div>
-                  <div className="text-xs" style={{ color: "#9E9E9E" }}>Enviar via WhatsApp</div>
+                  <div className="text-sm" style={{ color: "#9E9E9E" }}>Enviar via WhatsApp</div>
                 </div>
               </button>
 
@@ -2461,7 +2643,7 @@ ${blocksToPlainText(blocks)}`.trim());
                 </div>
                 <div className="text-left">
                   <div className="text-sm font-semibold" style={{ color: "#1A1A2E" }}>E-mail</div>
-                  <div className="text-xs" style={{ color: "#9E9E9E" }}>Enviar por e-mail</div>
+                  <div className="text-sm" style={{ color: "#9E9E9E" }}>Enviar por e-mail</div>
                 </div>
               </button>
 
@@ -2488,7 +2670,7 @@ ${blocksToPlainText(blocks)}`.trim();
                 </div>
                 <div className="text-left">
                   <div className="text-sm font-semibold" style={{ color: "#1A1A2E" }}>Copiar texto</div>
-                  <div className="text-xs" style={{ color: "#9E9E9E" }}>Copiar para área de transferência</div>
+                  <div className="text-sm" style={{ color: "#9E9E9E" }}>Copiar para área de transferência</div>
                 </div>
               </button>
 
@@ -2511,7 +2693,7 @@ ${blocksToPlainText(blocks)}`.trim() });
                   </div>
                   <div className="text-left">
                     <div className="text-sm font-semibold" style={{ color: "#1A1A2E" }}>Mais opções</div>
-                    <div className="text-xs" style={{ color: "#9E9E9E" }}>Telegram, SMS e outros</div>
+                    <div className="text-sm" style={{ color: "#9E9E9E" }}>Telegram, SMS e outros</div>
                   </div>
                 </button>
               )}
@@ -2535,11 +2717,11 @@ ${blocksToPlainText(blocks)}`.trim() });
               <h3 className="text-base font-semibold text-gray-800 mb-1 flex items-center gap-2">
                 <CalendarPlus size={18} className="text-gray-600" /> Agendar nota
               </h3>
-              <p className="text-xs text-gray-500 mb-4">
+              <p className="text-sm text-gray-500 mb-4">
                 Cria um compromisso na Agenda com o título e o conteúdo desta nota.
               </p>
 
-              <label className="block text-xs font-medium text-gray-600 mb-1">Data</label>
+              <label className="block text-sm font-medium text-gray-600 mb-1">Data</label>
               <input
                 type="date"
                 value={scheduleDate}
@@ -2547,7 +2729,7 @@ ${blocksToPlainText(blocks)}`.trim() });
                 className="w-full mb-3 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-800 outline-none focus:border-yellow-400"
               />
 
-              <label className="block text-xs font-medium text-gray-600 mb-1">Hora</label>
+              <label className="block text-sm font-medium text-gray-600 mb-1">Hora</label>
               <input
                 type="time"
                 value={scheduleTime}
@@ -2586,26 +2768,26 @@ ${blocksToPlainText(blocks)}`.trim() });
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40">
             <div className="bg-white rounded-2xl p-6 mx-4 shadow-xl max-w-xs w-full">
               <h3 className="text-base font-semibold text-gray-800 mb-1">Extrair texto (OCR)</h3>
-              <p className="text-xs text-gray-500 mb-4">De onde deseja extrair o texto?</p>
+              <p className="text-sm text-gray-500 mb-4">De onde deseja extrair o texto?</p>
               <div className="flex gap-3">
                 <button
                   onClick={() => ocrCameraRef.current?.click()}
                   className="flex-1 flex flex-col items-center gap-2 py-4 rounded-xl border-2 border-gray-200 hover:border-yellow-400 hover:bg-yellow-50 transition-all"
                 >
                   <Camera size={24} className="text-gray-600" />
-                  <span className="text-xs font-medium text-gray-700">Câmera</span>
+                  <span className="text-sm font-medium text-gray-700">Câmera</span>
                 </button>
                 <button
                   onClick={() => ocrFileRef.current?.click()}
                   className="flex-1 flex flex-col items-center gap-2 py-4 rounded-xl border-2 border-gray-200 hover:border-yellow-400 hover:bg-yellow-50 transition-all"
                 >
                   <ImagePlus size={24} className="text-gray-600" />
-                  <span className="text-xs font-medium text-gray-700">Galeria</span>
+                  <span className="text-sm font-medium text-gray-700">Galeria</span>
                 </button>
               </div>
               <button
                 onClick={() => setShowOcrModal(false)}
-                className="w-full mt-3 py-2 text-xs text-gray-500 hover:text-gray-800 transition-colors"
+                className="w-full mt-3 py-2 text-sm text-gray-500 hover:text-gray-800 transition-colors"
               >
                 Cancelar
               </button>
