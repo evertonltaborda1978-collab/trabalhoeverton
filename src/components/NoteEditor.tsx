@@ -1751,7 +1751,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); else onOpenChange(v); }} modal={false}>
-      <DialogContent className="!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !w-screen !max-w-none !max-h-none !rounded-none !shadow-none !border-0 !p-0 !gap-0 !bg-transparent z-50 sm:!inset-auto sm:!left-1/2 sm:!top-1/2 sm:!-translate-x-1/2 sm:!-translate-y-1/2 sm:!w-full sm:!max-w-[480px] sm:!h-auto sm:!max-h-[92vh] sm:!rounded-2xl sm:!shadow-2xl sm:!overflow-hidden"
+      <DialogContent className="!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !w-screen !max-w-none !max-h-none !rounded-none !shadow-none !border-0 !p-0 !gap-0 !bg-transparent z-50 sm:!inset-auto sm:!left-1/2 sm:!top-1/2 sm:!-translate-x-1/2 sm:!-translate-y-1/2 sm:!w-full sm:!max-w-[480px] sm:!h-[92vh] sm:!max-h-[92vh] sm:!rounded-2xl sm:!shadow-2xl sm:!overflow-hidden"
         style={{ height: "100dvh" }}
         aria-describedby={undefined}
         onOpenAutoFocus={(e) => e.preventDefault()}
@@ -1764,7 +1764,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
         <div
           className="flex flex-col"
           style={{
-            height: "100dvh",
+            height: "100%",
             background: theme.bg,
             transition: "background 0.3s ease",
             paddingBottom: "env(safe-area-inset-bottom)",
@@ -1914,7 +1914,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
           {/* Color picker dropdown */}
           {showColorPicker && (
             <div
-              className="flex gap-2 px-3 py-3 overflow-x-auto no-scrollbar shrink-0"
+              className="flex gap-2 flex-wrap px-3 py-3 shrink-0"
               style={{ background: theme.headerBg, transition: "background 0.3s ease", WebkitOverflowScrolling: "touch" }}
             >
               {NOTE_COLORS.map((c) => (
@@ -1936,7 +1936,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
           )}
 
           {/* ── Sub-header ── */}
-          <div className="flex items-center justify-between px-4 py-1.5 text-[13px] shrink-0" style={{ color: theme.textMuted, transition: "color 0.3s ease" }}>
+          <div className="flex items-center justify-between gap-2 flex-wrap px-4 py-1.5 text-[13px] shrink-0" style={{ color: theme.textMuted, transition: "color 0.3s ease" }}>
             <span className="font-medium">
               {readOnly ? "👁️ Visualização" : (editingNote ? "✏️ Editando" : "Nova nota")}
               {isListening && (
@@ -1945,7 +1945,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                 </span>
               )}
             </span>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 flex-wrap">
               {[14, 16, 20, 24, 30].map((size, i) => (
                 <button
                   key={size}
@@ -2014,7 +2014,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
           {/* ── Barra de formatação de texto (aparece com um bloco de texto em foco) ── */}
           {!readOnly && activeBlockIdx !== null && blocks[activeBlockIdx]?.type === "text" && (
             <div
-              className="flex items-center gap-2 px-3 py-2 overflow-x-auto no-scrollbar shrink-0"
+              className="flex items-center gap-2 flex-wrap px-3 py-2 shrink-0"
               style={{ background: theme.toolbarBg, borderBottom: `1px solid ${theme.lines}` }}
             >
               {/* Cores — aplicam só no trecho selecionado (ou no que for digitado a partir do cursor) */}
