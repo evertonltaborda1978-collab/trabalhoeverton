@@ -2103,7 +2103,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
           {/* ── LINED PAPER BODY ── */}
           <div
             ref={scrollContainerRef}
-            className="flex-1 overflow-y-auto px-4"
+            className="flex-1 min-h-0 overflow-y-auto px-4"
             style={{
               background: `repeating-linear-gradient(to bottom, transparent, transparent 31px, ${theme.lines} 32px)`,
               backgroundPosition: "0 0",
@@ -2458,7 +2458,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                           style={{
                             width: "100%",
                             height: "auto",
-                            maxHeight: "320px",
+                            maxHeight: "38vh",
                             objectFit: "contain",
                             borderRadius: 12,
                             boxShadow: "0 4px 16px rgba(0,0,0,0.18)",
