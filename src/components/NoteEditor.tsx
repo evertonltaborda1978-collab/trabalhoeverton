@@ -502,7 +502,7 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     const all = drawingRef.current.current ? [...objects, drawingRef.current.current] : objects;
-    all.forEach((obj) => drawObjectOnCanvas(ctx, obj));
+    all.filter(Boolean).forEach((obj) => drawObjectOnCanvas(ctx, obj));
   }, [objects, canvasSize]);
 
   useEffect(() => { if (ready) redraw(); }, [ready, redraw]);
@@ -553,7 +553,8 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
 
   function handlePointerUp() {
     if (!drawingRef.current.active || !drawingRef.current.current) return;
-    setObjects((prev) => [...prev, drawingRef.current.current!]);
+    const finished = drawingRef.current.current;
+    setObjects((prev) => [...prev, finished]);
     drawingRef.current.active = false;
     drawingRef.current.current = null;
   }
@@ -2353,19 +2354,19 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                   const total = calcularTotalTabela(block.tableItems);
                   const tFont = editorFontSize; // tamanho base — segue o mesmo ajuste A/A+/A++ do resto da nota
                   return (
-                    <div key={`table-${idx}`} className="my-2">
+                    <div key={`table-${idx}`} className="my-2 w-full max-w-full overflow-hidden">
                       <div className="flex items-center gap-1.5 mb-2 px-1">
                         <Table2 size={tFont} style={{ color: theme.textMuted }} />
                         <span className="font-bold" style={{ color: theme.textMuted, fontSize: tFont * 0.85 }}>Tabela Manual</span>
                       </div>
-                      <div className="space-y-2">
+                      <div className="space-y-2 w-full max-w-full">
                         {block.tableItems.map((item) => {
                           const ehPct = tableValorEhPorcentagem(item.valor);
                           const numero = tableValorParaNumero(item.valor);
                           return (
                             <div
                               key={item.id}
-                              className="flex items-center gap-1.5 rounded-xl px-2 py-1.5"
+                              className="flex items-center gap-1.5 rounded-xl px-2 py-1.5 w-full min-w-0"
                               style={{
                                 background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.025)",
                                 border: `1px solid ${theme.lines}`,
@@ -2404,7 +2405,8 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                                   color: numero < 0 ? "#E53935" : (isDark ? "#81C784" : "#2D9E7F"),
                                   opacity: item.marcado ? 1 : 0.6,
                                   fontSize: tFont,
-                                  width: Math.max(56, tFont * 4),
+                                  width: Math.min(Math.max(56, tFont * 3.2), 110),
+                                  maxWidth: "34vw",
                                 }}
                               />
                               {!readOnly && (
@@ -2434,14 +2436,14 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
                       {/* Rodapé fixo com o total, sempre visível ao rolar a nota */}
                       <div
-                        className="sticky bottom-0 mt-2 flex items-center justify-between rounded-xl px-3 py-2 z-10"
+                        className="sticky bottom-0 mt-2 flex items-center justify-between rounded-xl px-3 py-2 z-10 w-full min-w-0"
                         style={{
                           background: isDark ? "#1F1F1F" : "#1A1A2E",
                           boxShadow: "0 -2px 10px rgba(0,0,0,0.15)",
                         }}
                       >
-                        <span className="font-medium" style={{ color: "#BDBDBD", fontSize: tFont * 0.75 }}>Total da tabela</span>
-                        <span className="font-bold" style={{ color: "#FFF", fontSize: tFont * 1.05 }}>{formatarMoedaBRL(total)}</span>
+                        <span className="font-medium shrink-0" style={{ color: "#BDBDBD", fontSize: tFont * 0.75 }}>Total da tabela</span>
+                        <span className="font-bold shrink-0" style={{ color: "#FFF", fontSize: tFont * 1.05 }}>{formatarMoedaBRL(total)}</span>
                       </div>
                     </div>
                   );
@@ -3038,11 +3040,11 @@ ${blocksToPlainText(blocks)}`.trim() });
                 }
                 if (b.type === "table" && b.tableItems) {
                   return (
-                    <div key={i} style={{ marginBottom: 16 }}>
+                    <div key={i} style={{ marginBottom: 16, width: "100%", maxWidth: "100%", overflow: "hidden" }}>
                       {b.tableItems.map((it) => (
-                        <div key={it.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: Math.max(18, editorFontSize), color: textColor, borderBottom: `1px solid ${theme.lines}` }}>
-                          <span>{it.nome}</span>
-                          <strong>{it.valor}</strong>
+                        <div key={it.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "8px 0", fontSize: Math.max(18, editorFontSize), color: textColor, borderBottom: `1px solid ${theme.lines}` }}>
+                          <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.nome}</span>
+                          <strong style={{ flexShrink: 0, whiteSpace: "nowrap" }}>{it.valor}</strong>
                         </div>
                       ))}
                     </div>
