@@ -675,8 +675,8 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
           </button>
         </div>
 
-        {/* Colors + width + zoom */}
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        {/* Colors + width */}
+        <div style={{ display: "flex", gap: 6, alignItems: "center", overflowX: "auto" }} className="no-scrollbar">
           {DRAW_COLORS.map((c) => (
             <button
               key={c}
@@ -691,13 +691,17 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
           <input
             type="range" min={2} max={20} value={strokeWidth}
             onChange={(e) => setStrokeWidth(Number(e.target.value))}
-            style={{ flex: 1, marginLeft: 4 }}
+            style={{ flex: 1, minWidth: 60, marginLeft: 4 }}
           />
-          <button onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))} title="Diminuir zoom (lupa)" style={{ padding: 6, borderRadius: 8, background: "#2E2E2E", color: "#FFF", border: "none", flexShrink: 0 }}>
+        </div>
+
+        {/* Zoom (lupa) — linha própria, sempre visível por inteiro */}
+        <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "center" }}>
+          <button onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))} title="Diminuir zoom (lupa)" style={{ padding: "6px 10px", borderRadius: 8, background: "#2E2E2E", color: "#FFF", border: "none", flexShrink: 0, display: "flex", alignItems: "center", gap: 4 }}>
             <ZoomOut size={16} />
           </button>
-          <span style={{ color: "#FFF", fontSize: 11, minWidth: 34, textAlign: "center" }}>{Math.round(zoom * 100)}%</span>
-          <button onClick={() => setZoom((z) => Math.min(4, +(z + 0.25).toFixed(2)))} title="Aumentar zoom (lupa)" style={{ padding: 6, borderRadius: 8, background: "#2E2E2E", color: "#FFF", border: "none", flexShrink: 0 }}>
+          <span style={{ color: "#FFF", fontSize: 12, minWidth: 40, textAlign: "center" }}>{Math.round(zoom * 100)}%</span>
+          <button onClick={() => setZoom((z) => Math.min(4, +(z + 0.25).toFixed(2)))} title="Aumentar zoom (lupa)" style={{ padding: "6px 10px", borderRadius: 8, background: "#2E2E2E", color: "#FFF", border: "none", flexShrink: 0, display: "flex", alignItems: "center", gap: 4 }}>
             <ZoomIn size={16} />
           </button>
         </div>
@@ -2388,7 +2392,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                                 readOnly={readOnly}
                                 tabIndex={readOnly ? -1 : 0}
                                 placeholder="Nome"
-                                className="flex-1 min-w-0 bg-transparent border-0 outline-none font-medium"
+                                className="flex-1 min-w-0 bg-transparent border-0 outline-none font-medium text-ellipsis"
                                 style={{ color: textColor, opacity: item.marcado ? 1 : 0.6, fontSize: tFont }}
                               />
                               <input
@@ -2400,13 +2404,13 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                                 tabIndex={readOnly ? -1 : 0}
                                 inputMode="decimal"
                                 placeholder="Valor"
-                                className="shrink-0 bg-transparent border-0 outline-none text-right font-semibold"
+                                className="shrink-0 bg-transparent border-0 outline-none text-right font-semibold text-ellipsis"
                                 style={{
                                   color: numero < 0 ? "#E53935" : (isDark ? "#81C784" : "#2D9E7F"),
                                   opacity: item.marcado ? 1 : 0.6,
                                   fontSize: tFont,
-                                  width: Math.min(Math.max(56, tFont * 3.2), 110),
-                                  maxWidth: "34vw",
+                                  width: Math.min(Math.max(48, tFont * 2.4), 90),
+                                  maxWidth: "28vw",
                                 }}
                               />
                               {!readOnly && (
