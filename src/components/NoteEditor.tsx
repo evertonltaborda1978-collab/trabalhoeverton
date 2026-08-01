@@ -2225,7 +2225,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                   const progress = total > 0 ? Math.round((checked / total) * 100) : 0;
                   const cFont = editorFontSize; // segue o mesmo ajuste A/A+/A++ do resto da nota
                   return (
-                    <div key={`checklist-${idx}`} className="my-2">
+                    <div key={`checklist-${idx}`} className="my-2 w-full max-w-full overflow-hidden">
                       {/* Progress bar */}
                       {total > 0 && (
                         <div className="flex items-center gap-2 mb-2 px-1">
@@ -3028,11 +3028,11 @@ ${blocksToPlainText(blocks)}`.trim() });
                 }
                 if (b.type === "checklist" && b.items) {
                   return (
-                    <div key={i} style={{ marginBottom: 16 }}>
+                    <div key={i} style={{ marginBottom: 16, width: "100%", maxWidth: "100%", overflow: "hidden" }}>
                       {b.items.map((it) => (
                         <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", fontSize: Math.max(18, editorFontSize), color: textColor, opacity: it.checked ? 0.6 : 1, fontWeight: it.bold ? 700 : 400 }}>
                           {it.checked ? <CheckSquare size={22} color="#4CAF50" /> : <Square size={22} />}
-                          <span style={{ textDecoration: it.checked ? "line-through" : "none" }}>{it.text}</span>
+                          <span style={{ textDecoration: it.checked ? "line-through" : "none", minWidth: 0, overflowWrap: "break-word" }}>{it.text}</span>
                         </div>
                       ))}
                     </div>
