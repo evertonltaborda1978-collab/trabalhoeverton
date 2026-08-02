@@ -82,6 +82,7 @@ export interface ContentBlock {
   url?: string;
   items?: ChecklistItem[];
   tableItems?: TableItem[];
+  tableTitle?: string; // título editável da Tabela Manual (padrão: "Tabela Manual")
   style?: TextStyle;
 }
 
@@ -746,6 +747,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const [title, setTitle] = useState("");
   const [blocks, setBlocks] = useState<ContentBlock[]>([{ type: "text", content: "" }]);
   const [editingImageIdx, setEditingImageIdx] = useState<number | null>(null);
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<{ type: "table" | "checklist"; blockIdx: number; itemId: string; label: string } | null>(null);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
   const [viewZoom, setViewZoom] = useState(1);
   const [activeBlockIdx, setActiveBlockIdx] = useState<number | null>(null);
@@ -1445,6 +1447,20 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
       }
       return next;
     });
+  };
+
+  const updateTableTitle = (blockIdx: number, title: string) => {
+    setBlocks((prev) => {
+      const next = [...prev];
+      if (next[blockIdx]?.type === "table") {
+        next[blockIdx] = { ...next[blockIdx], tableTitle: title };
+      }
+      return next;
+    });
+    clearTimeout(historyTimer.current);
+    historyTimer.current = setTimeout(() => {
+      setBlocks((current) => { pushHistory(current); return current; });
+    }, 500);
   };
 
   // ── OCR ──────────────────────────────────────────────
@@ -2331,11 +2347,11 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                             )}
                             {!readOnly && (
                               <button
-                                onClick={() => removeChecklistItem(idx, item.id)}
+                                onClick={() => setPendingDeleteItem({ type: "checklist", blockIdx: idx, itemId: item.id, label: item.text || "esse item" })}
                                 className="shrink-0 opacity-0 group-hover/check:opacity-100 transition-opacity p-1 rounded hover:bg-black/5"
                                 style={{ color: "#BDBDBD" }}
                               >
-                                <Trash2 size={cFont * 0.78} />
+                                <Trash2 size={Math.min(cFont * 0.78, 18)} />
                               </button>
                             )}
                           </div>
@@ -2360,8 +2376,20 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                   return (
                     <div key={`table-${idx}`} className="my-2 w-full max-w-full overflow-hidden">
                       <div className="flex items-center gap-1.5 mb-2 px-1">
-                        <Table2 size={tFont} style={{ color: theme.textMuted }} />
-                        <span className="font-bold" style={{ color: theme.textMuted, fontSize: tFont * 0.85 }}>Tabela Manual</span>
+                        <Table2 size={Math.min(tFont, 22)} style={{ color: theme.textMuted, flexShrink: 0 }} />
+                        {readOnly ? (
+                          <span className="font-bold min-w-0 truncate" style={{ color: theme.textMuted, fontSize: tFont * 0.85 }}>
+                            {block.tableTitle || "Tabela Manual"}
+                          </span>
+                        ) : (
+                          <input
+                            value={block.tableTitle ?? "Tabela Manual"}
+                            onChange={(e) => updateTableTitle(idx, e.target.value)}
+                            onFocus={(e) => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; e.target.select(); }}
+                            className="font-bold bg-transparent border-0 outline-none min-w-0 flex-1"
+                            style={{ color: theme.textMuted, fontSize: tFont * 0.85 }}
+                          />
+                        )}
                       </div>
                       <div className="space-y-2 w-full max-w-full">
                         {block.tableItems.map((item) => {
@@ -2382,7 +2410,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                                 style={{ color: item.marcado ? "#4CAF50" : (isDark ? "#888" : "#BDBDBD") }}
                                 disabled={readOnly}
                               >
-                                {item.marcado ? <CheckSquare size={tFont} /> : <Square size={tFont} />}
+                                {item.marcado ? <CheckSquare size={Math.min(tFont, 22)} /> : <Square size={Math.min(tFont, 22)} />}
                               </button>
                               <input
                                 value={item.nome}
@@ -2415,12 +2443,12 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                               />
                               {!readOnly && (
                                 <button
-                                  onClick={() => removeTableItem(idx, item.id)}
+                                  onClick={() => setPendingDeleteItem({ type: "table", blockIdx: idx, itemId: item.id, label: item.nome || "esse item" })}
                                   className="shrink-0 hover:bg-black/5 rounded"
                                   style={{ color: "#BDBDBD", padding: 2 }}
                                   aria-label="Remover item"
                                 >
-                                  <Trash2 size={tFont * 0.9} />
+                                  <Trash2 size={Math.min(tFont * 0.9, 20)} />
                                 </button>
                               )}
                             </div>
@@ -2440,7 +2468,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
                       {/* Rodapé fixo com o total, sempre visível ao rolar a nota */}
                       <div
-                        className="sticky bottom-0 mt-2 flex items-center justify-between rounded-xl px-3 py-2 z-10 w-full min-w-0"
+                        className="mt-2 flex items-center justify-between rounded-xl px-3 py-2 w-full min-w-0"
                         style={{
                           background: isDark ? "#1F1F1F" : "#1A1A2E",
                           boxShadow: "0 -2px 10px rgba(0,0,0,0.15)",
@@ -2954,6 +2982,44 @@ ${blocksToPlainText(blocks)}`.trim() });
               onCancel={() => setEditingImageIdx(null)}
             />
           </AnnotatorErrorBoundary>
+        )}
+
+        {/* Confirmação antes de excluir um item da tabela ou checklist */}
+        {pendingDeleteItem && (
+          <div
+            className="absolute inset-0 z-[90] flex items-center justify-center p-5"
+            style={{ background: "rgba(0,0,0,0.5)" }}
+            onClick={() => setPendingDeleteItem(null)}
+          >
+            <div
+              className="w-full"
+              style={{ maxWidth: 320, background: theme.card, borderRadius: 18, padding: 20 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p style={{ fontWeight: 700, fontSize: 15, color: theme.text, margin: "0 0 6px" }}>Excluir item?</p>
+              <p style={{ fontSize: 13, color: theme.textMuted, margin: "0 0 16px" }}>
+                Tem certeza que quer excluir "{pendingDeleteItem.label}"? Essa ação não pode ser desfeita.
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => setPendingDeleteItem(null)}
+                  style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: isDark ? "#333" : "#F0F0F0", color: theme.text, fontWeight: 600, fontSize: 13 }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    if (pendingDeleteItem.type === "table") removeTableItem(pendingDeleteItem.blockIdx, pendingDeleteItem.itemId);
+                    else removeChecklistItem(pendingDeleteItem.blockIdx, pendingDeleteItem.itemId);
+                    setPendingDeleteItem(null);
+                  }}
+                  style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#E53935", color: "#FFF", fontWeight: 600, fontSize: 13 }}
+                >
+                  Excluir
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Visualizador com lupa (ver a imagem ampliada, sem editar) */}
