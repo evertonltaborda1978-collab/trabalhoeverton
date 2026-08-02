@@ -2395,19 +2395,27 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                         {block.tableItems.map((item) => {
                           const ehPct = tableValorEhPorcentagem(item.valor);
                           const numero = tableValorParaNumero(item.valor);
+                          const checkboxCol = Math.min(tFont, 22) + 8;
+                          const valueCol = Math.min(Math.max(48, tFont * 2.2), 80);
+                          const trashCol = readOnly ? 0 : Math.min(tFont * 0.9, 20) + 10;
                           return (
                             <div
                               key={item.id}
-                              className="flex items-center gap-1.5 rounded-xl px-2 py-1.5 w-full min-w-0"
+                              className="rounded-xl px-2 py-1.5 w-full"
                               style={{
+                                display: "grid",
+                                gridTemplateColumns: `${checkboxCol}px minmax(0, 1fr) ${valueCol}px${trashCol ? ` ${trashCol}px` : ""}`,
+                                columnGap: 6,
+                                alignItems: "center",
                                 background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.025)",
                                 border: `1px solid ${theme.lines}`,
+                                boxSizing: "border-box",
+                                maxWidth: "100%",
                               }}
                             >
                               <button
                                 onClick={() => !readOnly && updateTableItem(idx, item.id, { marcado: !item.marcado })}
-                                className="shrink-0 transition-all duration-200"
-                                style={{ color: item.marcado ? "#4CAF50" : (isDark ? "#888" : "#BDBDBD") }}
+                                style={{ color: item.marcado ? "#4CAF50" : (isDark ? "#888" : "#BDBDBD"), minWidth: 0 }}
                                 disabled={readOnly}
                               >
                                 {item.marcado ? <CheckSquare size={Math.min(tFont, 22)} /> : <Square size={Math.min(tFont, 22)} />}
@@ -2420,8 +2428,8 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                                 readOnly={readOnly}
                                 tabIndex={readOnly ? -1 : 0}
                                 placeholder="Nome"
-                                className="flex-1 min-w-0 bg-transparent border-0 outline-none font-medium text-ellipsis"
-                                style={{ color: textColor, opacity: item.marcado ? 1 : 0.6, fontSize: tFont }}
+                                className="bg-transparent border-0 outline-none font-medium"
+                                style={{ color: textColor, opacity: item.marcado ? 1 : 0.6, fontSize: tFont, minWidth: 0, width: "100%", overflow: "hidden", textOverflow: "ellipsis" }}
                               />
                               <input
                                 value={item.valor}
@@ -2432,20 +2440,22 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                                 tabIndex={readOnly ? -1 : 0}
                                 inputMode="decimal"
                                 placeholder="Valor"
-                                className="shrink-0 bg-transparent border-0 outline-none text-right font-semibold text-ellipsis"
+                                className="bg-transparent border-0 outline-none text-right font-semibold"
                                 style={{
                                   color: numero < 0 ? "#E53935" : (isDark ? "#81C784" : "#2D9E7F"),
                                   opacity: item.marcado ? 1 : 0.6,
                                   fontSize: tFont,
-                                  width: Math.min(Math.max(48, tFont * 2.4), 90),
-                                  maxWidth: "28vw",
+                                  minWidth: 0,
+                                  width: "100%",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
                                 }}
                               />
                               {!readOnly && (
                                 <button
                                   onClick={() => setPendingDeleteItem({ type: "table", blockIdx: idx, itemId: item.id, label: item.nome || "esse item" })}
-                                  className="shrink-0 hover:bg-black/5 rounded"
-                                  style={{ color: "#BDBDBD", padding: 2 }}
+                                  className="hover:bg-black/5 rounded"
+                                  style={{ color: "#BDBDBD", padding: 2, minWidth: 0, justifySelf: "center" }}
                                   aria-label="Remover item"
                                 >
                                   <Trash2 size={Math.min(tFont * 0.9, 20)} />
