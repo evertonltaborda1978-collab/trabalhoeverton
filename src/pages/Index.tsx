@@ -82,7 +82,31 @@ const Index = () => {
     };
   }, []);
 
-  // Interceptar botão físico de voltar do Android
+  // Qualidade estimada da conexão (Network Information API — só existe hoje no
+  // Android/Chrome; no iPhone/Safari simplesmente não existe, e nesse caso o app
+  // não mostra nada, sem erro). Não é a "força do sinal" de verdade — nenhum
+  // navegador dá acesso a isso — é só uma estimativa aproximada (2g/3g/4g +
+  // velocidade), mas ajuda a perceber se a conexão está fraca ou melhorando.
+  const [connInfo, setConnInfo] = useState<{ effectiveType: string; downlink: number } | null>(null);
+  useEffect(() => {
+    const conn = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
+    if (!conn) return; // API não suportada neste navegador (ex: iPhone) — segue sem indicador
+    const update = () => setConnInfo({ effectiveType: conn.effectiveType, downlink: conn.downlink });
+    update();
+    conn.addEventListener("change", update);
+    return () => conn.removeEventListener("change", update);
+  }, []);
+
+  const connLabel = connInfo
+    ? connInfo.effectiveType === "4g"
+      ? "Boa"
+      : connInfo.effectiveType === "3g"
+        ? "Média"
+        : "Fraca"
+    : null;
+  const connColor = connInfo
+    ? connInfo.effectiveType === "4g" ? "#43A047" : connInfo.effectiveType === "3g" ? "#F9A825" : "#E53935"
+    : "#9E9E9E";
   useEffect(() => {
     const SENTINEL = { page: "app-sentinel" };
     window.history.replaceState(SENTINEL, "");
@@ -185,6 +209,23 @@ const Index = () => {
     deleteAppointment(id);
   };
 
+  // Badge "Online": antes só olhava se o celular tinha rede ativa (podia mentir com
+  // sinal fraco). Agora prioriza o syncStatus real — só diz "Online" quando as notas
+  // realmente conseguiram sincronizar com o servidor, não só quando o celular "acha"
+  // que tem sinal.
+  const syncBadge = (() => {
+    if (!isOnline) {
+      return { label: "Sem sinal", bg: "#F5F5F5", dot: "#9E9E9E", text: "#757575" };
+    }
+    if (syncStatus === "syncing") {
+      return { label: "Sincronizando...", bg: "#FFF8E1", dot: "#F9A825", text: "#F57F17" };
+    }
+    if (syncStatus === "offline") {
+      return { label: "Sinal fraco", bg: "#FFF3E0", dot: "#EF6C00", text: "#E65100" };
+    }
+    return { label: "Online", bg: "#E8F5E9", dot: "#43A047", text: "#2E7D32" };
+  })();
+
   return (
     <div className="min-h-screen" style={{ background: "#F7F5F2", paddingBottom: "calc(64px + env(safe-area-inset-bottom) + 24px)" }}>
       {/* Header */}
@@ -226,35 +267,49 @@ const Index = () => {
 
           {/* Linha 2 — online à esquerda, lua + sair à direita */}
           <div className="flex items-center justify-between">
-            <span
-              className="inline-flex items-center gap-1"
-              style={{
-                padding: "2px 8px 2px 6px",
-                borderRadius: 999,
-                background: isOnline ? "#E8F5E9" : "#F5F5F5",
-                transition: "background 0.3s",
-              }}
-            >
+            <div className="flex items-center gap-2">
               <span
-                className="inline-block rounded-full"
+                className="inline-flex items-center gap-1"
                 style={{
-                  width: 6,
-                  height: 6,
-                  background: isOnline ? "#43A047" : "#9E9E9E",
-                }}
-              />
-              <span
-                className="font-bold"
-                style={{
-                  fontSize: 10,
-                  color: isOnline ? "#2E7D32" : "#757575",
-                  letterSpacing: 0.2,
-                  whiteSpace: "nowrap",
+                  padding: "2px 8px 2px 6px",
+                  borderRadius: 999,
+                  background: syncBadge.bg,
+                  transition: "background 0.3s",
                 }}
               >
-                {isOnline ? "Online" : "Offline"}
+                <span
+                  className="inline-block rounded-full"
+                  style={{
+                    width: 6,
+                    height: 6,
+                    background: syncBadge.dot,
+                  }}
+                />
+                <span
+                  className="font-bold"
+                  style={{
+                    fontSize: 10,
+                    color: syncBadge.text,
+                    letterSpacing: 0.2,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {syncBadge.label}
+                </span>
               </span>
-            </span>
+
+              {/* Qualidade estimada da conexão — só aparece se o navegador suportar
+                  (hoje, só Android/Chrome). É uma estimativa, não o sinal real. */}
+              {connLabel && (
+                <span
+                  className="inline-flex items-center gap-1"
+                  style={{ fontSize: 9, color: connColor, fontWeight: 700, letterSpacing: 0.2 }}
+                  title="Estimativa de qualidade da conexão (Android/Chrome)"
+                >
+                  📶 {connLabel}
+                </span>
+              )}
+            </div>
 
             <div className="flex items-center gap-3">
               <button
