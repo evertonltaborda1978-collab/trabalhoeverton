@@ -28,7 +28,7 @@ interface Position {
 export function LocationView() {
   const { devices, currentDevice, fetchDevices } = useDeviceTracking();
   const { latestByDevice, recordLocation } = useDeviceLocations();
-  const [editingDevice, setEditingDevice] = useState<{ id: string; name: string; address: string | null } | null>(null);
+  const [editingDevice, setEditingDevice] = useState<{ id: string; name: string; address: string | null; lat?: number; lng?: number } | null>(null);
 
   const [position, setPosition] = useState<Position | null>(null);
   const [tracking, setTracking] = useState(false);
@@ -277,6 +277,10 @@ export function LocationView() {
     setShowLostDevicePicker(false);
     lowBatterySavedRef.current = false;
     setTrail(position ? [position] : []);
+    // Limpa resultado de uma busca anterior antes de começar uma nova
+    setFoundDeviceMapHref(null);
+    setFoundDeviceName(null);
+    setFoundDeviceLoc(null);
 
     const isCurrentDevice = currentDevice?.id === deviceId;
     if (isCurrentDevice) {
@@ -304,6 +308,9 @@ export function LocationView() {
   // Quando o aparelho remoto responder com uma localização nova, prepara o link do mapa
   const [foundDeviceMapHref, setFoundDeviceMapHref] = useState<string | null>(null);
   const [foundDeviceName, setFoundDeviceName] = useState<string | null>(null);
+  // Guarda lat/lng/endereço do aparelho encontrado — pra poder Compartilhar e Editar
+  // endereço com a mesma experiência do "Localizar agora"
+  const [foundDeviceLoc, setFoundDeviceLoc] = useState<{ lat: number; lng: number; address: string | null } | null>(null);
 
   const checkRemoteDeviceLocation = useCallback(async () => {
     if (!lostDeviceId || currentDevice?.id === lostDeviceId) return;
@@ -333,6 +340,7 @@ export function LocationView() {
       : `https://www.google.com/maps?q=${data.latitude},${data.longitude}`;
     setFoundDeviceMapHref(href);
     setFoundDeviceName(name);
+    setFoundDeviceLoc({ lat: data.latitude, lng: data.longitude, address: displayAddress ?? null });
     toast({ title: "📍 Localização encontrada!", description: `${name} — toque para ver no mapa` });
   }, [lostDeviceId, currentDevice, devices]);
 
@@ -354,6 +362,7 @@ export function LocationView() {
       setWaitingRemoteLocation(false);
       setFoundDeviceMapHref(null);
       setFoundDeviceName(null);
+      setFoundDeviceLoc(null);
       lostDeviceStartCoordsRef.current = null;
       toast({ title: "Modo \"Perdi meu aparelho\" desativado" });
     }
@@ -538,7 +547,7 @@ export function LocationView() {
                           <div className="flex items-start gap-1.5">
                             <p className="text-[11px] flex-1 min-w-0 break-words" style={{ color: "#4A5568" }}>{displayAddress}</p>
                             <button
-                              onClick={() => setEditingDevice({ id: d.id, name, address: d.manual_address || loc?.address || null })}
+                              onClick={() => setEditingDevice({ id: d.id, name, address: d.manual_address || loc?.address || null, lat: loc?.latitude, lng: loc?.longitude })}
                               className="p-1 rounded-md hover:bg-black/5 shrink-0"
                               title="Editar endereço"
                             >
@@ -613,6 +622,42 @@ export function LocationView() {
           >
             <MapPin size={16} /> Ver localização no mapa
           </a>
+        )}
+
+        {/* Cartão de endereço do aparelho encontrado — mesmo padrão do "Localizar agora",
+            com endereço legível (não lat/lng cru), botão de editar e de compartilhar */}
+        {foundDeviceLoc && (
+          <div className="rounded-2xl p-3 flex items-start gap-2.5 mb-2" style={{ background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
+            <div className="flex items-center justify-center rounded-full shrink-0" style={{ width: 34, height: 34, background: "rgba(45,158,127,0.15)" }}>
+              <MapPin size={16} style={{ color: "#2D9E7F" }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-bold mb-0.5" style={{ color: "#2D9E7F" }}>
+                📍 {foundDeviceName || "Aparelho"} — endereço encontrado
+              </p>
+              <p className="text-[13px] font-semibold break-words leading-snug" style={{ color: "#1A1A2E" }}>
+                {foundDeviceLoc.address || `${foundDeviceLoc.lat.toFixed(5)}, ${foundDeviceLoc.lng.toFixed(5)}`}
+              </p>
+            </div>
+            <div className="flex flex-col gap-1.5 shrink-0">
+              <button
+                onClick={() => setEditingDevice({ id: lostDeviceId!, name: foundDeviceName || "aparelho", address: foundDeviceLoc.address, lat: foundDeviceLoc.lat, lng: foundDeviceLoc.lng })}
+                className="flex items-center justify-center rounded-full transition-all active:scale-95"
+                style={{ width: 30, height: 30, background: "rgba(45,158,127,0.15)", color: "#2D9E7F", border: "1.5px solid rgba(45,158,127,0.3)" }}
+                title="Editar endereço"
+              >
+                <Pencil size={14} />
+              </button>
+              <button
+                onClick={() => setShowShareModal({ lat: foundDeviceLoc.lat, lng: foundDeviceLoc.lng, address: foundDeviceLoc.address })}
+                className="flex items-center justify-center rounded-full transition-all active:scale-95"
+                style={{ width: 30, height: 30, background: "#2D9E7F", color: "#FFF" }}
+                title="Compartilhar localização"
+              >
+                <Share2 size={14} />
+              </button>
+            </div>
+          </div>
         )}
 
         {waitingRemoteLocation && (
@@ -741,19 +786,22 @@ export function LocationView() {
           deviceId={editingDevice.id}
           deviceName={editingDevice.name}
           currentAddress={editingDevice.address}
-          lat={position?.lat}
-          lng={position?.lng}
+          lat={editingDevice.lat ?? position?.lat}
+          lng={editingDevice.lng ?? position?.lng}
           onClose={() => setEditingDevice(null)}
           onSaved={(savedAddress?: string) => {
             fetchDevices();
             if (savedAddress) {
               setCurrentAddress(savedAddress);
               if (showShareModal) setShowShareModal((prev) => prev ? { ...prev, address: savedAddress } : null);
+              setFoundDeviceLoc((prev) => prev ? { ...prev, address: savedAddress } : null);
             }
           }}
           onShare={(address) => {
             setEditingDevice(null);
-            if (position) setShowShareModal({ lat: position.lat, lng: position.lng, address });
+            const lat = editingDevice.lat ?? position?.lat;
+            const lng = editingDevice.lng ?? position?.lng;
+            if (lat != null && lng != null) setShowShareModal({ lat, lng, address });
           }}
         />
       )}
