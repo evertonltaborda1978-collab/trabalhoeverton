@@ -395,7 +395,7 @@ const Index = () => {
         {tab === "weather" && <WeatherView />}
         {tab === "fuel" && <FuelCalculatorView />}
         {tab === "medication" && <MedicationView />}
-        {tab === "location" && <LocationView />}
+        {tab === "location" && <LocationView onBack={() => changeTab("notes")} />}
         {tab === "devices" && <DevicesView />}
       </main>
 
