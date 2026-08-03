@@ -2130,6 +2130,9 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
               backgroundPosition: "0 0",
               transition: "background 0.3s ease",
               minHeight: "120px",
+              touchAction: "pan-y",
+              WebkitOverflowScrolling: "touch",
+              overscrollBehavior: "contain",
             }}
           >
             <div className="py-2">
@@ -3109,7 +3112,7 @@ ${blocksToPlainText(blocks)}`.trim() });
                 {isSpeaking ? <VolumeX size={16} /> : <Volume2 size={16} />} {isSpeaking ? "Parar" : "Ouvir"}
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto px-5 py-6">
+            <div className="flex-1 overflow-y-auto px-5 py-6" style={{ touchAction: "pan-y", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}>
               {title.trim() && (
                 <h1 style={{ fontSize: Math.max(28, editorFontSize * 1.4), fontWeight: 700, color: textColor, marginBottom: 20, lineHeight: 1.3 }}>
                   {title}
