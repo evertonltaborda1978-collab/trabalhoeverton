@@ -220,6 +220,43 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
 
   const { sendCommand } = useDeviceCommands(null);
 
+  // ── "Rastrear agora" (botão individual na lista de dispositivos) ──
+  // Mesma ideia do "Ativar busca de aparelho", só que mais leve: pede uma localização
+  // única e mostra tela limpa (mapa + endereço + compartilhar) até fechar.
+  const [trackOnce, setTrackOnce] = useState<{ deviceId: string; name: string; waiting: boolean; loc: { lat: number; lng: number; address: string | null } | null } | null>(null);
+  const trackOnceStartRef = useRef<string | null>(null);
+
+  const startTrackOnce = useCallback((deviceId: string, name: string) => {
+    const existingLoc = latestByDevice[deviceId];
+    trackOnceStartRef.current = existingLoc ? existingLoc.id : "__none__";
+    setTrackOnce({ deviceId, name, waiting: true, loc: null });
+    sendCommand(deviceId, "update_now");
+    toast({ title: "📍 Solicitado", description: `Aguardando ${name} responder...` });
+  }, [latestByDevice, sendCommand]);
+
+  useEffect(() => {
+    if (!trackOnce?.waiting) return;
+    const check = async () => {
+      const { data } = await supabase
+        .from("device_locations")
+        .select("*")
+        .eq("device_id", trackOnce.deviceId)
+        .order("recorded_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!data) return;
+      const start = trackOnceStartRef.current;
+      if (start && data.id === start) return; // ainda é o mesmo registro de antes
+      const device = devices.find((d) => d.id === trackOnce.deviceId);
+      const displayAddress = device?.manual_address || data.address;
+      setTrackOnce((prev) => (prev ? { ...prev, waiting: false, loc: { lat: data.latitude, lng: data.longitude, address: displayAddress ?? null } } : prev));
+      toast({ title: "📍 Localização encontrada!", description: trackOnce.name });
+    };
+    check();
+    const iv = window.setInterval(check, 3000);
+    return () => window.clearInterval(iv);
+  }, [trackOnce?.waiting, trackOnce?.deviceId, trackOnce?.name, devices]);
+
   const secondsSinceUpdate = lastUpdateAt ? Math.floor((now - lastUpdateAt) / 1000) : 0;
   const interval = emergencyMode ? INTERVAL_EMERGENCY : INTERVAL_NORMAL;
   const nextUpdateSecs = Math.max(0, interval - secondsSinceUpdate);
@@ -284,13 +321,13 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
 
     const isCurrentDevice = currentDevice?.id === deviceId;
     if (isCurrentDevice) {
-      // É o aparelho que estou usando agora — ativa rastreamento local
+      // É o aparelho que estou usando agora — ativa rastreamento local.
+      // O cartão de "endereço encontrado" (com Compartilhar/Editar) aparece sozinho
+      // assim que a posição chegar, através do efeito abaixo — mesma experiência
+      // usada quando o aparelho perdido é remoto.
       if (!emergencyMode) {
         setEmergencyMode(true);
         if (!tracking) startTracking();
-      }
-      if (position) {
-        setTimeout(() => setShowShareModal({ lat: position.lat, lng: position.lng, address: currentAddress }), 600);
       }
     } else {
       // É outro aparelho — guarda o ID do último registro conhecido (se houver) para detectar quando um NOVO registro chegar
@@ -352,6 +389,26 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
     return () => window.clearInterval(interval);
   }, [waitingRemoteLocation, lostDeviceId, checkRemoteDeviceLocation]);
 
+  // Quando o aparelho "perdido" é este mesmo aparelho (local), popula o cartão de
+  // endereço encontrado (com Compartilhar/Editar) assim que a posição chegar —
+  // mesma experiência do fluxo de busca remota.
+  useEffect(() => {
+    if (!lostMode || !position || !currentDevice || lostDeviceId !== currentDevice.id) return;
+    let cancelled = false;
+    (async () => {
+      let address = currentAddress;
+      if (!address) {
+        address = await reverseGeocodeFetch(position.lat, position.lng);
+        if (!cancelled && address) setCurrentAddress(address);
+      }
+      if (!cancelled) {
+        setFoundDeviceLoc({ lat: position.lat, lng: position.lng, address });
+        setFoundDeviceName(currentDevice.custom_label || currentDevice.device_name);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [lostMode, lostDeviceId, currentDevice, position]);
+
   const toggleLostMode = useCallback(() => {
     if (!lostMode) {
       setShowLostDevicePicker(true);
@@ -371,6 +428,21 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
   const mapSrc = position
     ? `https://maps.google.com/maps?q=${position.lat},${position.lng}&z=17&output=embed`
     : null;
+
+  // Buscando um aparelho remoto (não o atual): o mapa principal deve mostrar a
+  // localização ENCONTRADA dele, não a posição do aparelho local (que não tem nada
+  // a ver nesse fluxo).
+  const isRemoteLostSearch = lostMode && !!lostDeviceId && currentDevice?.id !== lostDeviceId;
+  const effectiveMapSrc = trackOnce
+    ? (trackOnce.loc ? `https://maps.google.com/maps?q=${trackOnce.loc.lat},${trackOnce.loc.lng}&z=17&output=embed` : null)
+    : isRemoteLostSearch
+    ? (foundDeviceLoc ? `https://maps.google.com/maps?q=${foundDeviceLoc.lat},${foundDeviceLoc.lng}&z=17&output=embed` : null)
+    : mapSrc;
+  const effectivePosition = trackOnce
+    ? (trackOnce.loc ? { lat: trackOnce.loc.lat, lng: trackOnce.loc.lng } : null)
+    : isRemoteLostSearch
+    ? (foundDeviceLoc ? { lat: foundDeviceLoc.lat, lng: foundDeviceLoc.lng } : null)
+    : position;
 
   return (
     <div className="animate-fade-in space-y-4">
@@ -394,8 +466,8 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
           boxShadow: emergencyMode ? "0 0 20px rgba(229,57,53,0.2)" : "0 2px 8px rgba(0,0,0,0.06)",
         }}
       >
-        {position && mapSrc ? (
-          <iframe src={mapSrc} style={{ width: "100%", height: "100%", border: 0 }} title="Mapa" loading="lazy" />
+        {effectivePosition && effectiveMapSrc ? (
+          <iframe src={effectiveMapSrc} style={{ width: "100%", height: "100%", border: 0 }} title="Mapa" loading="lazy" />
         ) : (
           <div className="h-full flex flex-col items-center justify-center gap-3" style={{ background: "#F5F5F5" }}>
             {loading || capturing ? (
@@ -415,6 +487,16 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
                 <MapPinOff size={28} style={{ color: "#E53935" }} />
                 <p className="text-xs text-center px-6" style={{ color: "#E53935" }}>{error}</p>
                 <Button size="sm" variant="outline" onClick={startTracking} className="text-xs">Tentar novamente</Button>
+              </>
+            ) : trackOnce?.waiting ? (
+              <>
+                <Loader2 size={28} className="animate-spin" style={{ color: "#2D9E7F" }} />
+                <p className="text-xs" style={{ color: "#9E9E9E" }}>Aguardando {trackOnce.name} responder...</p>
+              </>
+            ) : isRemoteLostSearch ? (
+              <>
+                <Loader2 size={28} className="animate-spin" style={{ color: "#E53935" }} />
+                <p className="text-xs" style={{ color: "#9E9E9E" }}>Aguardando localização do aparelho perdido...</p>
               </>
             ) : (
               <>
@@ -437,6 +519,56 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
         )}
       </div>
 
+      {trackOnce && (
+        <div className="rounded-2xl p-3 flex items-start gap-2.5" style={{ background: trackOnce.loc ? "#F0FDF4" : "#F5F5F5", border: trackOnce.loc ? "1px solid #BBF7D0" : "1px solid #E0E0E0" }}>
+          <div className="flex items-center justify-center rounded-full shrink-0" style={{ width: 34, height: 34, background: trackOnce.loc ? "rgba(45,158,127,0.15)" : "#EEE" }}>
+            {trackOnce.waiting
+              ? <Loader2 size={16} className="animate-spin" style={{ color: "#2D9E7F" }} />
+              : <MapPin size={16} style={{ color: "#2D9E7F" }} />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-bold mb-0.5" style={{ color: trackOnce.loc ? "#2D9E7F" : "#757575" }}>
+              {trackOnce.waiting ? `🔄 Aguardando ${trackOnce.name}...` : `📍 ${trackOnce.name} — encontrado!`}
+            </p>
+            {trackOnce.loc && (
+              <p className="text-[13px] font-semibold break-words leading-snug" style={{ color: "#1A1A2E" }}>
+                {trackOnce.loc.address || `${trackOnce.loc.lat.toFixed(5)}, ${trackOnce.loc.lng.toFixed(5)}`}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-col gap-1.5 shrink-0">
+            {trackOnce.loc && (
+              <>
+                <button
+                  onClick={() => setEditingDevice({ id: trackOnce.deviceId, name: trackOnce.name, address: trackOnce.loc!.address, lat: trackOnce.loc!.lat, lng: trackOnce.loc!.lng })}
+                  className="flex items-center justify-center rounded-full transition-all active:scale-95"
+                  style={{ width: 30, height: 30, background: "rgba(45,158,127,0.15)", color: "#2D9E7F", border: "1.5px solid rgba(45,158,127,0.3)" }}
+                  title="Editar endereço"
+                >
+                  <Pencil size={14} />
+                </button>
+                <button
+                  onClick={() => setShowShareModal({ lat: trackOnce.loc!.lat, lng: trackOnce.loc!.lng, address: trackOnce.loc!.address })}
+                  className="flex items-center justify-center rounded-full transition-all active:scale-95"
+                  style={{ width: 30, height: 30, background: "#2D9E7F", color: "#FFF" }}
+                  title="Compartilhar localização"
+                >
+                  <Share2 size={14} />
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => setTrackOnce(null)}
+              className="flex items-center justify-center rounded-full transition-all active:scale-95"
+              style={{ width: 30, height: 30, background: "#EEE", color: "#616161" }}
+              title="Fechar"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {tracking && lastUpdateAt && (
         <UpdateIndicator
           secondsSinceUpdate={secondsSinceUpdate}
@@ -447,24 +579,26 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
         />
       )}
 
-      <div className="flex gap-2">
-        <Button
-          onClick={() => { setCurrentAddress(null); captureNow(true); }}
-          disabled={loading || capturing}
-          className="flex-1 gap-2 rounded-xl"
-        >
-          <Navigation size={16} className={capturing ? "animate-pulse" : ""} />
-          {capturing ? "Capturando GPS..." : "Localizar agora"}
-        </Button>
-        <Button
-          onClick={() => position && setShowShareModal({ lat: position.lat, lng: position.lng, address: currentAddress })}
-          disabled={!position}
-          variant="outline"
-          className="rounded-xl"
-        >
-          <Share2 size={16} />
-        </Button>
-      </div>
+      {!lostMode && (
+        <div className="flex gap-2">
+          <Button
+            onClick={() => { setCurrentAddress(null); captureNow(true); }}
+            disabled={loading || capturing}
+            className="flex-1 gap-2 rounded-xl"
+          >
+            <Navigation size={16} className={capturing ? "animate-pulse" : ""} />
+            {capturing ? "Capturando GPS..." : "Localizar agora"}
+          </Button>
+          <Button
+            onClick={() => position && setShowShareModal({ lat: position.lat, lng: position.lng, address: currentAddress })}
+            disabled={!position}
+            variant="outline"
+            className="rounded-xl"
+          >
+            <Share2 size={16} />
+          </Button>
+        </div>
+      )}
 
       {lostMode && trail.length > 1 && (
         <div className="rounded-2xl p-3 flex items-center justify-between" style={{ background: "#FFF5F5", border: "1px solid #FFCDD2" }}>
@@ -488,7 +622,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
       )}
 
       {/* Box endereço após localizar */}
-      {(loadingAddress || currentAddress) && (
+      {!lostMode && (loadingAddress || currentAddress) && (
         <div className="rounded-2xl p-4 flex items-start gap-3" style={{ background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
           <div className="flex items-center justify-center rounded-full shrink-0" style={{ width: 40, height: 40, background: "rgba(45,158,127,0.15)" }}>
             {loadingAddress
@@ -528,7 +662,12 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
         </div>
       )}
 
+      {/* Tudo abaixo fica escondido durante o "Rastrear agora" pra deixar a tela limpa,
+          focada só no mapa + endereço + compartilhar */}
+      {!trackOnce && (
+      <>
       {/* Devices list */}
+      {!lostMode && (
       <div>
         <h3 className="font-bold text-sm mb-2 px-1" style={{ color: "#1A1A2E" }}>📱 Meus Dispositivos</h3>
         <div className="space-y-2">
@@ -580,7 +719,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
                     <ActionBtn icon={<MapPin size={14} />} label="Mapa" onClick={() => mapsHref && window.open(mapsHref, "_blank")} disabled={!mapsHref} />
                     <ActionBtn icon={<Volume2 size={14} />} label="Alarme" onClick={() => { sendCommand(d.id, "ring"); toast({ title: "🔔 Alarme enviado" }); }} />
                     <ActionBtn icon={<Lock size={14} />} label="Bloquear" onClick={() => { sendCommand(d.id, "lock"); toast({ title: "🔒 Comando enviado" }); }} />
-                    <ActionBtn icon={<Navigation size={14} />} label="Rastrear agora" onClick={() => { sendCommand(d.id, "update_now"); toast({ title: "📍 Solicitado" }); }} />
+                    <ActionBtn icon={<Navigation size={14} />} label="Rastrear agora" onClick={() => startTrackOnce(d.id, name)} />
                   </div>
                 </div>
               );
@@ -588,6 +727,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
           )}
         </div>
       </div>
+      )}
 
       {/* Geofence section */}
       <GeofenceSection currentPosition={position} />
@@ -606,11 +746,11 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-bold text-[15px]" style={{ color: "#C62828" }}>
-              {foundDeviceMapHref ? "✅ Aparelho localizado!" : waitingRemoteLocation ? "🔄 Aguardando aparelho..." : lostMode ? "🔴 Buscando aparelho..." : "Perdi meu aparelho"}
+              {foundDeviceLoc ? "🔍 Dispositivo perdido encontrado! Deseja compartilhar?" : waitingRemoteLocation ? "🔄 Aguardando aparelho..." : lostMode ? "🔴 Buscando aparelho..." : "Perdi meu aparelho"}
             </p>
             <p className="text-[12px]" style={{ color: "#C62828", opacity: 0.85 }}>
-              {foundDeviceMapHref
-                ? `${foundDeviceName} — toque para ver no mapa`
+              {foundDeviceLoc
+                ? (foundDeviceName ? `${foundDeviceName} — endereço abaixo` : "Endereço abaixo")
                 : waitingRemoteLocation
                 ? "Aguardando o aparelho responder..."
                 : lostMode
@@ -733,6 +873,8 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
           </div>
         )}
       </div>
+      </>
+      )}
 
       {showAlertModal && <AlertModal deviceName={showAlertModal.name} onClose={() => setShowAlertModal(null)} />}
 
@@ -804,6 +946,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
               setCurrentAddress(savedAddress);
               if (showShareModal) setShowShareModal((prev) => prev ? { ...prev, address: savedAddress } : null);
               setFoundDeviceLoc((prev) => prev ? { ...prev, address: savedAddress } : null);
+              setTrackOnce((prev) => (prev && prev.loc ? { ...prev, loc: { ...prev.loc, address: savedAddress } } : prev));
             }
           }}
           onShare={(address) => {
