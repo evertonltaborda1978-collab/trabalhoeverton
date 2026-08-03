@@ -286,6 +286,18 @@ function deserializeBlocks(raw: string): ContentBlock[] {
 }
 
 // ── Tabela Manual: helpers de cálculo ─────────────────
+// Garante que a nota sempre termine com um bloco de texto (mesmo vazio), pra
+// sempre existir um lugar clicável pra continuar escrevendo. Corrige notas
+// antigas/importadas que terminam em Tabela Manual ou Checklist sem essa linha.
+function ensureTrailingTextBlock(blocks: ContentBlock[]): ContentBlock[] {
+  if (blocks.length === 0) return [{ type: "text", content: "" }];
+  const last = blocks[blocks.length - 1];
+  if (last.type !== "text") {
+    return [...blocks, { type: "text", content: "" }];
+  }
+  return blocks;
+}
+
 function tableValorEhPorcentagem(valor: string): boolean {
   return valor.trim().endsWith("%");
 }
@@ -932,7 +944,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
           // Only recover if draft is for a new note (no noteId) and less than 1 hour old
           if (!draft.noteId && Date.now() - draft.timestamp < 3600000) {
             setTitle(draft.title || "");
-            setBlocks(draft.blocks || [{ type: "text", content: "" }]);
+            setBlocks(ensureTrailingTextBlock(draft.blocks || [{ type: "text", content: "" }]));
             setSelectedColor(draft.color || NOTE_COLORS[0].value);
             recovered = true;
           }
@@ -957,7 +969,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
       if (editingNote) {
         setTitle(editingNote.title);
         const parsed = deserializeBlocks(editingNote.content);
-        setBlocks(parsed);
+        setBlocks(ensureTrailingTextBlock(parsed));
         setSelectedColor(editingNote.color);
       } else if (initialSharedData && (initialSharedData.title || initialSharedData.content)) {
         // Pre-fill from shared content received from another app
@@ -1327,8 +1339,10 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
       if (next[idx]?.type === "checklist" && next[idx].items) {
         next[idx] = { ...next[idx], items: [...next[idx].items!, newItem] };
       } else {
-        // Insert new checklist block after current
-        next.splice(idx + 1, 0, { type: "checklist", items: [newItem] });
+        // Insert new checklist block after current, followed by an empty text line
+        // (same pattern used when inserting a photo) so there's always somewhere
+        // to keep typing below it, even if it becomes the last block in the note.
+        next.splice(idx + 1, 0, { type: "checklist", items: [newItem] }, { type: "text", content: "" });
       }
       pushHistory(next);
       return next;
@@ -1393,8 +1407,10 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
       if (next[idx]?.type === "table" && next[idx].tableItems) {
         next[idx] = { ...next[idx], tableItems: [...next[idx].tableItems!, newItem] };
       } else {
-        // Insere novo bloco de tabela após o atual
-        next.splice(idx + 1, 0, { type: "table", tableItems: [newItem] });
+        // Insere novo bloco de tabela após o atual, seguido de uma linha de texto vazia
+        // (mesmo padrão usado ao inserir uma foto) — assim sempre dá pra continuar
+        // escrevendo depois da tabela, mesmo se ela virar o último bloco da nota.
+        next.splice(idx + 1, 0, { type: "table", tableItems: [newItem] }, { type: "text", content: "" });
       }
       pushHistory(next);
       return next;
