@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { MapPin, Navigation, AlertTriangle, Share2, Loader2, MapPinOff, Bell, Lock, Volume2, History, Battery, Pencil, X, Smartphone, Monitor } from "lucide-react";
+import { MapPin, Navigation, AlertTriangle, Share2, Loader2, MapPinOff, Bell, Lock, Volume2, History, Battery, Pencil, X, Smartphone, Monitor, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { UpdateIndicator } from "./local/UpdateIndicator";
@@ -25,7 +25,7 @@ interface Position {
   timestamp: number;
 }
 
-export function LocationView() {
+export function LocationView({ onBack }: { onBack?: () => void }) {
   const { devices, currentDevice, fetchDevices } = useDeviceTracking();
   const { latestByDevice, recordLocation } = useDeviceLocations();
   const [editingDevice, setEditingDevice] = useState<{ id: string; name: string; address: string | null; lat?: number; lng?: number } | null>(null);
@@ -375,6 +375,15 @@ export function LocationView() {
   return (
     <div className="animate-fade-in space-y-4">
 
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-sm font-semibold transition-all active:scale-95"
+          style={{ color: "#1A1A2E" }}
+        >
+          <ArrowLeft size={16} /> Notas
+        </button>
+      )}
 
       {/* Map */}
       <div
