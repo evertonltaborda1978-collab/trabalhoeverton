@@ -795,11 +795,6 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const savedScrollRef = useRef<number>(0);
   const justEnteredEditRef = useRef(false);
-  // Altura real e visível da tela (exclui o teclado virtual). Em muitos navegadores
-  // Android, "100dvh" não encolhe quando o teclado abre, então o app "acha" que tem
-  // mais espaço do que o realmente visível — isso trava a rolagem por completo perto
-  // do fim do conteúdo, pois a área rolável é calculada com a altura errada.
-  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
 
   // ── Auto-save draft to localStorage ───────────────────
   const DRAFT_KEY = "note_editor_draft";
@@ -837,14 +832,11 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     }
   });
 
-  // Fix keyboard overlap on mobile — scroll focused element into view when keyboard opens,
-  // and track the real visible height so the modal shrinks instead of hiding content
-  // behind the keyboard (root cause of scroll "travando" perto do fim da nota).
+  // Fix keyboard overlap on mobile — scroll focused element into view when keyboard opens
   useEffect(() => {
     if (!open) return;
     const handleViewportResize = () => {
       if (!window.visualViewport) return;
-      setViewportHeight(window.visualViewport.height);
       const kbHeight = Math.max(0, window.innerHeight - window.visualViewport.height);
       if (kbHeight > 100) {
         const focused = document.activeElement as HTMLElement;
@@ -853,7 +845,6 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
         }
       }
     };
-    handleViewportResize();
     window.visualViewport?.addEventListener("resize", handleViewportResize);
     return () => {
       window.visualViewport?.removeEventListener("resize", handleViewportResize);
@@ -1782,7 +1773,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); else onOpenChange(v); }} modal={false}>
       <DialogContent className="!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !w-screen !max-w-none !max-h-none !rounded-none !shadow-none !border-0 !p-0 !gap-0 !bg-transparent z-50 sm:!inset-auto sm:!left-1/2 sm:!top-1/2 sm:!-translate-x-1/2 sm:!-translate-y-1/2 sm:!w-full sm:!max-w-[480px] sm:!h-[92vh] sm:!max-h-[92vh] sm:!rounded-2xl sm:!shadow-2xl sm:!overflow-hidden"
-        style={{ height: viewportHeight ? `${viewportHeight}px` : "100dvh" }}
+        style={{ height: "100dvh" }}
         aria-describedby={undefined}
         onOpenAutoFocus={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
