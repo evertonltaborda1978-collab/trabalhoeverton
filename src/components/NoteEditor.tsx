@@ -83,6 +83,7 @@ export interface ContentBlock {
   items?: ChecklistItem[];
   tableItems?: TableItem[];
   tableTitle?: string; // título editável da Tabela Manual (padrão: "Tabela Manual")
+  somaTotalLabel?: string; // nome editável da barra "Soma Total" (guardado na 1ª tabela da nota)
   style?: TextStyle;
 }
 
@@ -1501,6 +1502,23 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     }, 500);
   };
 
+  // Guarda o nome customizado da barra "Soma Total" na 1ª tabela da nota (é o
+  // mesmo valor pra nota inteira, não por tabela — só precisa de um lugar pra ficar)
+  const updateSomaTotalLabel = (label: string) => {
+    setBlocks((prev) => {
+      const next = [...prev];
+      const firstTableIdx = next.findIndex((b) => b.type === "table" && b.tableItems);
+      if (firstTableIdx !== -1) {
+        next[firstTableIdx] = { ...next[firstTableIdx], somaTotalLabel: label };
+      }
+      return next;
+    });
+    clearTimeout(historyTimer.current);
+    historyTimer.current = setTimeout(() => {
+      setBlocks((current) => { pushHistory(current); return current; });
+    }, 500);
+  };
+
   // ── OCR ──────────────────────────────────────────────
   const handleOcrImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2539,23 +2557,34 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                                 className="bg-transparent border-0 outline-none font-medium resize-none overflow-hidden"
                                 style={{ color: textColor, opacity: item.marcado ? 1 : 0.6, fontSize: tFont, lineHeight: `${tFont * 1.3}px`, fontFamily: "inherit", minWidth: 0, width: "100%" }}
                               />
-                              <input
+                              <textarea
+                                ref={(el) => {
+                                  if (el) {
+                                    el.style.height = "auto";
+                                    el.style.height = `${el.scrollHeight}px`;
+                                  }
+                                }}
                                 value={item.valor}
-                                onChange={(e) => !readOnly && updateTableItem(idx, item.id, { valor: e.target.value })}
+                                onChange={(e) => {
+                                  if (!readOnly) updateTableItem(idx, item.id, { valor: e.target.value });
+                                  e.target.style.height = "auto";
+                                  e.target.style.height = `${e.target.scrollHeight}px`;
+                                }}
                                 onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
                                 onPaste={handleMobilePaste}
                                 readOnly={readOnly}
+                                rows={1}
                                 tabIndex={readOnly ? -1 : 0}
-                                placeholder="Valor (ou 5*3, 10/2...)"
-                                className="bg-transparent border-0 outline-none text-right font-semibold"
+                                placeholder="Valor"
+                                className="bg-transparent border-0 outline-none text-right font-semibold resize-none overflow-hidden"
                                 style={{
                                   color: numero < 0 ? "#E53935" : (isDark ? "#81C784" : "#2D9E7F"),
                                   opacity: item.marcado ? 1 : 0.6,
                                   fontSize: tFont,
+                                  lineHeight: `${tFont * 1.3}px`,
+                                  fontFamily: "inherit",
                                   minWidth: 0,
                                   width: "100%",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
                                 }}
                               />
                               {!readOnly && (
@@ -2677,18 +2706,33 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
             const tabelas = blocks.filter((b) => b.type === "table" && b.tableItems);
             if (tabelas.length < 2) return null;
             const somaGeral = tabelas.reduce((soma, b) => soma + calcularTotalTabela(b.tableItems!), 0);
+            const stFont = editorFontSize; // segue o mesmo ajuste A/A+/A++ do resto da nota
+            const label = tabelas[0].somaTotalLabel ?? "Soma Total";
             return (
               <div
-                className="mx-4 mb-2 flex items-center justify-between rounded-xl px-3 py-2.5"
+                className="mx-4 mb-2 flex items-center justify-between gap-2 rounded-xl px-3 py-2.5"
                 style={{
                   background: isDark ? "#0F3D2E" : "#E8F5E9",
                   border: `1.5px solid ${isDark ? "#2D9E7F" : "#A5D6A7"}`,
                 }}
               >
-                <span className="font-bold" style={{ color: isDark ? "#81C784" : "#2E7D32", fontSize: 12 }}>
-                  🧮 Soma Total ({tabelas.length} tabelas)
-                </span>
-                <span className="font-bold" style={{ color: isDark ? "#81C784" : "#2E7D32", fontSize: 15 }}>
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  <span style={{ fontSize: stFont * 0.85, flexShrink: 0 }}>🧮</span>
+                  {readOnly ? (
+                    <span className="font-bold truncate" style={{ color: isDark ? "#81C784" : "#2E7D32", fontSize: stFont * 0.8 }}>
+                      {label} ({tabelas.length} tabelas)
+                    </span>
+                  ) : (
+                    <input
+                      value={label}
+                      onChange={(e) => updateSomaTotalLabel(e.target.value)}
+                      onFocus={(e) => e.target.select()}
+                      className="font-bold bg-transparent border-0 outline-none min-w-0 flex-1"
+                      style={{ color: isDark ? "#81C784" : "#2E7D32", fontSize: stFont * 0.8 }}
+                    />
+                  )}
+                </div>
+                <span className="font-bold shrink-0" style={{ color: isDark ? "#81C784" : "#2E7D32", fontSize: stFont }}>
                   {formatarMoedaBRL(somaGeral)}
                 </span>
               </div>
