@@ -303,9 +303,31 @@ function tableValorEhPorcentagem(valor: string): boolean {
 }
 
 function tableValorParaNumero(valor: string): number {
-  const limpo = valor.trim().replace("%", "").replace(",", ".");
-  const num = parseFloat(limpo);
-  return isNaN(num) ? 0 : num;
+  const limpo = valor.trim().replace(/%/g, "").replace(/R\$/gi, "").trim();
+  if (!limpo) return 0;
+
+  // Caminho mais comum: um número simples com vírgula decimal (ex: "55,41" ou "-10")
+  const numeroSimples = limpo.replace(",", ".");
+  if (/^-?\d+(\.\d+)?$/.test(numeroSimples)) {
+    const n = parseFloat(numeroSimples);
+    return isNaN(n) ? 0 : n;
+  }
+
+  // Expressão com + - * / ( ) — ex: "5*3", "10/2", "55,41+0,01", "(10+5)/3"
+  // "x" e "÷" também são aceitos como atalhos de multiplicar/dividir.
+  const expressao = limpo
+    .replace(/,/g, ".")
+    .replace(/x/gi, "*")
+    .replace(/÷/g, "/");
+  // Validação de segurança: só permite números, espaços e os operadores +-*/(). — nada mais.
+  if (!/^[0-9+\-*/().\s]+$/.test(expressao)) return 0;
+  try {
+    // eslint-disable-next-line no-new-func
+    const resultado = Function(`"use strict"; return (${expressao});`)();
+    return typeof resultado === "number" && isFinite(resultado) ? resultado : 0;
+  } catch {
+    return 0;
+  }
 }
 
 function formatarMoedaBRL(valor: number): string {
@@ -2524,8 +2546,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                                 onPaste={handleMobilePaste}
                                 readOnly={readOnly}
                                 tabIndex={readOnly ? -1 : 0}
-                                inputMode="decimal"
-                                placeholder="Valor"
+                                placeholder="Valor (ou 5*3, 10/2...)"
                                 className="bg-transparent border-0 outline-none text-right font-semibold"
                                 style={{
                                   color: numero < 0 ? "#E53935" : (isDark ? "#81C784" : "#2D9E7F"),
@@ -2649,6 +2670,30 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
               </span>
             </div>
           </div>
+
+          {/* Soma Total de todas as tabelas da nota — só aparece com 2 ou mais tabelas,
+              fica fixa (fora da área de rolagem) pra sempre estar visível */}
+          {(() => {
+            const tabelas = blocks.filter((b) => b.type === "table" && b.tableItems);
+            if (tabelas.length < 2) return null;
+            const somaGeral = tabelas.reduce((soma, b) => soma + calcularTotalTabela(b.tableItems!), 0);
+            return (
+              <div
+                className="mx-4 mb-2 flex items-center justify-between rounded-xl px-3 py-2.5"
+                style={{
+                  background: isDark ? "#0F3D2E" : "#E8F5E9",
+                  border: `1.5px solid ${isDark ? "#2D9E7F" : "#A5D6A7"}`,
+                }}
+              >
+                <span className="font-bold" style={{ color: isDark ? "#81C784" : "#2E7D32", fontSize: 12 }}>
+                  🧮 Soma Total ({tabelas.length} tabelas)
+                </span>
+                <span className="font-bold" style={{ color: isDark ? "#81C784" : "#2E7D32", fontSize: 15 }}>
+                  {formatarMoedaBRL(somaGeral)}
+                </span>
+              </div>
+            );
+          })()}
 
           {/* ── FAB inputs (hidden) ── */}
           {!readOnly && (
