@@ -2495,16 +2495,27 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                               >
                                 {item.marcado ? <CheckSquare size={Math.min(tFont, 22)} /> : <Square size={Math.min(tFont, 22)} />}
                               </button>
-                              <input
+                              <textarea
+                                ref={(el) => {
+                                  if (el) {
+                                    el.style.height = "auto";
+                                    el.style.height = `${el.scrollHeight}px`;
+                                  }
+                                }}
                                 value={item.nome}
-                                onChange={(e) => !readOnly && updateTableItem(idx, item.id, { nome: e.target.value })}
+                                onChange={(e) => {
+                                  if (!readOnly) updateTableItem(idx, item.id, { nome: e.target.value });
+                                  e.target.style.height = "auto";
+                                  e.target.style.height = `${e.target.scrollHeight}px`;
+                                }}
                                 onFocus={() => { focusedBlockRef.current = idx; activeFieldRef.current = "content"; }}
                                 onPaste={handleMobilePaste}
                                 readOnly={readOnly}
+                                rows={1}
                                 tabIndex={readOnly ? -1 : 0}
                                 placeholder="Nome"
-                                className="bg-transparent border-0 outline-none font-medium"
-                                style={{ color: textColor, opacity: item.marcado ? 1 : 0.6, fontSize: tFont, minWidth: 0, width: "100%", overflow: "hidden", textOverflow: "ellipsis" }}
+                                className="bg-transparent border-0 outline-none font-medium resize-none overflow-hidden"
+                                style={{ color: textColor, opacity: item.marcado ? 1 : 0.6, fontSize: tFont, lineHeight: `${tFont * 1.3}px`, fontFamily: "inherit", minWidth: 0, width: "100%" }}
                               />
                               <input
                                 value={item.valor}
