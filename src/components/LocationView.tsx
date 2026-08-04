@@ -128,11 +128,21 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
       } else if (elapsed >= 15) {
         if (best) {
           if (best.accuracy > ACCURACY_TARGET) {
-            const ok = window.confirm(`Sinal fraco (±${Math.round(best.accuracy)}m). Compartilhar mesmo assim?`);
-            if (!ok) {
-              cleanup();
-              return;
-            }
+            window.clearInterval(tick);
+            const b = best;
+            (async () => {
+              const addr = await reverseGeocodeFetch(b.lat, b.lng);
+              const msg = addr
+                ? `Sinal fraco (±${Math.round(b.accuracy)}m). Endereço aproximado encontrado:\n\n${addr}\n\nCompartilhar mesmo assim?`
+                : `Sinal fraco (±${Math.round(b.accuracy)}m). Compartilhar mesmo assim?`;
+              const ok = window.confirm(msg);
+              if (!ok) {
+                cleanup();
+                return;
+              }
+              finish(addr);
+            })();
+            return;
           }
         }
         finish();
@@ -145,18 +155,22 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
       setCapturing(false);
     };
 
-    const finish = async () => {
+    const finish = async (precomputedAddr?: string | null) => {
       cleanup();
       if (best) {
         setPosition(best);
         setLastUpdateAt(Date.now());
         setTracking(true);
         if (currentDevice) recordLocation(currentDevice.id, best.lat, best.lng, best.accuracy, "manual");
-        setLoadingAddress(true);
-        setCurrentAddress(null);
-        const addr = await reverseGeocodeFetch(best.lat, best.lng);
-        setCurrentAddress(addr || "Endereço não encontrado");
-        setLoadingAddress(false);
+        if (precomputedAddr !== undefined) {
+          setCurrentAddress(precomputedAddr || "Endereço não encontrado");
+        } else {
+          setLoadingAddress(true);
+          setCurrentAddress(null);
+          const addr = await reverseGeocodeFetch(best.lat, best.lng);
+          setCurrentAddress(addr || "Endereço não encontrado");
+          setLoadingAddress(false);
+        }
       }
     };
   }, [currentDevice, recordLocation]);
@@ -395,11 +409,13 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
     return () => window.clearInterval(interval);
   }, [waitingRemoteLocation, lostDeviceId, checkRemoteDeviceLocation]);
 
-  // Quando o aparelho "perdido" é este mesmo aparelho (local), popula o cartão de
-  // endereço encontrado (com Compartilhar/Editar) assim que a posição chegar —
-  // mesma experiência do fluxo de busca remota.
+  // Quando o aparelho "perdido" é este mesmo aparelho (local), OU quando o Modo
+  // Emergência está ativo, popula o cartão de endereço encontrado (com
+  // Compartilhar/Editar) assim que a posição chegar — mesma experiência dos
+  // outros fluxos.
   useEffect(() => {
-    if (!lostMode || !position || !currentDevice || lostDeviceId !== currentDevice.id) return;
+    const isLocalLostMode = lostMode && lostDeviceId === currentDevice?.id;
+    if ((!isLocalLostMode && !emergencyMode) || !position || !currentDevice) return;
     let cancelled = false;
     (async () => {
       let address = currentAddress;
@@ -413,7 +429,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [lostMode, lostDeviceId, currentDevice, position]);
+  }, [lostMode, lostDeviceId, emergencyMode, currentDevice, position]);
 
   const toggleLostMode = useCallback(() => {
     if (!lostMode) {
