@@ -2344,23 +2344,47 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                             >
                               {item.checked ? <CheckSquare size={cFont * 1.15} /> : <Square size={cFont * 1.15} />}
                             </button>
-                            <input
-                              value={item.text}
-                              onChange={(e) => !readOnly && updateChecklistItem(idx, item.id, { text: e.target.value })}
-                              onPointerDown={(e) => {
-                                if (readOnly && editingNote) {
-                                  e.preventDefault();
-                                  activateFieldForEditing("content", idx);
+                            {readOnly ? (
+                              <span
+                                onPointerDown={(e) => {
+                                  if (editingNote) {
+                                    e.preventDefault();
+                                    activateFieldForEditing("content", idx);
+                                  }
+                                }}
+                                className="flex-1 min-w-0 break-words"
+                                style={{
+                                  lineHeight: `${cFont * 1.35}px`,
+                                  fontSize: cFont,
+                                  fontWeight: item.bold ? 700 : 400,
+                                  color: item.checked ? "#999" : textColor,
+                                  textDecoration: item.checked ? "line-through" : "none",
+                                  opacity: item.checked ? 0.7 : 1,
+                                }}
+                              >
+                                {item.text || "Item da lista..."}
+                              </span>
+                            ) : (
+                            <textarea
+                              ref={(el) => {
+                                if (el) {
+                                  el.style.height = "auto";
+                                  el.style.height = `${el.scrollHeight}px`;
                                 }
                               }}
+                              value={item.text}
+                              onChange={(e) => {
+                                updateChecklistItem(idx, item.id, { text: e.target.value });
+                                e.target.style.height = "auto";
+                                e.target.style.height = `${e.target.scrollHeight}px`;
+                              }}
                               onFocus={(e) => {
-                                if (readOnly) { e.target.blur(); return; }
                                 focusedBlockRef.current = idx;
                                 activeFieldRef.current = "content";
                               }}
-                              tabIndex={readOnly ? -1 : 0}
+                              rows={1}
+                              tabIndex={0}
                               onPaste={handleMobilePaste}
-                              readOnly={readOnly}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") {
                                   e.preventDefault();
@@ -2368,16 +2392,20 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                                 }
                               }}
                               placeholder="Item da lista..."
-                              className="flex-1 min-w-0 bg-transparent border-0 outline-none"
+                              className="flex-1 min-w-0 bg-transparent border-0 outline-none resize-none overflow-hidden"
                               style={{
-                                lineHeight: `${cFont * 2}px`,
+                                lineHeight: `${cFont * 1.35}px`,
+                                paddingTop: `${cFont * 0.32}px`,
+                                paddingBottom: `${cFont * 0.32}px`,
                                 fontSize: cFont,
+                                fontFamily: "inherit",
                                 fontWeight: item.bold ? 700 : 400,
                                 color: item.checked ? "#999" : textColor,
                                 textDecoration: item.checked ? "line-through" : "none",
                                 opacity: item.checked ? 0.7 : 1,
                               }}
                             />
+                            )}
                             {!readOnly && (
                               <button
                                 onClick={() => updateChecklistItem(idx, item.id, { bold: !item.bold })}
