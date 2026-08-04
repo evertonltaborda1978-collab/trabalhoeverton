@@ -45,6 +45,9 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
   const [captureAccuracy, setCaptureAccuracy] = useState<number | null>(null);
   const [currentAddress, setCurrentAddress] = useState<string | null>(null);
   const [loadingAddress, setLoadingAddress] = useState(false);
+  // Tela de escolha (chooser) ao entrar na aba: true = mostra "qual aparelho?",
+  // false = mostra o resultado (mapa + endereço + compartilhar) de quem foi escolhido.
+  const [pickerMode, setPickerMode] = useState(true);
 
   const watchIdRef = useRef<number | null>(null);
   const intervalRef = useRef<number | null>(null);
@@ -230,6 +233,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
     const existingLoc = latestByDevice[deviceId];
     trackOnceStartRef.current = existingLoc ? existingLoc.id : "__none__";
     setTrackOnce({ deviceId, name, waiting: true, loc: null });
+    setPickerMode(false);
     sendCommand(deviceId, "update_now");
     toast({ title: "📍 Solicitado", description: `Aguardando ${name} responder...` });
   }, [latestByDevice, sendCommand]);
@@ -264,6 +268,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
   const toggleEmergency = useCallback(() => {
     if (!emergencyMode) {
       setEmergencyMode(true);
+      setPickerMode(false);
       if (!tracking) startTracking();
       toast({ title: "🚨 Modo Emergência ATIVADO", description: "Rastreamento de alta precisão ativo." });
     } else {
@@ -312,6 +317,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
     setLostDeviceId(deviceId);
     setLostMode(true);
     setShowLostDevicePicker(false);
+    setPickerMode(false);
     lowBatterySavedRef.current = false;
     setTrail(position ? [position] : []);
     // Limpa resultado de uma busca anterior antes de começar uma nova
@@ -429,6 +435,26 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
     ? `https://maps.google.com/maps?q=${position.lat},${position.lng}&z=17&output=embed`
     : null;
 
+  // Volta pra tela de escolha ("Trocar aparelho"), encerrando qualquer fluxo em andamento
+  const handleBackToPicker = useCallback(() => {
+    if (lostMode) {
+      setLostMode(false);
+      setLostDeviceId(null);
+      setWaitingRemoteLocation(false);
+      setFoundDeviceMapHref(null);
+      setFoundDeviceName(null);
+      setFoundDeviceLoc(null);
+      lostDeviceStartCoordsRef.current = null;
+    }
+    if (emergencyMode) setEmergencyMode(false);
+    if (tracking) stopTracking();
+    setTrackOnce(null);
+    setPosition(null);
+    setCurrentAddress(null);
+    setError(null);
+    setPickerMode(true);
+  }, [lostMode, emergencyMode, tracking]);
+
   // Buscando um aparelho remoto (não o atual): o mapa principal deve mostrar a
   // localização ENCONTRADA dele, não a posição do aparelho local (que não tem nada
   // a ver nesse fluxo).
@@ -456,6 +482,16 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
           <ArrowLeft size={16} /> Notas
         </button>
       )}
+
+      {!pickerMode && (
+      <>
+      <button
+        onClick={handleBackToPicker}
+        className="flex items-center gap-1.5 text-sm font-semibold transition-all active:scale-95"
+        style={{ color: "#2D9E7F" }}
+      >
+        <ArrowLeft size={16} /> Trocar aparelho
+      </button>
 
       {/* Map */}
       <div
@@ -661,11 +697,20 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
           )}
         </div>
       )}
+      </>
+      )}
 
-      {/* Tudo abaixo fica escondido durante o "Rastrear agora" pra deixar a tela limpa,
-          focada só no mapa + endereço + compartilhar */}
-      {!trackOnce && (
+      {/* Tela de escolha: só aparece quando nenhum aparelho foi selecionado ainda */}
+      {pickerMode && (
       <>
+      <Button
+        onClick={() => { setCurrentAddress(null); setPickerMode(false); captureNow(true); }}
+        className="w-full gap-2 rounded-xl py-5"
+      >
+        <Navigation size={16} />
+        📍 Localizar meu aparelho
+      </Button>
+
       {/* Devices list */}
       {!lostMode && (
       <div>
