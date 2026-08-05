@@ -22,6 +22,9 @@ function getCurrentBuildHash(): string | null {
 export function useVersionCheck(intervalMs: number = 10 * 60 * 1000) {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const currentHashRef = useRef<string | null>(null);
+  // Debug temporário — mostra o que o código está realmente enxergando, pra
+  // diagnosticar sem precisar mais chutar. Remover depois que resolver.
+  const [debugInfo, setDebugInfo] = useState<{ current: string | null; latest: string | null; lastCheck: string } | null>(null);
 
   const checkNow = useCallback(async () => {
     try {
@@ -30,16 +33,22 @@ export function useVersionCheck(intervalMs: number = 10 * 60 * 1000) {
       }
       // Sempre sem cache: precisa ser o index.html real do servidor, não uma cópia guardada
       const res = await fetch(`/index.html?_=${Date.now()}`, { cache: "no-store" });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setDebugInfo({ current: currentHashRef.current, latest: `ERRO HTTP ${res.status}`, lastCheck: new Date().toLocaleTimeString("pt-BR") });
+        return;
+      }
       const html = await res.text();
       const match = html.match(SCRIPT_SRC_REGEX);
       const latestHash = match ? match[0] : null;
 
+      setDebugInfo({ current: currentHashRef.current, latest: latestHash, lastCheck: new Date().toLocaleTimeString("pt-BR") });
+
       if (latestHash && currentHashRef.current && latestHash !== currentHashRef.current) {
         setUpdateAvailable(true);
       }
-    } catch {
+    } catch (e) {
       // Sem internet ou erro de rede: falha silenciosa, não incomoda o usuário
+      setDebugInfo({ current: currentHashRef.current, latest: `ERRO: ${e instanceof Error ? e.message : String(e)}`, lastCheck: new Date().toLocaleTimeString("pt-BR") });
     }
   }, []);
 
@@ -60,5 +69,5 @@ export function useVersionCheck(intervalMs: number = 10 * 60 * 1000) {
     window.location.reload();
   };
 
-  return { updateAvailable, applyUpdate };
+  return { updateAvailable, applyUpdate, debugInfo, checkNow };
 }
