@@ -882,6 +882,17 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
           </a>
         )}
 
+        {/* Feedback de "buscando..." enquanto a Emergência/Perdi-meu-aparelho (local)
+            ainda não encontrou o endereço — evita a tela parecer travada/muda */}
+        {!foundDeviceLoc && (lostMode ? lostDeviceId === currentDevice?.id : emergencyMode) && (
+          <div className="rounded-2xl p-3 flex items-center gap-2.5 mb-2" style={{ background: "#F5F5F5", border: "1px solid #E0E0E0" }}>
+            <Loader2 size={18} className="animate-spin" style={{ color: "#2D9E7F" }} />
+            <p className="text-[12px] font-medium" style={{ color: "#616161" }}>
+              🔄 Buscando endereço da sua posição atual...
+            </p>
+          </div>
+        )}
+
         {/* Cartão de endereço do aparelho encontrado — mesmo padrão do "Localizar agora",
             com endereço legível (não lat/lng cru), botão de editar e de compartilhar */}
         {foundDeviceLoc && (
