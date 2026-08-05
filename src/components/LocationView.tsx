@@ -269,7 +269,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
       const start = trackOnceStartRef.current;
       if (start && data.id === start) return; // ainda é o mesmo registro de antes
       const device = devices.find((d) => d.id === trackOnce.deviceId);
-      const displayAddress = device?.manual_address || data.address;
+      const displayAddress = data.address || device?.manual_address;
       setTrackOnce((prev) => (prev ? { ...prev, waiting: false, loc: { lat: data.latitude, lng: data.longitude, address: displayAddress ?? null } } : prev));
       toast({ title: "📍 Localização encontrada!", description: trackOnce.name });
     };
@@ -394,7 +394,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
     setWaitingRemoteLocation(false);
     const device = devices.find((d) => d.id === lostDeviceId);
     const name = device?.custom_label || device?.device_name || "aparelho";
-    const displayAddress = device?.manual_address || data.address;
+    const displayAddress = data.address || device?.manual_address;
     const href = displayAddress
       ? `https://www.google.com/maps?q=${encodeURIComponent(displayAddress)}&ll=${data.latitude},${data.longitude}`
       : `https://www.google.com/maps?q=${data.latitude},${data.longitude}`;
@@ -787,7 +787,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
               const loc = latestByDevice[d.id];
               const name = d.custom_label || d.device_name;
               const isManual = !!d.manual_address;
-              const displayAddress = d.manual_address || loc?.address || (loc ? `${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}` : null);
+              const displayAddress = loc?.address || d.manual_address || (loc ? `${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}` : null);
               const mapsHref = loc
                 ? (displayAddress && !displayAddress.match(/^-?\d/)
                     ? `https://www.google.com/maps?q=${encodeURIComponent(displayAddress)}&ll=${loc.latitude},${loc.longitude}`
@@ -804,7 +804,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
                           <div className="flex items-start gap-1.5">
                             <p className="text-[11px] flex-1 min-w-0 break-words" style={{ color: "#4A5568" }}>{displayAddress}</p>
                             <button
-                              onClick={() => setEditingDevice({ id: d.id, name, address: d.manual_address || loc?.address || null, lat: loc?.latitude, lng: loc?.longitude })}
+                              onClick={() => setEditingDevice({ id: d.id, name, address: loc?.address || d.manual_address || null, lat: loc?.latitude, lng: loc?.longitude })}
                               className="p-1 rounded-md hover:bg-black/5 shrink-0"
                               title="Editar endereço"
                             >
