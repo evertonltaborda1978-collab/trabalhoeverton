@@ -45,6 +45,9 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
   const [captureAccuracy, setCaptureAccuracy] = useState<number | null>(null);
   const [currentAddress, setCurrentAddress] = useState<string | null>(null);
   const [loadingAddress, setLoadingAddress] = useState(false);
+  // Modal customizado (substitui o window.confirm() nativo, feio e sem estilo do app)
+  // que aparece quando o sinal está fraco, perguntando se quer compartilhar assim mesmo
+  const [weakSignalConfirm, setWeakSignalConfirm] = useState<{ accuracy: number; address: string | null; resolve: (ok: boolean) => void } | null>(null);
   // Tela de escolha (chooser) ao entrar na aba: true = mostra "qual aparelho?",
   // false = mostra o resultado (mapa + endereço + compartilhar) de quem foi escolhido.
   const [pickerMode, setPickerMode] = useState(true);
@@ -132,10 +135,10 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
             const b = best;
             (async () => {
               const addr = await reverseGeocodeFetch(b.lat, b.lng);
-              const msg = addr
-                ? `Sinal fraco (±${Math.round(b.accuracy)}m). Endereço aproximado encontrado:\n\n${addr}\n\nCompartilhar mesmo assim?`
-                : `Sinal fraco (±${Math.round(b.accuracy)}m). Compartilhar mesmo assim?`;
-              const ok = window.confirm(msg);
+              const ok = await new Promise<boolean>((resolve) => {
+                setWeakSignalConfirm({ accuracy: b.accuracy, address: addr, resolve });
+              });
+              setWeakSignalConfirm(null);
               if (!ok) {
                 cleanup();
                 return;
@@ -471,6 +474,22 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
     setPickerMode(true);
   }, [lostMode, emergencyMode, tracking]);
 
+  // Para o rastreio AO VIVO (Emergência/Perdi meu aparelho/atualização contínua)
+  // sem sair da tela — mantém a última posição/endereço encontrados visíveis,
+  // só para de atualizar.
+  const isLiveTracking = tracking || lostMode || emergencyMode;
+  const handleStopLocating = useCallback(() => {
+    if (lostMode) {
+      setLostMode(false);
+      setLostDeviceId(null);
+      setWaitingRemoteLocation(false);
+      lostDeviceStartCoordsRef.current = null;
+    }
+    if (emergencyMode) setEmergencyMode(false);
+    if (tracking) stopTracking();
+    toast({ title: "⏹️ Localização parada", description: "A última posição encontrada continua na tela." });
+  }, [lostMode, emergencyMode, tracking]);
+
   // Buscando um aparelho remoto (não o atual): o mapa principal deve mostrar a
   // localização ENCONTRADA dele, não a posição do aparelho local (que não tem nada
   // a ver nesse fluxo).
@@ -501,13 +520,25 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
 
       {!pickerMode && (
       <>
-      <button
-        onClick={handleBackToPicker}
-        className="flex items-center gap-1.5 text-sm font-semibold transition-all active:scale-95"
-        style={{ color: "#2D9E7F" }}
-      >
-        <ArrowLeft size={16} /> Trocar aparelho
-      </button>
+      <div className="flex items-center justify-between">
+        <button
+          onClick={handleBackToPicker}
+          className="flex items-center gap-1.5 text-sm font-semibold transition-all active:scale-95"
+          style={{ color: "#2D9E7F" }}
+        >
+          <ArrowLeft size={16} /> Trocar aparelho
+        </button>
+        {isLiveTracking && (
+          <button
+            onClick={handleStopLocating}
+            className="flex items-center gap-1.5 text-sm font-semibold transition-all active:scale-95 px-2.5 py-1 rounded-lg"
+            style={{ color: "#E53935", background: "#FFEBEE" }}
+            title="Parar localização ao vivo"
+          >
+            <span style={{ fontSize: 13 }}>⏹</span> Parar
+          </button>
+        )}
+      </div>
 
       {/* Map */}
       <div
@@ -720,7 +751,24 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
       {pickerMode && (
       <>
       <Button
-        onClick={() => { setCurrentAddress(null); setPickerMode(false); captureNow(true); }}
+        onClick={() => {
+          setCurrentAddress(null);
+          setPickerMode(false);
+          // Se já existe uma posição salva de até 2 minutos atrás, mostra ela na
+          // hora (sem esperar) enquanto busca uma localização nova em tempo real
+          // por trás, que substitui a instantânea assim que chegar.
+          const existing = currentDevice ? latestByDevice[currentDevice.id] : null;
+          if (existing) {
+            const ageMs = Date.now() - new Date(existing.recorded_at).getTime();
+            if (ageMs <= 2 * 60 * 1000) {
+              setPosition({ lat: existing.latitude, lng: existing.longitude, accuracy: existing.accuracy ?? 0, timestamp: Date.now() });
+              setLastUpdateAt(new Date(existing.recorded_at).getTime());
+              setTracking(true);
+              setCurrentAddress(existing.address || null);
+            }
+          }
+          captureNow(true);
+        }}
         className="w-full gap-2 rounded-xl py-5"
       >
         <Navigation size={16} />
@@ -938,6 +986,56 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
       )}
 
       {showAlertModal && <AlertModal deviceName={showAlertModal.name} onClose={() => setShowAlertModal(null)} />}
+
+      {weakSignalConfirm && (
+        <div
+          className="fixed inset-0 z-[130] flex items-end sm:items-center justify-center p-3"
+          style={{ background: "rgba(0,0,0,0.5)" }}
+        >
+          <div className="w-full max-w-md rounded-2xl p-5" style={{ background: "#FFF" }}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: "#FFF3E0" }}>
+                <span style={{ fontSize: 20 }}>📡</span>
+              </div>
+              <div>
+                <h3 className="font-bold text-base" style={{ color: "#1A1A2E" }}>Sinal de GPS fraco</h3>
+                <p className="text-[12px]" style={{ color: "#9E9E9E" }}>Margem de erro: ±{Math.round(weakSignalConfirm.accuracy)}m</p>
+              </div>
+            </div>
+
+            {weakSignalConfirm.address ? (
+              <div className="rounded-xl p-3 mb-4" style={{ background: "#FFF8E1", border: "1px solid #FFE082" }}>
+                <p className="text-[11px] font-bold mb-1" style={{ color: "#F57F17" }}>📍 Endereço aproximado encontrado</p>
+                <p className="text-[13px] font-semibold" style={{ color: "#1A1A2E" }}>{weakSignalConfirm.address}</p>
+              </div>
+            ) : (
+              <p className="text-[13px] mb-4" style={{ color: "#616161" }}>
+                Não foi possível identificar um endereço com esse sinal.
+              </p>
+            )}
+
+            <p className="text-[13px] mb-4" style={{ color: "#616161" }}>
+              Deseja compartilhar essa localização mesmo assim?
+            </p>
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1 rounded-xl"
+                onClick={() => weakSignalConfirm.resolve(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1 rounded-xl"
+                onClick={() => weakSignalConfirm.resolve(true)}
+              >
+                Compartilhar mesmo assim
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showLostDevicePicker && (
         <div
