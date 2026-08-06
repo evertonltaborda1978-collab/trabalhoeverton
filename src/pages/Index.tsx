@@ -34,6 +34,10 @@ const titles: Record<Tab, string> = {
 
 const DEVICE_LABEL_PROMPT_KEY = "device_label_prompt_dismissed";
 
+// Versão do app — sobe a cada atualização entregue pelo Claude, pra você conferir
+// rapidinho se o que está no ar já é a versão mais nova, direto na tela, sem chutar.
+const APP_VERSION = "v1.1";
+
 const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
   const tabHistoryRef = useRef<Tab[]>([]);
@@ -49,7 +53,7 @@ const Index = () => {
   const [showLabelModal, setShowLabelModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
-  const { updateAvailable, applyUpdate } = useVersionCheck();
+  const { updateAvailable, applyUpdate, debugInfo, checkNow } = useVersionCheck();
 
   // Escuta global de comandos remotos — funciona em qualquer aba, não só na Local
   const { markExecuted } = useDeviceCommands(currentDevice?.id ?? null, async (cmd) => {
@@ -257,13 +261,22 @@ const Index = () => {
             </button>
           )}
 
-          {/* Linha 1 — título centralizado */}
-          <h1
-            className="font-display text-center"
-            style={{ fontWeight: 800, fontSize: 19, color: "#1A1A2E", marginBottom: 6 }}
-          >
-            {titles[tab]}
-          </h1>
+          {/* Linha 1 — título centralizado, com a versão discreta no canto direito.
+              Como esse cabeçalho é compartilhado, aparece em todas as abas sozinho. */}
+          <div className="relative flex items-center justify-center" style={{ marginBottom: 6 }}>
+            <h1
+              className="font-display text-center"
+              style={{ fontWeight: 800, fontSize: 19, color: "#1A1A2E" }}
+            >
+              {titles[tab]}
+            </h1>
+            <span
+              className="absolute right-0"
+              style={{ fontSize: 9, color: "#BDBDBD", fontWeight: 700, letterSpacing: 0.3 }}
+            >
+              v{APP_VERSION.replace(/^v/i, "")}
+            </span>
+          </div>
 
           {/* Linha 2 — online à esquerda, lua + sair à direita */}
           <div className="flex items-center justify-between">
