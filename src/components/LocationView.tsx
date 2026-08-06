@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { MapPin, Navigation, AlertTriangle, Share2, Loader2, MapPinOff, Bell, Lock, Volume2, History, Battery, Pencil, X, Smartphone, Monitor, ArrowLeft } from "lucide-react";
+import { MapPin, Navigation, AlertTriangle, Share2, Loader2, MapPinOff, Bell, Lock, Volume2, History, Battery, Pencil, X, Smartphone, Monitor, ArrowLeft, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { UpdateIndicator } from "./local/UpdateIndicator";
@@ -52,6 +52,8 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
   // Tela de escolha (chooser) ao entrar na aba: true = mostra "qual aparelho?",
   // false = mostra o resultado (mapa + endereço + compartilhar) de quem foi escolhido.
   const [pickerMode, setPickerMode] = useState(true);
+  // Modal de ajuda ("?") explicando a diferença entre as opções da tela de escolha
+  const [infoModal, setInfoModal] = useState<{ title: string; text: string } | null>(null);
 
   const watchIdRef = useRef<number | null>(null);
   const intervalRef = useRef<number | null>(null);
@@ -726,6 +728,27 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
         </div>
       )}
 
+      {/* Mais opções — só aparece depois que a localização já funcionou, pra não
+          duplicar com a lista completa que já existe na aba Segurança */}
+      {foundDeviceLoc && (() => {
+        const targetId = lostDeviceId || currentDevice?.id;
+        if (!targetId) return null;
+        const mapsHref = foundDeviceLoc.address
+          ? `https://www.google.com/maps?q=${encodeURIComponent(foundDeviceLoc.address)}&ll=${foundDeviceLoc.lat},${foundDeviceLoc.lng}`
+          : `https://www.google.com/maps?q=${foundDeviceLoc.lat},${foundDeviceLoc.lng}`;
+        return (
+          <div className="rounded-2xl p-3" style={{ background: "#FFF", border: "1px solid #F0F0F0" }}>
+            <p className="text-[11px] font-bold mb-2" style={{ color: "#9E9E9E" }}>Mais opções pra esse aparelho</p>
+            <div className="grid grid-cols-4 gap-1.5">
+              <ActionBtn icon={<MapPin size={14} />} label="Mapa" onClick={() => window.open(mapsHref, "_blank")} />
+              <ActionBtn icon={<Volume2 size={14} />} label="Alarme" onClick={() => { sendCommand(targetId, "ring"); toast({ title: "🔔 Alarme enviado" }); }} />
+              <ActionBtn icon={<Lock size={14} />} label="Bloquear" onClick={() => { sendCommand(targetId, "lock"); toast({ title: "🔒 Comando enviado" }); }} />
+              <ActionBtn icon={<Navigation size={14} />} label="Rastrear agora" onClick={() => startTrackOnce(targetId, foundDeviceName || "aparelho")} />
+            </div>
+          </div>
+        );
+      })()}
+
       {waitingRemoteLocation && (
         <button
           onClick={() => checkRemoteDeviceLocation()}
@@ -834,87 +857,71 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
       {/* Tela de escolha: só aparece quando nenhum aparelho foi selecionado ainda */}
       {pickerMode && (
       <>
-      <Button
-        onClick={() => {
-          setCurrentAddress(null);
-          setPickerMode(false);
-          // Se já existe uma posição salva de até 2 minutos atrás, mostra ela na
-          // hora (sem esperar) enquanto busca uma localização nova em tempo real
-          // por trás, que substitui a instantânea assim que chegar.
-          const existing = currentDevice ? latestByDevice[currentDevice.id] : null;
-          if (existing) {
-            const ageMs = Date.now() - new Date(existing.recorded_at).getTime();
-            if (ageMs <= 2 * 60 * 1000) {
-              setPosition({ lat: Number(existing.latitude), lng: Number(existing.longitude), accuracy: existing.accuracy ?? 0, timestamp: Date.now() });
-              setLastUpdateAt(new Date(existing.recorded_at).getTime());
-              setTracking(true);
-              setCurrentAddress(existing.address || null);
+      <div className="flex gap-2 items-stretch">
+        <Button
+          onClick={() => {
+            setCurrentAddress(null);
+            setPickerMode(false);
+            // Se já existe uma posição salva de até 2 minutos atrás, mostra ela na
+            // hora (sem esperar) enquanto busca uma localização nova em tempo real
+            // por trás, que substitui a instantânea assim que chegar.
+            const existing = currentDevice ? latestByDevice[currentDevice.id] : null;
+            if (existing) {
+              const ageMs = Date.now() - new Date(existing.recorded_at).getTime();
+              if (ageMs <= 2 * 60 * 1000) {
+                setPosition({ lat: Number(existing.latitude), lng: Number(existing.longitude), accuracy: existing.accuracy ?? 0, timestamp: Date.now() });
+                setLastUpdateAt(new Date(existing.recorded_at).getTime());
+                setTracking(true);
+                setCurrentAddress(existing.address || null);
+              }
             }
-          }
-          captureNow(true);
-        }}
-        className="w-full gap-2 rounded-xl py-5"
-      >
-        <Navigation size={16} />
-        📍 Localizar meu aparelho
-      </Button>
+            captureNow(true);
+          }}
+          className="flex-1 gap-2 rounded-xl py-5"
+        >
+          <Navigation size={16} />
+          📍 Compartilhar minha Localização
+        </Button>
+        <button
+          onClick={() => setInfoModal({ title: "📍 Compartilhar minha Localização", text: "Pega a sua posição de agora (do aparelho que você está usando), mostra no mapa, e deixa você compartilhar com alguém — tipo mandar sua localização pro WhatsApp. É pontual: pega uma vez e pronto." })}
+          className="flex items-center justify-center rounded-xl shrink-0"
+          style={{ width: 44, background: "#F5F5F5", border: "1px solid #E0E0E0", color: "#757575" }}
+          title="O que isso faz?"
+        >
+          <HelpCircle size={18} />
+        </button>
+      </div>
 
-      {/* Devices list */}
+      {/* Devices list — versão simples, só pra escolher qual buscar. As ações extras
+          (Mapa/Alarme/Bloquear) agora só aparecem depois que a localização já
+          funcionou, na tela de resultado — evita duplicar com a aba Segurança. */}
       {!lostMode && (
       <div>
         <h3 className="font-bold text-sm mb-2 px-1" style={{ color: "#1A1A2E" }}>📱 Meus Dispositivos</h3>
         <div className="space-y-2">
-          {devices.length === 0 ? (
-            <p className="text-xs text-center py-4" style={{ color: "#9E9E9E" }}>Nenhum dispositivo</p>
+          {devices.filter((d) => !d.is_current).length === 0 ? (
+            <p className="text-xs text-center py-4" style={{ color: "#9E9E9E" }}>Nenhum outro dispositivo</p>
           ) : (
-            devices.map((d) => {
+            devices.filter((d) => !d.is_current).map((d) => {
               const loc = latestByDevice[d.id];
               const name = d.custom_label || d.device_name;
-              const isManual = !!d.manual_address;
               const displayAddress = loc?.address || d.manual_address || (loc ? `${Number(loc.latitude).toFixed(4)}, ${Number(loc.longitude).toFixed(4)}` : null);
-              const mapsHref = loc
-                ? (displayAddress && !displayAddress.match(/^-?\d/)
-                    ? `https://www.google.com/maps?q=${encodeURIComponent(displayAddress)}&ll=${loc.latitude},${loc.longitude}`
-                    : `https://www.google.com/maps?q=${loc.latitude},${loc.longitude}`)
-                : null;
               return (
-                <div key={d.id} className="rounded-2xl p-3" style={{ background: "#FFF", border: d.is_current ? "1px solid #C8E6C9" : "1px solid #F0F0F0" }}>
-                  <div className="flex items-start gap-2 mb-2">
-                    <div className="text-2xl">{d.os === "Android" || d.os === "iOS" ? "📱" : "💻"}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-sm truncate" style={{ color: "#1A1A2E" }}>{name}{d.is_current && " · este aparelho"}</p>
-                      {loc || isManual ? (
-                        <>
-                          <div className="flex items-start gap-1.5">
-                            <p className="text-[11px] flex-1 min-w-0 break-words" style={{ color: "#4A5568" }}>{displayAddress}</p>
-                            <button
-                              onClick={() => setEditingDevice({ id: d.id, name, address: loc?.address || d.manual_address || null, lat: loc?.latitude, lng: loc?.longitude })}
-                              className="p-1 rounded-md hover:bg-black/5 shrink-0"
-                              title="Editar endereço"
-                            >
-                              <Pencil size={12} style={{ color: "#2D9E7F" }} />
-                            </button>
-                          </div>
-                          <p className="text-[10px] flex items-center gap-2 mt-0.5 flex-wrap" style={{ color: "#9E9E9E" }}>
-                            <span className="px-1.5 py-0.5 rounded-full font-bold" style={{ background: isManual ? "#FFF3E0" : "#E8F5E9", color: isManual ? "#E65100" : "#2D9E7F" }}>
-                              {isManual ? "✏️ Corrigido" : "📍 Automático"}
-                            </span>
-                            {loc && <span>{format(new Date(loc.recorded_at), "dd/MM HH:mm", { locale: ptBR })}</span>}
-                            {loc?.battery_level != null && (<span className="flex items-center gap-0.5"><Battery size={10} />{loc.battery_level}%</span>)}
-                          </p>
-                        </>
-                      ) : (
-                        <p className="text-[11px]" style={{ color: "#9E9E9E" }}>Sem localização registrada</p>
-                      )}
-                    </div>
+                <button
+                  key={d.id}
+                  onClick={() => startTrackOnce(d.id, name)}
+                  className="w-full flex items-center gap-2.5 rounded-2xl p-3 text-left transition-all active:scale-[0.98]"
+                  style={{ background: "#FFF", border: "1px solid #F0F0F0" }}
+                >
+                  <div className="text-2xl shrink-0">{d.os === "Android" || d.os === "iOS" ? "📱" : "💻"}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm truncate" style={{ color: "#1A1A2E" }}>{name}</p>
+                    <p className="text-[11px] truncate" style={{ color: "#9E9E9E" }}>
+                      {displayAddress || "Sem localização registrada"}
+                    </p>
                   </div>
-                  <div className="grid grid-cols-4 gap-1.5">
-                    <ActionBtn icon={<MapPin size={14} />} label="Mapa" onClick={() => mapsHref && window.open(mapsHref, "_blank")} disabled={!mapsHref} />
-                    <ActionBtn icon={<Volume2 size={14} />} label="Alarme" onClick={() => { sendCommand(d.id, "ring"); toast({ title: "🔔 Alarme enviado" }); }} />
-                    <ActionBtn icon={<Lock size={14} />} label="Bloquear" onClick={() => { sendCommand(d.id, "lock"); toast({ title: "🔒 Comando enviado" }); }} />
-                    <ActionBtn icon={<Navigation size={14} />} label="Rastrear agora" onClick={() => startTrackOnce(d.id, name)} />
-                  </div>
-                </div>
+                  <Navigation size={16} style={{ color: "#2D9E7F" }} className="shrink-0" />
+                </button>
               );
             })
           )}
@@ -951,6 +958,16 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
                 : "Rastreia, salva trilha e monitora bateria"}
             </p>
           </div>
+          {!lostMode && !foundDeviceLoc && (
+            <button
+              onClick={() => setInfoModal({ title: "🆘 Ativar busca de aparelho", text: "Pra quando um aparelho está PERDIDO (o seu ou de outra pessoa da família). Ativa rastreio contínuo: vai atualizando a posição sozinho, salva uma trilha do caminho percorrido, e monitora a bateria. Serve tanto pra procurar seu próprio celular a partir do computador, quanto pra ligar o rastreio remotamente no aparelho que sumiu." })}
+              className="flex items-center justify-center rounded-full shrink-0"
+              style={{ width: 28, height: 28, background: "rgba(229,57,53,0.10)", color: "#E53935" }}
+              title="O que isso faz?"
+            >
+              <HelpCircle size={16} />
+            </button>
+          )}
         </div>
 
         {waitingRemoteLocation && (
@@ -996,6 +1013,16 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
               {emergencyMode ? "Ativo — alta precisão" : "Rastreamento contínuo de emergência"}
             </p>
           </div>
+          {!emergencyMode && (
+            <button
+              onClick={() => setInfoModal({ title: "🚨 Modo Emergência", text: "Rastreio contínuo de ALTA FREQUÊNCIA — atualiza a cada 30 segundos, bem mais rápido que o normal (10 minutos). Pensado pra situação de risco/urgência, tipo 'quero que alguém saiba onde estou o tempo todo agora'." })}
+              className="flex items-center justify-center rounded-full shrink-0"
+              style={{ width: 28, height: 28, background: "#FFF3E0", color: "#FF9800" }}
+              title="O que isso faz?"
+            >
+              <HelpCircle size={16} />
+            </button>
+          )}
         </div>
         <Button onClick={toggleEmergency} variant={emergencyMode ? "destructive" : "outline"} className="w-full gap-2 rounded-xl text-xs mb-3">
           <AlertTriangle size={14} />
@@ -1021,6 +1048,21 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
       )}
 
       {showAlertModal && <AlertModal deviceName={showAlertModal.name} onClose={() => setShowAlertModal(null)} />}
+
+      {infoModal && (
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.4)" }} onClick={() => setInfoModal(null)}>
+          <div className="w-full max-w-sm rounded-2xl p-5" style={{ background: "#FFF" }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <h3 className="font-bold text-[15px]" style={{ color: "#1A1A2E" }}>{infoModal.title}</h3>
+              <button onClick={() => setInfoModal(null)} className="shrink-0 p-1 rounded-full hover:bg-black/5">
+                <X size={18} style={{ color: "#9E9E9E" }} />
+              </button>
+            </div>
+            <p className="text-[13px] leading-relaxed" style={{ color: "#4A5568" }}>{infoModal.text}</p>
+            <Button onClick={() => setInfoModal(null)} className="w-full rounded-xl mt-4">Entendi</Button>
+          </div>
+        </div>
+      )}
 
       {weakSignalConfirm && (
         <div
