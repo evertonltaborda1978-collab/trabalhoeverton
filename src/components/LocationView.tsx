@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 const INTERVAL_NORMAL = 600;
 const INTERVAL_EMERGENCY = 30;
+
 const ACCURACY_TARGET = 20;
 
 interface Position {
@@ -270,7 +271,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
       if (start && data.id === start) return; // ainda é o mesmo registro de antes
       const device = devices.find((d) => d.id === trackOnce.deviceId);
       const displayAddress = data.address || device?.manual_address;
-      setTrackOnce((prev) => (prev ? { ...prev, waiting: false, loc: { lat: data.latitude, lng: data.longitude, address: displayAddress ?? null } } : prev));
+      setTrackOnce((prev) => (prev ? { ...prev, waiting: false, loc: { lat: Number(data.latitude), lng: Number(data.longitude), address: displayAddress ?? null } } : prev));
       toast({ title: "📍 Localização encontrada!", description: trackOnce.name });
     };
     check();
@@ -390,6 +391,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
 
     const start = lostDeviceStartCoordsRef.current;
     if (start && data.id === start) return; // ainda é o mesmo registro de antes — nada novo chegou
+    lostDeviceStartCoordsRef.current = data.id; // marca este registro como "já processado"
 
     setWaitingRemoteLocation(false);
     const device = devices.find((d) => d.id === lostDeviceId);
@@ -400,7 +402,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
       : `https://www.google.com/maps?q=${data.latitude},${data.longitude}`;
     setFoundDeviceMapHref(href);
     setFoundDeviceName(name);
-    setFoundDeviceLoc({ lat: data.latitude, lng: data.longitude, address: displayAddress ?? null });
+    setFoundDeviceLoc({ lat: Number(data.latitude), lng: Number(data.longitude), address: displayAddress ?? null });
     toast({ title: "📍 Localização encontrada!", description: `${name} — toque para ver no mapa` });
   }, [lostDeviceId, currentDevice, devices]);
 
@@ -664,6 +666,76 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
         </div>
       )}
 
+      {foundDeviceMapHref && (
+        <a
+          href={foundDeviceMapHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => setFoundDeviceMapHref(null)}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
+          style={{ background: "#2D9E7F", color: "#FFF" }}
+        >
+          <MapPin size={16} /> Ver localização no mapa
+        </a>
+      )}
+
+      {/* Feedback de "buscando..." enquanto a Emergência/Perdi-meu-aparelho (local ou
+          remoto) ainda não encontrou o endereço — evita a tela parecer travada/muda */}
+      {!foundDeviceLoc && (lostMode || emergencyMode) && (
+        <div className="rounded-2xl p-3 flex items-center gap-2.5" style={{ background: "#F5F5F5", border: "1px solid #E0E0E0" }}>
+          <Loader2 size={18} className="animate-spin" style={{ color: "#2D9E7F" }} />
+          <p className="text-[12px] font-medium" style={{ color: "#616161" }}>
+            🔄 Buscando endereço da posição encontrada...
+          </p>
+        </div>
+      )}
+
+      {/* Cartão de endereço do aparelho encontrado — mesmo padrão do "Localizar agora",
+          com endereço legível (não lat/lng cru), botão de editar e de compartilhar */}
+      {foundDeviceLoc && (
+        <div className="rounded-2xl p-3 flex items-start gap-2.5" style={{ background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
+          <div className="flex items-center justify-center rounded-full shrink-0" style={{ width: 34, height: 34, background: "rgba(45,158,127,0.15)" }}>
+            <MapPin size={16} style={{ color: "#2D9E7F" }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-bold mb-0.5" style={{ color: "#2D9E7F" }}>
+              📍 {foundDeviceName || "Aparelho"} — endereço encontrado
+            </p>
+            <p className="text-[13px] font-semibold break-words leading-snug" style={{ color: "#1A1A2E" }}>
+              {foundDeviceLoc.address || `${foundDeviceLoc.lat.toFixed(5)}, ${foundDeviceLoc.lng.toFixed(5)}`}
+            </p>
+          </div>
+          <div className="flex flex-col gap-1.5 shrink-0">
+            <button
+              onClick={() => setEditingDevice({ id: lostDeviceId || currentDevice?.id || "", name: foundDeviceName || "aparelho", address: foundDeviceLoc.address, lat: foundDeviceLoc.lat, lng: foundDeviceLoc.lng })}
+              className="flex items-center justify-center rounded-full transition-all active:scale-95"
+              style={{ width: 30, height: 30, background: "rgba(45,158,127,0.15)", color: "#2D9E7F", border: "1.5px solid rgba(45,158,127,0.3)" }}
+              title="Editar endereço"
+            >
+              <Pencil size={14} />
+            </button>
+            <button
+              onClick={() => setShowShareModal({ lat: foundDeviceLoc.lat, lng: foundDeviceLoc.lng, address: foundDeviceLoc.address })}
+              className="flex items-center justify-center rounded-full transition-all active:scale-95"
+              style={{ width: 30, height: 30, background: "#2D9E7F", color: "#FFF" }}
+              title="Compartilhar localização"
+            >
+              <Share2 size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {waitingRemoteLocation && (
+        <button
+          onClick={() => checkRemoteDeviceLocation()}
+          className="w-full flex items-center justify-center gap-2 py-2 rounded-xl font-semibold text-xs transition-all active:scale-95"
+          style={{ background: "rgba(229,57,53,0.10)", color: "#C62828", border: "1px solid rgba(229,57,53,0.3)" }}
+        >
+          <Navigation size={13} /> Verificar agora
+        </button>
+      )}
+
       {tracking && lastUpdateAt && (
         <UpdateIndicator
           secondsSinceUpdate={secondsSinceUpdate}
@@ -773,7 +845,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
           if (existing) {
             const ageMs = Date.now() - new Date(existing.recorded_at).getTime();
             if (ageMs <= 2 * 60 * 1000) {
-              setPosition({ lat: existing.latitude, lng: existing.longitude, accuracy: existing.accuracy ?? 0, timestamp: Date.now() });
+              setPosition({ lat: Number(existing.latitude), lng: Number(existing.longitude), accuracy: existing.accuracy ?? 0, timestamp: Date.now() });
               setLastUpdateAt(new Date(existing.recorded_at).getTime());
               setTracking(true);
               setCurrentAddress(existing.address || null);
@@ -799,7 +871,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
               const loc = latestByDevice[d.id];
               const name = d.custom_label || d.device_name;
               const isManual = !!d.manual_address;
-              const displayAddress = loc?.address || d.manual_address || (loc ? `${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}` : null);
+              const displayAddress = loc?.address || d.manual_address || (loc ? `${Number(loc.latitude).toFixed(4)}, ${Number(loc.longitude).toFixed(4)}` : null);
               const mapsHref = loc
                 ? (displayAddress && !displayAddress.match(/^-?\d/)
                     ? `https://www.google.com/maps?q=${encodeURIComponent(displayAddress)}&ll=${loc.latitude},${loc.longitude}`
@@ -880,66 +952,6 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
             </p>
           </div>
         </div>
-
-        {foundDeviceMapHref && (
-          <a
-            href={foundDeviceMapHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => setFoundDeviceMapHref(null)}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 mb-2"
-            style={{ background: "#2D9E7F", color: "#FFF" }}
-          >
-            <MapPin size={16} /> Ver localização no mapa
-          </a>
-        )}
-
-        {/* Feedback de "buscando..." enquanto a Emergência/Perdi-meu-aparelho (local)
-            ainda não encontrou o endereço — evita a tela parecer travada/muda */}
-        {!foundDeviceLoc && (lostMode ? lostDeviceId === currentDevice?.id : emergencyMode) && (
-          <div className="rounded-2xl p-3 flex items-center gap-2.5 mb-2" style={{ background: "#F5F5F5", border: "1px solid #E0E0E0" }}>
-            <Loader2 size={18} className="animate-spin" style={{ color: "#2D9E7F" }} />
-            <p className="text-[12px] font-medium" style={{ color: "#616161" }}>
-              🔄 Buscando endereço da sua posição atual...
-            </p>
-          </div>
-        )}
-
-        {/* Cartão de endereço do aparelho encontrado — mesmo padrão do "Localizar agora",
-            com endereço legível (não lat/lng cru), botão de editar e de compartilhar */}
-        {foundDeviceLoc && (
-          <div className="rounded-2xl p-3 flex items-start gap-2.5 mb-2" style={{ background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
-            <div className="flex items-center justify-center rounded-full shrink-0" style={{ width: 34, height: 34, background: "rgba(45,158,127,0.15)" }}>
-              <MapPin size={16} style={{ color: "#2D9E7F" }} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-bold mb-0.5" style={{ color: "#2D9E7F" }}>
-                📍 {foundDeviceName || "Aparelho"} — endereço encontrado
-              </p>
-              <p className="text-[13px] font-semibold break-words leading-snug" style={{ color: "#1A1A2E" }}>
-                {foundDeviceLoc.address || `${foundDeviceLoc.lat.toFixed(5)}, ${foundDeviceLoc.lng.toFixed(5)}`}
-              </p>
-            </div>
-            <div className="flex flex-col gap-1.5 shrink-0">
-              <button
-                onClick={() => setEditingDevice({ id: lostDeviceId!, name: foundDeviceName || "aparelho", address: foundDeviceLoc.address, lat: foundDeviceLoc.lat, lng: foundDeviceLoc.lng })}
-                className="flex items-center justify-center rounded-full transition-all active:scale-95"
-                style={{ width: 30, height: 30, background: "rgba(45,158,127,0.15)", color: "#2D9E7F", border: "1.5px solid rgba(45,158,127,0.3)" }}
-                title="Editar endereço"
-              >
-                <Pencil size={14} />
-              </button>
-              <button
-                onClick={() => setShowShareModal({ lat: foundDeviceLoc.lat, lng: foundDeviceLoc.lng, address: foundDeviceLoc.address })}
-                className="flex items-center justify-center rounded-full transition-all active:scale-95"
-                style={{ width: 30, height: 30, background: "#2D9E7F", color: "#FFF" }}
-                title="Compartilhar localização"
-              >
-                <Share2 size={14} />
-              </button>
-            </div>
-          </div>
-        )}
 
         {waitingRemoteLocation && (
           <button
