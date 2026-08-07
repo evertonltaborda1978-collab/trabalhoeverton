@@ -17,6 +17,10 @@ import { supabase } from "@/integrations/supabase/client";
 const INTERVAL_NORMAL = 600;
 const INTERVAL_EMERGENCY = 30;
 
+// Versão DESTE arquivo (LocationView.tsx) — cada arquivo importante tem seu próprio
+// número, pra você saber exatamente qual arquivo está com qual versão publicada.
+const APP_VERSION = "v1.4.1";
+
 const ACCURACY_TARGET = 20;
 
 interface Position {
@@ -511,6 +515,11 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
 
   return (
     <div className="animate-fade-in space-y-4">
+
+      {/* Versão deste arquivo (LocationView.tsx) — sempre visível no topo da aba */}
+      <div className="text-right" style={{ fontSize: 9, color: "#BDBDBD", fontWeight: 700, letterSpacing: 0.3 }}>
+        {APP_VERSION}
+      </div>
 
       {onBack && (
         <button
