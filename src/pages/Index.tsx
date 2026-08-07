@@ -36,9 +36,9 @@ const DEVICE_LABEL_PROMPT_KEY = "device_label_prompt_dismissed";
 
 // Versão do app — sobe a cada atualização entregue pelo Claude, pra você conferir
 // rapidinho se o que está no ar já é a versão mais nova, direto na tela, sem chutar.
-// Versão DESTE arquivo (Index.tsx) — cada arquivo importante tem seu próprio número,
-// pra você saber exatamente qual arquivo está com qual versão publicada.
-const APP_VERSION = "v1.4.0";
+// Versão do app — um número só, compartilhado por todas as telas. Sobe a cada
+// atualização entregue pelo Claude, não importa qual arquivo mudou.
+const APP_VERSION = "v1.5";
 
 const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
@@ -73,6 +73,25 @@ const Index = () => {
       );
     } else if (cmd.command === "ring") {
       if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500, 200, 500]);
+      // Som de alarme (bipe alto e repetido), além da vibração — só funciona se
+      // a aba estiver aberta (limitação de PWA; um app nativo consegue tocar som
+      // mesmo com a tela apagada).
+      try {
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const playBeep = (startAt: number) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "square";
+          osc.frequency.value = 880;
+          gain.gain.setValueAtTime(0.4, ctx.currentTime + startAt);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(ctx.currentTime + startAt);
+          osc.stop(ctx.currentTime + startAt + 0.35);
+        };
+        [0, 0.5, 1, 1.5, 2, 2.5].forEach(playBeep);
+      } catch {}
+      toast({ title: "🔔 Alarme!", description: "Alguém está te chamando pelo app." });
       markExecuted(cmd.id);
     }
   });
