@@ -10,8 +10,12 @@ import { Mail, Lock, Eye, EyeOff, Fingerprint, HelpCircle, X } from "lucide-reac
 // Versão do app — sobe a cada atualização entregue pelo Claude (mesmo número
 // mostrado no cabeçalho do app, em Index.tsx). O histórico abaixo é só um
 // resumo simples, pra você conferir o que mudou em cada versão.
-const APP_VERSION = "v1.3";
+// Versão DESTE arquivo (Auth.tsx) — cada arquivo importante tem seu próprio número,
+// pra você saber exatamente qual arquivo está com qual versão publicada.
+const APP_VERSION = "v1.4.2";
 const VERSION_HISTORY: { version: string; changes: string }[] = [
+  { version: "v1.4.2", changes: "Cada arquivo (Index/LocationView/Auth) agora tem seu próprio número de versão." },
+  { version: "v1.4", changes: "Correção: arquivo LocationView.tsx estava com conteúdo trocado (do Index.tsx) no GitHub." },
   { version: "v1.3", changes: "Tela de Localização: removida a lista de dispositivos duplicada na tela de escolha." },
   { version: "v1.2", changes: "Login sempre exigido ao abrir o app (não reaproveita mais sessão salva)." },
   { version: "v1.1", changes: "Correções de rolagem e Tabela Manual nas Notas; nova tela de escolha na Localização." },
