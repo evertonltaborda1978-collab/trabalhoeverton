@@ -36,7 +36,7 @@ const DEVICE_LABEL_PROMPT_KEY = "device_label_prompt_dismissed";
 
 // Versão do app — sobe a cada atualização entregue pelo Claude, pra você conferir
 // rapidinho se o que está no ar já é a versão mais nova, direto na tela, sem chutar.
-const APP_VERSION = "v1.1";
+const APP_VERSION = "v1.3";
 
 const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
