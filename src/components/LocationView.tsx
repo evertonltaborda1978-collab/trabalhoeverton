@@ -17,10 +17,6 @@ import { supabase } from "@/integrations/supabase/client";
 const INTERVAL_NORMAL = 600;
 const INTERVAL_EMERGENCY = 30;
 
-// Versão DESTE arquivo (LocationView.tsx) — cada arquivo importante tem seu próprio
-// número, pra você saber exatamente qual arquivo está com qual versão publicada.
-const APP_VERSION = "v1.4.1";
-
 const ACCURACY_TARGET = 20;
 
 interface Position {
@@ -63,6 +59,9 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
   const intervalRef = useRef<number | null>(null);
   const [lostMode, setLostMode] = useState(false);
   const [showLostDevicePicker, setShowLostDevicePicker] = useState(false);
+  // Qual botão abriu o seletor de aparelho — "Perdi meu aparelho" ou "Emergência"
+  // (agora os dois reaproveitam a mesma pergunta "Qual aparelho?")
+  const [pickerPurpose, setPickerPurpose] = useState<"lost" | "emergency">("lost");
   const [lostDeviceId, setLostDeviceId] = useState<string | null>(null);
   const [waitingRemoteLocation, setWaitingRemoteLocation] = useState(false);
   const lostDeviceStartCoordsRef = useRef<string | null>(null);
@@ -291,15 +290,15 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
 
   const toggleEmergency = useCallback(() => {
     if (!emergencyMode) {
-      setEmergencyMode(true);
-      setPickerMode(false);
-      if (!tracking) startTracking();
-      toast({ title: "🚨 Modo Emergência ATIVADO", description: "Rastreamento de alta precisão ativo." });
+      // Abre a mesma pergunta "Qual aparelho?" do Perdi meu aparelho, pra poder
+      // ativar emergência tanto no aparelho atual quanto num remoto.
+      setPickerPurpose("emergency");
+      setShowLostDevicePicker(true);
     } else {
       setEmergencyMode(false);
       toast({ title: "Modo emergência desativado" });
     }
-  }, [emergencyMode, tracking, startTracking]);
+  }, [emergencyMode]);
 
   // Monitorar bateria e salvar localização se estiver crítica
   useEffect(() => {
@@ -338,6 +337,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
   }, [lostMode, position]);
 
   const activateLostMode = useCallback((deviceId: string) => {
+    const isEmergencyPurpose = pickerPurpose === "emergency";
     setLostDeviceId(deviceId);
     setLostMode(true);
     setShowLostDevicePicker(false);
@@ -364,13 +364,17 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
       const existingLoc = latestByDevice[deviceId];
       lostDeviceStartCoordsRef.current = existingLoc ? existingLoc.id : "__none__";
       setWaitingRemoteLocation(true);
+      // Se veio da Emergência, marca como ativa — um efeito à parte cuida de ficar
+      // reenviando o pedido pro aparelho remoto a cada 30s (já que o navegador não
+      // tem como "ligar" a emergência sozinha em outro aparelho sem ele responder)
+      if (isEmergencyPurpose) setEmergencyMode(true);
       sendCommand(deviceId, "update_now");
     }
 
     const device = devices.find((d) => d.id === deviceId);
     const name = device?.custom_label || device?.device_name || "aparelho";
     toast({ title: "🚨 Buscando: " + name, description: isCurrentDevice ? "Rastreamento contínuo ativo neste aparelho." : "Aguardando o aparelho responder..." });
-  }, [currentDevice, emergencyMode, tracking, startTracking, position, currentAddress, devices, sendCommand, latestByDevice]);
+  }, [pickerPurpose, currentDevice, emergencyMode, tracking, startTracking, position, currentAddress, devices, sendCommand, latestByDevice]);
 
   // Quando o aparelho remoto responder com uma localização nova, prepara o link do mapa
   const [foundDeviceMapHref, setFoundDeviceMapHref] = useState<string | null>(null);
@@ -420,6 +424,19 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
     return () => window.clearInterval(interval);
   }, [waitingRemoteLocation, lostDeviceId, checkRemoteDeviceLocation]);
 
+  // Emergência num aparelho REMOTO: como o navegador não tem como "ligar" a
+  // emergência sozinha em outro aparelho, ficamos reenviando o pedido de
+  // localização a cada 30s (mesmo intervalo da emergência local) enquanto
+  // estiver ativa — assim a posição continua atualizando quase em tempo real.
+  useEffect(() => {
+    if (!lostMode || !emergencyMode || !lostDeviceId || lostDeviceId === currentDevice?.id) return;
+    const interval = window.setInterval(() => {
+      sendCommand(lostDeviceId, "update_now");
+      checkRemoteDeviceLocation();
+    }, INTERVAL_EMERGENCY * 1000);
+    return () => window.clearInterval(interval);
+  }, [lostMode, emergencyMode, lostDeviceId, currentDevice, sendCommand, checkRemoteDeviceLocation]);
+
   // Quando o aparelho "perdido" é este mesmo aparelho (local), OU quando o Modo
   // Emergência está ativo, popula o cartão de endereço encontrado (com
   // Compartilhar/Editar) assim que a posição chegar — mesma experiência dos
@@ -444,6 +461,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
 
   const toggleLostMode = useCallback(() => {
     if (!lostMode) {
+      setPickerPurpose("lost");
       setShowLostDevicePicker(true);
     } else {
       setLostMode(false);
@@ -515,11 +533,6 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
 
   return (
     <div className="animate-fade-in space-y-4">
-
-      {/* Versão deste arquivo (LocationView.tsx) — sempre visível no topo da aba */}
-      <div className="text-right" style={{ fontSize: 9, color: "#BDBDBD", fontWeight: 700, letterSpacing: 0.3 }}>
-        {APP_VERSION}
-      </div>
 
       {onBack && (
         <button
@@ -1099,11 +1112,15 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-1">
-              <h3 className="font-bold text-base" style={{ color: "#1A1A2E" }}>Qual aparelho está perdido?</h3>
+              <h3 className="font-bold text-base" style={{ color: "#1A1A2E" }}>
+                {pickerPurpose === "emergency" ? "Qual aparelho quer monitorar?" : "Qual aparelho está perdido?"}
+              </h3>
               <button onClick={() => setShowLostDevicePicker(false)} className="p-1"><X size={18} /></button>
             </div>
             <p className="text-[12px] mb-4" style={{ color: "#9E9E9E" }}>
-              Selecione o dispositivo para ativar o rastreamento de busca.
+              {pickerPurpose === "emergency"
+                ? "Selecione o dispositivo para ativar o rastreamento de emergência."
+                : "Selecione o dispositivo para ativar o rastreamento de busca."}
             </p>
             <div className="space-y-2">
               {devices.map((d) => {
