@@ -20,27 +20,6 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
-// Reads the Supabase auth session directly from localStorage as a fallback,
-// for when the SDK's getSession() hangs while offline (e.g. it tries to
-// validate/refresh the token over the network and never resolves).
-function readCachedSession(): Session | null {
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key || !key.startsWith("sb-") || !key.endsWith("-auth-token")) continue;
-      const raw = localStorage.getItem(key);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw);
-      // Supabase stores either the session object directly, or { currentSession: {...} }
-      const cached = parsed?.currentSession || parsed;
-      if (cached?.access_token && cached?.user) {
-        return cached;
-      }
-    }
-  } catch {}
-  return null;
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,35 +35,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // Safety timeout: if getSession() never resolves (e.g. offline and the
-    // SDK is stuck trying to validate/refresh the token over the network),
-    // fall back to a cached session read directly from localStorage after
-    // 3 seconds, so the app doesn't get stuck on a loading/blank screen.
-    const timeoutId = setTimeout(() => {
-      if (!isMounted) return;
-      setSession((current: Session | null) => current ?? readCachedSession());
-      setLoading(false);
-    }, 3000);
-
+    // Sempre exige login ao abrir o app — nunca reaproveita uma sessão salva de
+    // antes (mesmo que o navegador tenha guardado um token válido). A pessoa
+    // precisa entrar com email/senha (ou biometria) toda vez que abrir o app.
+    // Assim que ela entrar, o onAuthStateChange acima atualiza a sessão normal.
     (supabase.auth as any)
-      .getSession()
-      .then(({ data: { session } }) => {
-        if (!isMounted) return;
-        setSession(session ?? readCachedSession());
-      })
-      .catch(() => {
-        if (!isMounted) return;
-        setSession(readCachedSession());
-      })
+      .signOut()
+      .catch(() => {})
       .finally(() => {
         if (!isMounted) return;
-        clearTimeout(timeoutId);
         setLoading(false);
       });
 
     return () => {
       isMounted = false;
-      clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
   }, []);
