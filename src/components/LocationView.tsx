@@ -1,429 +1,1176 @@
-import { useState, useEffect, useRef } from "react";
-import { MoonPhaseWidget } from "@/components/MoonPhaseWidget";
-import { BottomNav } from "@/components/BottomNav";
-import { NotesView } from "@/components/NotesView";
-import { CalendarView } from "@/components/CalendarView";
-import { LocationView } from "@/components/LocationView";
-import { WeatherView } from "@/components/WeatherView";
-import { DevicesView } from "@/components/DevicesView";
-import { FuelCalculatorView } from "@/components/FuelCalculatorView";
-import { MedicationView } from "@/components/MedicationView";
-import { SnoozeAlert } from "@/components/SnoozeAlert";
-import { DeviceLabelModal } from "@/components/local/DeviceLabelModal";
-import { useNotes } from "@/hooks/useNotes";
-import { useAppointments } from "@/hooks/useAppointments";
-import { useDeviceTracking } from "@/hooks/useDeviceTracking";
-import { useDeviceCommands } from "@/hooks/useDeviceCommands";
-import { useDeviceLocations, reverseGeocodeFetch } from "@/hooks/useDeviceLocations";
-import { useVersionCheck } from "@/hooks/useVersionCheck";
-import { useAuth } from "@/contexts/AuthContext";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { MapPin, Navigation, AlertTriangle, Share2, Loader2, MapPinOff, Bell, Lock, Volume2, History, Battery, Pencil, X, Smartphone, Monitor, ArrowLeft, HelpCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
-import { LogOut, RefreshCw } from "lucide-react";
+import { UpdateIndicator } from "./local/UpdateIndicator";
+import { AlertModal } from "./local/AlertModal";
+import { ShareLocationModal } from "./local/ShareLocationModal";
+import { EditAddressModal } from "./local/EditAddressModal";
+import { useDeviceTracking } from "@/hooks/useDeviceTracking";
+import { useDeviceLocations, reverseGeocodeFetch } from "@/hooks/useDeviceLocations";
+import { useDeviceCommands } from "@/hooks/useDeviceCommands";
+import { GeofenceSection } from "./local/GeofenceSection";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { supabase } from "@/integrations/supabase/client";
 
-type Tab = "notes" | "calendar" | "weather" | "location" | "devices" | "fuel" | "medication";
+const INTERVAL_NORMAL = 600;
+const INTERVAL_EMERGENCY = 30;
 
-const titles: Record<Tab, string> = {
-  notes: "Minhas Notas",
-  calendar: "Agenda",
-  weather: "Tempo",
-  location: "Localização",
-  devices: "Segurança",
-  fuel: "Combustível",
-  medication: "Saúde",
-};
+const ACCURACY_TARGET = 20;
 
-const DEVICE_LABEL_PROMPT_KEY = "device_label_prompt_dismissed";
+interface Position {
+  lat: number;
+  lng: number;
+  accuracy: number;
+  timestamp: number;
+}
 
-// Versão do app — sobe a cada atualização entregue pelo Claude, pra você conferir
-// rapidinho se o que está no ar já é a versão mais nova, direto na tela, sem chutar.
-const APP_VERSION = "v1.3";
+export function LocationView({ onBack }: { onBack?: () => void }) {
+  const { devices, currentDevice, fetchDevices } = useDeviceTracking();
+  const { latestByDevice, recordLocation } = useDeviceLocations();
+  const [editingDevice, setEditingDevice] = useState<{ id: string; name: string; address: string | null; lat?: number; lng?: number } | null>(null);
 
-const Index = () => {
-  const [tab, setTab] = useState<Tab>("notes");
-  const tabHistoryRef = useRef<Tab[]>([]);
-  const tabRef = useRef<Tab>("notes");
-  const [activeModal, setActiveModal] = useState<string | null>(null);
-  const activeModalRef = useRef<string | null>(null);
-  const onModalCloseRef = useRef<(() => void) | null>(null);
-  const { notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, reorderPinnedNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes, refreshNotes } = useNotes();
-  const { appointments, trashedAppointments, addAppointment, updateAppointment, deleteAppointment, restoreAppointment, permanentDeleteAppointment, emptyAppointmentTrash, activeAlert, dismissAlert, snoozeAlert, fetchAppointments } = useAppointments();
-  const { signOut } = useAuth();
-  const { currentDevice, fetchDevices } = useDeviceTracking();
-  const { recordLocation } = useDeviceLocations();
-  const [showLabelModal, setShowLabelModal] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
-  const { updateAvailable, applyUpdate, debugInfo, checkNow } = useVersionCheck();
+  const [position, setPosition] = useState<Position | null>(null);
+  const [tracking, setTracking] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [emergencyMode, setEmergencyMode] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [lastUpdateAt, setLastUpdateAt] = useState<number | null>(null);
+  const [now, setNow] = useState(Date.now());
+  const [showAlertModal, setShowAlertModal] = useState<{ deviceId: string; name: string } | null>(null);
+  const [showShareModal, setShowShareModal] = useState<{ lat: number; lng: number; address?: string | null } | null>(null);
+  const [capturing, setCapturing] = useState(false);
+  const [captureProgress, setCaptureProgress] = useState(0);
+  const [captureAccuracy, setCaptureAccuracy] = useState<number | null>(null);
+  const [currentAddress, setCurrentAddress] = useState<string | null>(null);
+  const [loadingAddress, setLoadingAddress] = useState(false);
+  // Modal customizado (substitui o window.confirm() nativo, feio e sem estilo do app)
+  // que aparece quando o sinal está fraco, perguntando se quer compartilhar assim mesmo
+  const [weakSignalConfirm, setWeakSignalConfirm] = useState<{ accuracy: number; address: string | null; resolve: (ok: boolean) => void } | null>(null);
+  // Tela de escolha (chooser) ao entrar na aba: true = mostra "qual aparelho?",
+  // false = mostra o resultado (mapa + endereço + compartilhar) de quem foi escolhido.
+  const [pickerMode, setPickerMode] = useState(true);
+  // Modal de ajuda ("?") explicando a diferença entre as opções da tela de escolha
+  const [infoModal, setInfoModal] = useState<{ title: string; text: string } | null>(null);
 
-  // Escuta global de comandos remotos — funciona em qualquer aba, não só na Local
-  const { markExecuted } = useDeviceCommands(currentDevice?.id ?? null, async (cmd) => {
-    if (cmd.command === "update_now") {
-      if (!navigator.geolocation || !currentDevice) return;
-      toast({ title: "📍 Comando recebido", description: "Capturando sua localização..." });
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          await recordLocation(currentDevice.id, pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, "remote");
-          await markExecuted(cmd.id);
-          toast({ title: "✅ Localização enviada", description: "Posição registrada com sucesso." });
+  const watchIdRef = useRef<number | null>(null);
+  const intervalRef = useRef<number | null>(null);
+  const [lostMode, setLostMode] = useState(false);
+  const [showLostDevicePicker, setShowLostDevicePicker] = useState(false);
+  const [lostDeviceId, setLostDeviceId] = useState<string | null>(null);
+  const [waitingRemoteLocation, setWaitingRemoteLocation] = useState(false);
+  const lostDeviceStartCoordsRef = useRef<string | null>(null);
+  const [trail, setTrail] = useState<Position[]>([]);
+  const lowBatterySavedRef = useRef(false);
+  const captureNowRef = useRef<(accurate?: boolean) => void>(() => {});
+  // Comandos remotos agora são escutados globalmente em Index.tsx (funciona em qualquer aba).
+  // Aqui apenas refletimos: se uma localização nova chegar via Supabase Realtime (latestByDevice),
+  // a tela atualiza sozinha através do hook useDeviceLocations já usado abaixo.
+
+  useEffect(() => {
+    if (!tracking) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [tracking]);
+
+  const fetchPosition = useCallback((accurate = true) => {
+    setIsUpdating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const newPos: Position = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          timestamp: pos.timestamp,
+        };
+        setPosition(newPos);
+        setLastUpdateAt(Date.now());
+        setIsUpdating(false);
+        setLoading(false);
+        setTracking(true);
+        if (currentDevice) {
+          recordLocation(currentDevice.id, newPos.lat, newPos.lng, newPos.accuracy, accurate ? "manual" : "auto");
+        }
+      },
+      (err) => {
+        setError(err.code === 1 ? "Permissão de localização negada." : "Não foi possível obter sua localização.");
+        setIsUpdating(false);
+        setLoading(false);
+      },
+      { enableHighAccuracy: accurate, timeout: 15000, maximumAge: 0 }
+    );
+  }, [currentDevice, recordLocation]);
+
+  const captureNow = useCallback((accurate = true) => {
+    if (!navigator.geolocation) return;
+    setCapturing(true);
+    setCaptureProgress(0);
+    setCaptureAccuracy(null);
+    let best: Position | null = null;
+    const started = Date.now();
+
+    const wid = navigator.geolocation.watchPosition(
+      (pos) => {
+        const p: Position = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          timestamp: pos.timestamp,
+        };
+        if (!best || p.accuracy < best.accuracy) best = p;
+        setCaptureAccuracy(p.accuracy);
+      },
+      () => {},
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+
+    const tick = window.setInterval(() => {
+      const elapsed = (Date.now() - started) / 1000;
+      setCaptureProgress(Math.min(1, elapsed / 10));
+      if (best && best.accuracy <= ACCURACY_TARGET) {
+        finish();
+      } else if (elapsed >= 15) {
+        if (best) {
+          if (best.accuracy > ACCURACY_TARGET) {
+            window.clearInterval(tick);
+            const b = best;
+            (async () => {
+              const addr = await reverseGeocodeFetch(b.lat, b.lng);
+              const ok = await new Promise<boolean>((resolve) => {
+                setWeakSignalConfirm({ accuracy: b.accuracy, address: addr, resolve });
+              });
+              setWeakSignalConfirm(null);
+              if (!ok) {
+                cleanup();
+                return;
+              }
+              finish(addr);
+            })();
+            return;
+          }
+        }
+        finish();
+      }
+    }, 500);
+
+    const cleanup = () => {
+      navigator.geolocation.clearWatch(wid);
+      window.clearInterval(tick);
+      setCapturing(false);
+    };
+
+    const finish = async (precomputedAddr?: string | null) => {
+      cleanup();
+      if (best) {
+        setPosition(best);
+        setLastUpdateAt(Date.now());
+        setTracking(true);
+        if (currentDevice) recordLocation(currentDevice.id, best.lat, best.lng, best.accuracy, "manual");
+        if (precomputedAddr !== undefined) {
+          setCurrentAddress(precomputedAddr || "Endereço não encontrado");
+        } else {
+          setLoadingAddress(true);
+          setCurrentAddress(null);
+          const addr = await reverseGeocodeFetch(best.lat, best.lng);
+          setCurrentAddress(addr || "Endereço não encontrado");
+          setLoadingAddress(false);
+        }
+      }
+    };
+  }, [currentDevice, recordLocation]);
+
+  // Mantém a ref sempre apontando para a versão mais atual de captureNow
+  useEffect(() => {
+    captureNowRef.current = captureNow;
+  }, [captureNow]);
+
+  const startTracking = useCallback(() => {
+    if (!navigator.geolocation) {
+      setError("Geolocalização não suportada");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    fetchPosition(true);
+  }, [fetchPosition]);
+
+  const stopTracking = useCallback(() => {
+    if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+    watchIdRef.current = null;
+    if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
+    intervalRef.current = null;
+    setTracking(false);
+  }, []);
+
+  // 10min auto / 30s emergency
+  useEffect(() => {
+    if (!tracking) return;
+    if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
+    const ms = (emergencyMode ? INTERVAL_EMERGENCY : INTERVAL_NORMAL) * 1000;
+    intervalRef.current = window.setInterval(() => fetchPosition(emergencyMode), ms);
+
+    if (emergencyMode && watchIdRef.current === null) {
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        (pos) => {
+          const np: Position = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+            timestamp: pos.timestamp,
+          };
+          setPosition(np);
+          setLastUpdateAt(Date.now());
+          if (currentDevice) recordLocation(currentDevice.id, np.lat, np.lng, np.accuracy, "emergency");
         },
-        () => { markExecuted(cmd.id); },
+        () => {},
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
       );
-    } else if (cmd.command === "ring") {
-      if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500, 200, 500]);
-      markExecuted(cmd.id);
+    } else if (!emergencyMode && watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
     }
-  });
-
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
     return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
+      if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
     };
+  }, [tracking, emergencyMode, fetchPosition, currentDevice, recordLocation]);
+
+  useEffect(() => () => {
+    if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+    if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
   }, []);
 
-  // Qualidade estimada da conexão (Network Information API — só existe hoje no
-  // Android/Chrome; no iPhone/Safari simplesmente não existe, e nesse caso o app
-  // não mostra nada, sem erro). Não é a "força do sinal" de verdade — nenhum
-  // navegador dá acesso a isso — é só uma estimativa aproximada (2g/3g/4g +
-  // velocidade), mas ajuda a perceber se a conexão está fraca ou melhorando.
-  const [connInfo, setConnInfo] = useState<{ effectiveType: string; downlink: number } | null>(null);
+  const { sendCommand } = useDeviceCommands(null);
+
+  // ── "Rastrear agora" (botão individual na lista de dispositivos) ──
+  // Mesma ideia do "Ativar busca de aparelho", só que mais leve: pede uma localização
+  // única e mostra tela limpa (mapa + endereço + compartilhar) até fechar.
+  const [trackOnce, setTrackOnce] = useState<{ deviceId: string; name: string; waiting: boolean; loc: { lat: number; lng: number; address: string | null } | null } | null>(null);
+  const trackOnceStartRef = useRef<string | null>(null);
+
+  const startTrackOnce = useCallback((deviceId: string, name: string) => {
+    const existingLoc = latestByDevice[deviceId];
+    trackOnceStartRef.current = existingLoc ? existingLoc.id : "__none__";
+    setTrackOnce({ deviceId, name, waiting: true, loc: null });
+    setPickerMode(false);
+    sendCommand(deviceId, "update_now");
+    toast({ title: "📍 Solicitado", description: `Aguardando ${name} responder...` });
+  }, [latestByDevice, sendCommand]);
+
   useEffect(() => {
-    const conn = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
-    if (!conn) return; // API não suportada neste navegador (ex: iPhone) — segue sem indicador
-    const update = () => setConnInfo({ effectiveType: conn.effectiveType, downlink: conn.downlink });
-    update();
-    conn.addEventListener("change", update);
-    return () => conn.removeEventListener("change", update);
-  }, []);
+    if (!trackOnce?.waiting) return;
+    const check = async () => {
+      const { data } = await supabase
+        .from("device_locations")
+        .select("*")
+        .eq("device_id", trackOnce.deviceId)
+        .order("recorded_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!data) return;
+      const start = trackOnceStartRef.current;
+      if (start && data.id === start) return; // ainda é o mesmo registro de antes
+      const device = devices.find((d) => d.id === trackOnce.deviceId);
+      const displayAddress = data.address || device?.manual_address;
+      setTrackOnce((prev) => (prev ? { ...prev, waiting: false, loc: { lat: Number(data.latitude), lng: Number(data.longitude), address: displayAddress ?? null } } : prev));
+      toast({ title: "📍 Localização encontrada!", description: trackOnce.name });
+    };
+    check();
+    const iv = window.setInterval(check, 3000);
+    return () => window.clearInterval(iv);
+  }, [trackOnce?.waiting, trackOnce?.deviceId, trackOnce?.name, devices]);
 
-  const connLabel = connInfo
-    ? connInfo.effectiveType === "4g"
-      ? "Boa"
-      : connInfo.effectiveType === "3g"
-        ? "Média"
-        : "Fraca"
+  const secondsSinceUpdate = lastUpdateAt ? Math.floor((now - lastUpdateAt) / 1000) : 0;
+  const interval = emergencyMode ? INTERVAL_EMERGENCY : INTERVAL_NORMAL;
+  const nextUpdateSecs = Math.max(0, interval - secondsSinceUpdate);
+
+  const toggleEmergency = useCallback(() => {
+    if (!emergencyMode) {
+      setEmergencyMode(true);
+      setPickerMode(false);
+      if (!tracking) startTracking();
+      toast({ title: "🚨 Modo Emergência ATIVADO", description: "Rastreamento de alta precisão ativo." });
+    } else {
+      setEmergencyMode(false);
+      toast({ title: "Modo emergência desativado" });
+    }
+  }, [emergencyMode, tracking, startTracking]);
+
+  // Monitorar bateria e salvar localização se estiver crítica
+  useEffect(() => {
+    if (!lostMode) return;
+    let battery: any;
+    const checkBattery = async () => {
+      try {
+        // @ts-ignore
+        if (!navigator.getBattery) return;
+        // @ts-ignore
+        battery = await navigator.getBattery();
+        const handleLevelChange = () => {
+          const pct = Math.round(battery.level * 100);
+          if (pct <= 20 && !lowBatterySavedRef.current && currentDevice && position) {
+            lowBatterySavedRef.current = true;
+            recordLocation(currentDevice.id, position.lat, position.lng, position.accuracy, "low_battery");
+            toast({ title: "🔋 Bateria crítica", description: "Última localização salva automaticamente." });
+          }
+        };
+        battery.addEventListener("levelchange", handleLevelChange);
+        handleLevelChange();
+        return () => battery.removeEventListener("levelchange", handleLevelChange);
+      } catch {}
+    };
+    checkBattery();
+  }, [lostMode, currentDevice, position, recordLocation]);
+
+  // Acumular trilha de localizações durante o modo "perdi meu aparelho"
+  useEffect(() => {
+    if (!lostMode || !position) return;
+    setTrail((prev) => {
+      const last = prev[prev.length - 1];
+      if (last && last.lat === position.lat && last.lng === position.lng) return prev;
+      return [...prev, position].slice(-50); // mantém últimas 50 posições
+    });
+  }, [lostMode, position]);
+
+  const activateLostMode = useCallback((deviceId: string) => {
+    setLostDeviceId(deviceId);
+    setLostMode(true);
+    setShowLostDevicePicker(false);
+    setPickerMode(false);
+    lowBatterySavedRef.current = false;
+    setTrail(position ? [position] : []);
+    // Limpa resultado de uma busca anterior antes de começar uma nova
+    setFoundDeviceMapHref(null);
+    setFoundDeviceName(null);
+    setFoundDeviceLoc(null);
+
+    const isCurrentDevice = currentDevice?.id === deviceId;
+    if (isCurrentDevice) {
+      // É o aparelho que estou usando agora — ativa rastreamento local.
+      // O cartão de "endereço encontrado" (com Compartilhar/Editar) aparece sozinho
+      // assim que a posição chegar, através do efeito abaixo — mesma experiência
+      // usada quando o aparelho perdido é remoto.
+      if (!emergencyMode) {
+        setEmergencyMode(true);
+        if (!tracking) startTracking();
+      }
+    } else {
+      // É outro aparelho — guarda o ID do último registro conhecido (se houver) para detectar quando um NOVO registro chegar
+      const existingLoc = latestByDevice[deviceId];
+      lostDeviceStartCoordsRef.current = existingLoc ? existingLoc.id : "__none__";
+      setWaitingRemoteLocation(true);
+      sendCommand(deviceId, "update_now");
+    }
+
+    const device = devices.find((d) => d.id === deviceId);
+    const name = device?.custom_label || device?.device_name || "aparelho";
+    toast({ title: "🚨 Buscando: " + name, description: isCurrentDevice ? "Rastreamento contínuo ativo neste aparelho." : "Aguardando o aparelho responder..." });
+  }, [currentDevice, emergencyMode, tracking, startTracking, position, currentAddress, devices, sendCommand, latestByDevice]);
+
+  // Quando o aparelho remoto responder com uma localização nova, prepara o link do mapa
+  const [foundDeviceMapHref, setFoundDeviceMapHref] = useState<string | null>(null);
+  const [foundDeviceName, setFoundDeviceName] = useState<string | null>(null);
+  // Guarda lat/lng/endereço do aparelho encontrado — pra poder Compartilhar e Editar
+  // endereço com a mesma experiência do "Localizar agora"
+  const [foundDeviceLoc, setFoundDeviceLoc] = useState<{ lat: number; lng: number; address: string | null } | null>(null);
+
+  const checkRemoteDeviceLocation = useCallback(async () => {
+    if (!lostDeviceId || currentDevice?.id === lostDeviceId) return;
+    const { data, error } = await supabase
+      .from("device_locations")
+      .select("*")
+      .eq("device_id", lostDeviceId)
+      .order("recorded_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Erro ao verificar localização remota:", error);
+      return;
+    }
+    if (!data) return;
+
+    const start = lostDeviceStartCoordsRef.current;
+    if (start && data.id === start) return; // ainda é o mesmo registro de antes — nada novo chegou
+    lostDeviceStartCoordsRef.current = data.id; // marca este registro como "já processado"
+
+    setWaitingRemoteLocation(false);
+    const device = devices.find((d) => d.id === lostDeviceId);
+    const name = device?.custom_label || device?.device_name || "aparelho";
+    const displayAddress = data.address || device?.manual_address;
+    const href = displayAddress
+      ? `https://www.google.com/maps?q=${encodeURIComponent(displayAddress)}&ll=${data.latitude},${data.longitude}`
+      : `https://www.google.com/maps?q=${data.latitude},${data.longitude}`;
+    setFoundDeviceMapHref(href);
+    setFoundDeviceName(name);
+    setFoundDeviceLoc({ lat: Number(data.latitude), lng: Number(data.longitude), address: displayAddress ?? null });
+    toast({ title: "📍 Localização encontrada!", description: `${name} — toque para ver no mapa` });
+  }, [lostDeviceId, currentDevice, devices]);
+
+  // Polling direto ao Supabase a cada 3s enquanto aguarda — não depende do Realtime nem do hook de estado
+  useEffect(() => {
+    if (!waitingRemoteLocation || !lostDeviceId) return;
+    checkRemoteDeviceLocation(); // verifica imediatamente também
+    const interval = window.setInterval(checkRemoteDeviceLocation, 3000);
+    return () => window.clearInterval(interval);
+  }, [waitingRemoteLocation, lostDeviceId, checkRemoteDeviceLocation]);
+
+  // Quando o aparelho "perdido" é este mesmo aparelho (local), OU quando o Modo
+  // Emergência está ativo, popula o cartão de endereço encontrado (com
+  // Compartilhar/Editar) assim que a posição chegar — mesma experiência dos
+  // outros fluxos.
+  useEffect(() => {
+    const isLocalLostMode = lostMode && lostDeviceId === currentDevice?.id;
+    if ((!isLocalLostMode && !emergencyMode) || !position || !currentDevice) return;
+    let cancelled = false;
+    (async () => {
+      let address = currentAddress;
+      if (!address) {
+        address = await reverseGeocodeFetch(position.lat, position.lng);
+        if (!cancelled && address) setCurrentAddress(address);
+      }
+      if (!cancelled) {
+        setFoundDeviceLoc({ lat: position.lat, lng: position.lng, address });
+        setFoundDeviceName(currentDevice.custom_label || currentDevice.device_name);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [lostMode, lostDeviceId, emergencyMode, currentDevice, position]);
+
+  const toggleLostMode = useCallback(() => {
+    if (!lostMode) {
+      setShowLostDevicePicker(true);
+    } else {
+      setLostMode(false);
+      setLostDeviceId(null);
+      setEmergencyMode(false);
+      setWaitingRemoteLocation(false);
+      setFoundDeviceMapHref(null);
+      setFoundDeviceName(null);
+      setFoundDeviceLoc(null);
+      lostDeviceStartCoordsRef.current = null;
+      toast({ title: "Modo \"Perdi meu aparelho\" desativado" });
+    }
+  }, [lostMode]);
+
+  const mapSrc = position
+    ? `https://maps.google.com/maps?q=${position.lat},${position.lng}&z=17&output=embed`
     : null;
-  const connColor = connInfo
-    ? connInfo.effectiveType === "4g" ? "#43A047" : connInfo.effectiveType === "3g" ? "#F9A825" : "#E53935"
-    : "#9E9E9E";
-  useEffect(() => {
-    const SENTINEL = { page: "app-sentinel" };
-    window.history.replaceState(SENTINEL, "");
-    window.history.pushState(SENTINEL, "");
 
-    const handlePopState = () => {
-      // Reempurra IMEDIATAMENTE para nunca fechar o app
-      window.history.pushState(SENTINEL, "");
-
-      // Se há modal aberto, fecha o modal
-      if (activeModalRef.current && onModalCloseRef.current) {
-        onModalCloseRef.current();
-        activeModalRef.current = null;
-        setActiveModal(null);
-        return;
-      }
-
-      // Volta para aba anterior se houver histórico
-      const history = tabHistoryRef.current;
-      if (history.length > 0) {
-        const prev = history[history.length - 1];
-        tabHistoryRef.current = history.slice(0, -1);
-        tabRef.current = prev;
-        setTab(prev);
-      }
-    };
-
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
-
-  // Função para trocar de aba guardando histórico
-  const changeTab = (newTab: Tab) => {
-    tabHistoryRef.current = [...tabHistoryRef.current, tabRef.current];
-    tabRef.current = newTab;
-    setTab(newTab);
-  };
-
-  // Botão de refresh global: recarrega notas, agenda e dispositivos
-  const handleRefresh = async () => {
-    if (isRefreshing) return;
-    setIsRefreshing(true);
-    try {
-      await Promise.allSettled([
-        refreshNotes(),
-        fetchDevices(),
-        fetchAppointments(),
-      ]);
-      toast({ title: "🔄 Atualizado", description: "Notas, agenda e dispositivos sincronizados." });
-    } catch {
-      toast({ title: "Erro ao atualizar", description: "Verifique sua conexão." });
-    } finally {
-      setTimeout(() => setIsRefreshing(false), 600);
+  // Volta pra tela de escolha ("Trocar aparelho"), encerrando qualquer fluxo em andamento
+  const handleBackToPicker = useCallback(() => {
+    if (lostMode) {
+      setLostMode(false);
+      setLostDeviceId(null);
+      setWaitingRemoteLocation(false);
+      setFoundDeviceMapHref(null);
+      setFoundDeviceName(null);
+      setFoundDeviceLoc(null);
+      lostDeviceStartCoordsRef.current = null;
     }
-  };
+    if (emergencyMode) setEmergencyMode(false);
+    if (tracking) stopTracking();
+    setTrackOnce(null);
+    setPosition(null);
+    setCurrentAddress(null);
+    setError(null);
+    setPickerMode(true);
+  }, [lostMode, emergencyMode, tracking]);
 
-  // Registrar/desregistrar modais para o botão voltar
-  useEffect(() => {
-    (window as any).__registerModal = (id: string, onClose: () => void) => {
-      activeModalRef.current = id;
-      onModalCloseRef.current = onClose;
-      setActiveModal(id);
-      window.history.pushState({ modal: id }, "");
-    };
-    (window as any).__unregisterModal = () => {
-      activeModalRef.current = null;
-      onModalCloseRef.current = null;
-      setActiveModal(null);
-    };
-    return () => {
-      delete (window as any).__registerModal;
-      delete (window as any).__unregisterModal;
-    };
-  }, []);
+  // Para o rastreio AO VIVO (Emergência/Perdi meu aparelho/atualização contínua)
+  // sem sair da tela — mantém a última posição/endereço encontrados visíveis,
+  // só para de atualizar.
+  const isLiveTracking = tracking || lostMode || emergencyMode;
+  const handleStopLocating = useCallback(() => {
+    if (lostMode) {
+      setLostMode(false);
+      setLostDeviceId(null);
+      setWaitingRemoteLocation(false);
+      lostDeviceStartCoordsRef.current = null;
+    }
+    if (emergencyMode) setEmergencyMode(false);
+    if (tracking) stopTracking();
+    toast({ title: "⏹️ Localização parada", description: "A última posição encontrada continua na tela." });
+  }, [lostMode, emergencyMode, tracking]);
 
-  useEffect(() => {
-    const dismissedId = localStorage.getItem(DEVICE_LABEL_PROMPT_KEY);
-    if (currentDevice && !currentDevice.custom_label && dismissedId !== currentDevice.id) {
-      setShowLabelModal(true);
-    }
-  }, [currentDevice]);
-
-  const closeLabelModal = () => {
-    if (currentDevice) localStorage.setItem(DEVICE_LABEL_PROMPT_KEY, currentDevice.id);
-    setShowLabelModal(false);
-  };
-
-  // When deleting an appointment, also clear matching note reminders
-  const handleDeleteAppointment = (id: string) => {
-    const apt = appointments.find((a) => a.id === id);
-    if (apt) {
-      const dateStr = apt.date.toISOString().split("T")[0];
-      // Clear reminders from notes that match this appointment's date/time
-      notes.forEach((note) => {
-        if (note.reminderDate === dateStr && note.reminderTime === apt.time) {
-          setNoteReminder(note.id, null, null);
-        }
-      });
-    }
-    deleteAppointment(id);
-  };
-
-  // Badge "Online": antes só olhava se o celular tinha rede ativa (podia mentir com
-  // sinal fraco). Agora prioriza o syncStatus real — só diz "Online" quando as notas
-  // realmente conseguiram sincronizar com o servidor, não só quando o celular "acha"
-  // que tem sinal.
-  const syncBadge = (() => {
-    if (!isOnline) {
-      return { label: "Sem sinal", bg: "#F5F5F5", dot: "#9E9E9E", text: "#757575" };
-    }
-    if (syncStatus === "syncing") {
-      return { label: "Sincronizando...", bg: "#FFF8E1", dot: "#F9A825", text: "#F57F17" };
-    }
-    if (syncStatus === "offline") {
-      return { label: "Sinal fraco", bg: "#FFF3E0", dot: "#EF6C00", text: "#E65100" };
-    }
-    return { label: "Online", bg: "#E8F5E9", dot: "#43A047", text: "#2E7D32" };
-  })();
+  // Buscando um aparelho remoto (não o atual): o mapa principal deve mostrar a
+  // localização ENCONTRADA dele, não a posição do aparelho local (que não tem nada
+  // a ver nesse fluxo).
+  const isRemoteLostSearch = lostMode && !!lostDeviceId && currentDevice?.id !== lostDeviceId;
+  const effectiveMapSrc = trackOnce
+    ? (trackOnce.loc ? `https://maps.google.com/maps?q=${trackOnce.loc.lat},${trackOnce.loc.lng}&z=17&output=embed` : null)
+    : isRemoteLostSearch
+    ? (foundDeviceLoc ? `https://maps.google.com/maps?q=${foundDeviceLoc.lat},${foundDeviceLoc.lng}&z=17&output=embed` : null)
+    : mapSrc;
+  const effectivePosition = trackOnce
+    ? (trackOnce.loc ? { lat: trackOnce.loc.lat, lng: trackOnce.loc.lng } : null)
+    : isRemoteLostSearch
+    ? (foundDeviceLoc ? { lat: foundDeviceLoc.lat, lng: foundDeviceLoc.lng } : null)
+    : position;
 
   return (
-    <div className="min-h-screen" style={{ background: "#F7F5F2", paddingBottom: "calc(64px + env(safe-area-inset-bottom) + 24px)" }}>
-      {/* Header */}
-      <header
-        className="sticky top-0 z-40"
+    <div className="animate-fade-in space-y-4">
+
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-sm font-semibold transition-all active:scale-95"
+          style={{ color: "#1A1A2E" }}
+        >
+          <ArrowLeft size={16} /> Notas
+        </button>
+      )}
+
+      {!pickerMode && (
+      <>
+      <div className="flex items-center justify-between">
+        <button
+          onClick={handleBackToPicker}
+          className="flex items-center justify-center rounded-full transition-all active:scale-95"
+          style={{ width: 32, height: 32, background: "rgba(45,158,127,0.1)", color: "#2D9E7F" }}
+          title="Voltar"
+        >
+          <ArrowLeft size={18} />
+        </button>
+        {isLiveTracking && (
+          <button
+            onClick={handleStopLocating}
+            className="flex items-center gap-1.5 text-sm font-semibold transition-all active:scale-95 px-2.5 py-1 rounded-lg"
+            style={{ color: "#E53935", background: "#FFEBEE" }}
+            title="Parar localização ao vivo"
+          >
+            <span style={{ fontSize: 13 }}>⏹</span> Parar
+          </button>
+        )}
+      </div>
+
+      {/* DEBUG TEMPORÁRIO — mostra o estado interno real, pra diagnosticar sem
+          precisar mais chutar. Remover depois que resolver. */}
+      <div
+        className="flex flex-col gap-0.5"
+        style={{ background: "#FFF3E0", border: "1px solid #FFB74D", borderRadius: 8, padding: "6px 8px", fontSize: 9, color: "#5D4037" }}
+      >
+        <span>🐛 pickerMode: {String(pickerMode)} | tracking: {String(tracking)} | lostMode: {String(lostMode)} | emergencyMode: {String(emergencyMode)}</span>
+        <span>🐛 currentDevice: {currentDevice ? currentDevice.id.slice(0, 8) : "NULO"} | lostDeviceId: {lostDeviceId ? lostDeviceId.slice(0, 8) : "nulo"}</span>
+        <span>🐛 position: {position ? `${position.lat.toFixed(4)},${position.lng.toFixed(4)}` : "NULO"} | foundDeviceLoc: {foundDeviceLoc ? "existe" : "NULO"}</span>
+        <span>🐛 currentAddress: {currentAddress || "nulo"} | loadingAddress: {String(loadingAddress)}</span>
+      </div>
+
+      {/* Map */}
+      <div
+        className="rounded-2xl overflow-hidden relative"
         style={{
-          background: "rgba(247,245,242,0.98)",
-          borderBottom: "1px solid rgba(0,0,0,0.04)",
+          height: 240,
+          border: emergencyMode ? "2px solid #E53935" : "1px solid #F0F0F0",
+          boxShadow: emergencyMode ? "0 0 20px rgba(229,57,53,0.2)" : "0 2px 8px rgba(0,0,0,0.06)",
         }}
       >
-        <div className="max-w-lg mx-auto px-4 pt-2 pb-2">
-          {/* Faixa de nova versão disponível */}
-          {updateAvailable && (
-            <button
-              onClick={applyUpdate}
-              className="w-full flex items-center justify-center gap-1.5 transition-opacity hover:opacity-90"
-              style={{
-                background: "#1A1A2E",
-                color: "#FFFFFF",
-                fontSize: 12,
-                fontWeight: 700,
-                borderRadius: 10,
-                padding: "8px 12px",
-                marginBottom: 8,
-                border: "none",
-              }}
-            >
-              🔄 Nova versão disponível — toque para atualizar
-            </button>
-          )}
+        {effectivePosition && effectiveMapSrc ? (
+          <iframe src={effectiveMapSrc} style={{ width: "100%", height: "100%", border: 0 }} title="Mapa" loading="lazy" />
+        ) : (
+          <div className="h-full flex flex-col items-center justify-center gap-3" style={{ background: "#F5F5F5" }}>
+            {loading || capturing ? (
+              <>
+                <Loader2 size={28} className="animate-spin" style={{ color: "#9E9E9E" }} />
+                <p className="text-xs" style={{ color: "#9E9E9E" }}>
+                  {capturing ? `Aguardando sinal GPS... ${captureAccuracy ? `±${Math.round(captureAccuracy)}m` : ""}` : "Obtendo localização..."}
+                </p>
+                {capturing && (
+                  <div className="w-40 h-1.5 rounded-full overflow-hidden" style={{ background: "#E0E0E0" }}>
+                    <div className="h-full transition-all" style={{ width: `${captureProgress * 100}%`, background: "#2D9E7F" }} />
+                  </div>
+                )}
+              </>
+            ) : error ? (
+              <>
+                <MapPinOff size={28} style={{ color: "#E53935" }} />
+                <p className="text-xs text-center px-6" style={{ color: "#E53935" }}>{error}</p>
+                <Button size="sm" variant="outline" onClick={startTracking} className="text-xs">Tentar novamente</Button>
+              </>
+            ) : trackOnce?.waiting ? (
+              <>
+                <Loader2 size={28} className="animate-spin" style={{ color: "#2D9E7F" }} />
+                <p className="text-xs" style={{ color: "#9E9E9E" }}>Aguardando {trackOnce.name} responder...</p>
+              </>
+            ) : isRemoteLostSearch ? (
+              <>
+                <Loader2 size={28} className="animate-spin" style={{ color: "#E53935" }} />
+                <p className="text-xs" style={{ color: "#9E9E9E" }}>Aguardando localização do aparelho perdido...</p>
+              </>
+            ) : (
+              <>
+                <MapPin size={28} style={{ color: "#9E9E9E" }} />
+                <p className="text-xs" style={{ color: "#9E9E9E" }}>Toque em "Localizar agora"</p>
+              </>
+            )}
+          </div>
+        )}
 
-          {/* Linha 1 — título centralizado, com a versão discreta no canto direito.
-              Como esse cabeçalho é compartilhado, aparece em todas as abas sozinho. */}
-          <div className="relative flex items-center justify-center" style={{ marginBottom: 6 }}>
-            <h1
-              className="font-display text-center"
-              style={{ fontWeight: 800, fontSize: 19, color: "#1A1A2E" }}
+        {emergencyMode && (
+          <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold animate-pulse" style={{ background: "#E53935", color: "#FFF" }}>
+            <AlertTriangle size={14} /> EMERGÊNCIA
+          </div>
+        )}
+        {position && (
+          <div className="absolute bottom-3 left-3 z-10 px-2 py-1 rounded-full text-[10px] font-bold" style={{ background: "rgba(255,255,255,0.95)", color: position.accuracy <= 20 ? "#2D9E7F" : "#F57C00" }}>
+            📍 ±{Math.round(position.accuracy)}m
+          </div>
+        )}
+      </div>
+
+      {trackOnce && (
+        <div className="rounded-2xl p-3 flex items-start gap-2.5" style={{ background: trackOnce.loc ? "#F0FDF4" : "#F5F5F5", border: trackOnce.loc ? "1px solid #BBF7D0" : "1px solid #E0E0E0" }}>
+          <div className="flex items-center justify-center rounded-full shrink-0" style={{ width: 34, height: 34, background: trackOnce.loc ? "rgba(45,158,127,0.15)" : "#EEE" }}>
+            {trackOnce.waiting
+              ? <Loader2 size={16} className="animate-spin" style={{ color: "#2D9E7F" }} />
+              : <MapPin size={16} style={{ color: "#2D9E7F" }} />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-bold mb-0.5" style={{ color: trackOnce.loc ? "#2D9E7F" : "#757575" }}>
+              {trackOnce.waiting ? `🔄 Aguardando ${trackOnce.name}...` : `📍 ${trackOnce.name} — encontrado!`}
+            </p>
+            {trackOnce.loc && (
+              <p className="text-[13px] font-semibold break-words leading-snug" style={{ color: "#1A1A2E" }}>
+                {trackOnce.loc.address || `${trackOnce.loc.lat.toFixed(5)}, ${trackOnce.loc.lng.toFixed(5)}`}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-col gap-1.5 shrink-0">
+            {trackOnce.loc && (
+              <>
+                <button
+                  onClick={() => setEditingDevice({ id: trackOnce.deviceId, name: trackOnce.name, address: trackOnce.loc!.address, lat: trackOnce.loc!.lat, lng: trackOnce.loc!.lng })}
+                  className="flex items-center justify-center rounded-full transition-all active:scale-95"
+                  style={{ width: 30, height: 30, background: "rgba(45,158,127,0.15)", color: "#2D9E7F", border: "1.5px solid rgba(45,158,127,0.3)" }}
+                  title="Editar endereço"
+                >
+                  <Pencil size={14} />
+                </button>
+                <button
+                  onClick={() => setShowShareModal({ lat: trackOnce.loc!.lat, lng: trackOnce.loc!.lng, address: trackOnce.loc!.address })}
+                  className="flex items-center justify-center rounded-full transition-all active:scale-95"
+                  style={{ width: 30, height: 30, background: "#2D9E7F", color: "#FFF" }}
+                  title="Compartilhar localização"
+                >
+                  <Share2 size={14} />
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => setTrackOnce(null)}
+              className="flex items-center justify-center rounded-full transition-all active:scale-95"
+              style={{ width: 30, height: 30, background: "#EEE", color: "#616161" }}
+              title="Fechar"
             >
-              {titles[tab]}
-            </h1>
-            <span
-              className="absolute right-0"
-              style={{ fontSize: 9, color: "#BDBDBD", fontWeight: 700, letterSpacing: 0.3 }}
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {foundDeviceMapHref && (
+        <a
+          href={foundDeviceMapHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => setFoundDeviceMapHref(null)}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
+          style={{ background: "#2D9E7F", color: "#FFF" }}
+        >
+          <MapPin size={16} /> Ver localização no mapa
+        </a>
+      )}
+
+      {/* Feedback de "buscando..." enquanto a Emergência/Perdi-meu-aparelho (local ou
+          remoto) ainda não encontrou o endereço — evita a tela parecer travada/muda */}
+      {!foundDeviceLoc && (lostMode || emergencyMode) && (
+        <div className="rounded-2xl p-3 flex items-center gap-2.5" style={{ background: "#F5F5F5", border: "1px solid #E0E0E0" }}>
+          <Loader2 size={18} className="animate-spin" style={{ color: "#2D9E7F" }} />
+          <p className="text-[12px] font-medium" style={{ color: "#616161" }}>
+            🔄 Buscando endereço da posição encontrada...
+          </p>
+        </div>
+      )}
+
+      {/* Cartão de endereço do aparelho encontrado — mesmo padrão do "Localizar agora",
+          com endereço legível (não lat/lng cru), botão de editar e de compartilhar */}
+      {foundDeviceLoc && (
+        <div className="rounded-2xl p-3 flex items-start gap-2.5" style={{ background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
+          <div className="flex items-center justify-center rounded-full shrink-0" style={{ width: 34, height: 34, background: "rgba(45,158,127,0.15)" }}>
+            <MapPin size={16} style={{ color: "#2D9E7F" }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-bold mb-0.5" style={{ color: "#2D9E7F" }}>
+              📍 {foundDeviceName || "Aparelho"} — endereço encontrado
+            </p>
+            <p className="text-[13px] font-semibold break-words leading-snug" style={{ color: "#1A1A2E" }}>
+              {foundDeviceLoc.address || `${foundDeviceLoc.lat.toFixed(5)}, ${foundDeviceLoc.lng.toFixed(5)}`}
+            </p>
+          </div>
+          <div className="flex flex-col gap-1.5 shrink-0">
+            <button
+              onClick={() => setEditingDevice({ id: lostDeviceId || currentDevice?.id || "", name: foundDeviceName || "aparelho", address: foundDeviceLoc.address, lat: foundDeviceLoc.lat, lng: foundDeviceLoc.lng })}
+              className="flex items-center justify-center rounded-full transition-all active:scale-95"
+              style={{ width: 30, height: 30, background: "rgba(45,158,127,0.15)", color: "#2D9E7F", border: "1.5px solid rgba(45,158,127,0.3)" }}
+              title="Editar endereço"
             >
-              v{APP_VERSION.replace(/^v/i, "")}
+              <Pencil size={14} />
+            </button>
+            <button
+              onClick={() => setShowShareModal({ lat: foundDeviceLoc.lat, lng: foundDeviceLoc.lng, address: foundDeviceLoc.address })}
+              className="flex items-center justify-center rounded-full transition-all active:scale-95"
+              style={{ width: 30, height: 30, background: "#2D9E7F", color: "#FFF" }}
+              title="Compartilhar localização"
+            >
+              <Share2 size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Mais opções — só aparece depois que a localização já funcionou, pra não
+          duplicar com a lista completa que já existe na aba Segurança */}
+      {foundDeviceLoc && (() => {
+        const targetId = lostDeviceId || currentDevice?.id;
+        if (!targetId) return null;
+        const mapsHref = foundDeviceLoc.address
+          ? `https://www.google.com/maps?q=${encodeURIComponent(foundDeviceLoc.address)}&ll=${foundDeviceLoc.lat},${foundDeviceLoc.lng}`
+          : `https://www.google.com/maps?q=${foundDeviceLoc.lat},${foundDeviceLoc.lng}`;
+        return (
+          <div className="rounded-2xl p-3" style={{ background: "#FFF", border: "1px solid #F0F0F0" }}>
+            <p className="text-[11px] font-bold mb-2" style={{ color: "#9E9E9E" }}>Mais opções pra esse aparelho</p>
+            <div className="grid grid-cols-4 gap-1.5">
+              <ActionBtn icon={<MapPin size={14} />} label="Mapa" onClick={() => window.open(mapsHref, "_blank")} />
+              <ActionBtn icon={<Volume2 size={14} />} label="Alarme" onClick={() => { sendCommand(targetId, "ring"); toast({ title: "🔔 Alarme enviado" }); }} />
+              <ActionBtn icon={<Lock size={14} />} label="Bloquear" onClick={() => { sendCommand(targetId, "lock"); toast({ title: "🔒 Comando enviado" }); }} />
+              <ActionBtn icon={<Navigation size={14} />} label="Rastrear agora" onClick={() => startTrackOnce(targetId, foundDeviceName || "aparelho")} />
+            </div>
+          </div>
+        );
+      })()}
+
+      {waitingRemoteLocation && (
+        <button
+          onClick={() => checkRemoteDeviceLocation()}
+          className="w-full flex items-center justify-center gap-2 py-2 rounded-xl font-semibold text-xs transition-all active:scale-95"
+          style={{ background: "rgba(229,57,53,0.10)", color: "#C62828", border: "1px solid rgba(229,57,53,0.3)" }}
+        >
+          <Navigation size={13} /> Verificar agora
+        </button>
+      )}
+
+      {tracking && lastUpdateAt && (
+        <UpdateIndicator
+          secondsSinceUpdate={secondsSinceUpdate}
+          nextUpdateSecs={nextUpdateSecs}
+          isUpdating={isUpdating}
+          emergency={emergencyMode}
+          accuracy={position?.accuracy ?? null}
+        />
+      )}
+
+      {!lostMode && (
+        <div className="flex gap-2">
+          <Button
+            onClick={() => { setCurrentAddress(null); captureNow(true); }}
+            disabled={loading || capturing}
+            className="flex-1 gap-2 rounded-xl"
+          >
+            <Navigation size={16} className={capturing ? "animate-pulse" : ""} />
+            {capturing ? "Capturando GPS..." : "Localizar agora"}
+          </Button>
+          <Button
+            onClick={() => position && setShowShareModal({ lat: position.lat, lng: position.lng, address: currentAddress })}
+            disabled={!position}
+            variant="outline"
+            className="rounded-xl"
+          >
+            <Share2 size={16} />
+          </Button>
+        </div>
+      )}
+
+      {lostMode && trail.length > 1 && (
+        <div className="rounded-2xl p-3 flex items-center justify-between" style={{ background: "#FFF5F5", border: "1px solid #FFCDD2" }}>
+          <div className="flex items-center gap-2">
+            <History size={14} style={{ color: "#E53935" }} />
+            <span className="text-[11px] font-semibold" style={{ color: "#C62828" }}>
+              {trail.length} pontos registrados na trilha
             </span>
           </div>
+          <button
+            onClick={() => {
+              const path = trail.map((p) => `${p.lat},${p.lng}`).join("/");
+              window.open(`https://www.google.com/maps/dir/${path}`, "_blank");
+            }}
+            className="text-[11px] font-bold underline"
+            style={{ color: "#E53935" }}
+          >
+            Ver trilha
+          </button>
+        </div>
+      )}
 
-          {/* Linha 2 — online à esquerda, lua + sair à direita */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span
-                className="inline-flex items-center gap-1"
-                style={{
-                  padding: "2px 8px 2px 6px",
-                  borderRadius: 999,
-                  background: syncBadge.bg,
-                  transition: "background 0.3s",
-                }}
-              >
-                <span
-                  className="inline-block rounded-full"
-                  style={{
-                    width: 6,
-                    height: 6,
-                    background: syncBadge.dot,
-                  }}
-                />
-                <span
-                  className="font-bold"
-                  style={{
-                    fontSize: 10,
-                    color: syncBadge.text,
-                    letterSpacing: 0.2,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {syncBadge.label}
-                </span>
-              </span>
+      {/* Box endereço após localizar */}
+      {!lostMode && (loadingAddress || currentAddress) && (
+        <div className="rounded-2xl p-4 flex items-start gap-3" style={{ background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
+          <div className="flex items-center justify-center rounded-full shrink-0" style={{ width: 40, height: 40, background: "rgba(45,158,127,0.15)" }}>
+            {loadingAddress
+              ? <Loader2 size={18} className="animate-spin" style={{ color: "#2D9E7F" }} />
+              : <MapPin size={18} style={{ color: "#2D9E7F" }} />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-bold mb-1" style={{ color: "#2D9E7F" }}>
+              {loadingAddress ? "Buscando endereço..." : "📍 Endereço encontrado"}
+            </p>
+            {!loadingAddress && (
+              <>
+                <p className="text-sm font-semibold break-words leading-snug" style={{ color: "#1A1A2E" }}>
+                  {currentAddress}
+                </p>
+                {position && (
+                  <p className="text-[10px] mt-1" style={{ color: "#9E9E9E" }}>
+                    ±{Math.round(position.accuracy)}m · {new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+          {!loadingAddress && currentDevice && currentAddress && currentAddress !== "Endereço não encontrado" && (
+            <button
+              onClick={() => {
+                const name = currentDevice.custom_label || currentDevice.device_name;
+                setEditingDevice({ id: currentDevice.id, name, address: currentAddress });
+              }}
+              className="flex items-center justify-center rounded-full shrink-0 transition-all active:scale-95"
+              style={{ width: 36, height: 36, background: "rgba(45,158,127,0.15)", color: "#2D9E7F", border: "1.5px solid rgba(45,158,127,0.3)" }}
+              title="Editar endereço"
+            >
+              <Pencil size={16} />
+            </button>
+          )}
+        </div>
+      )}
+      </>
+      )}
 
-              {/* Qualidade estimada da conexão — só aparece se o navegador suportar
-                  (hoje, só Android/Chrome). É uma estimativa, não o sinal real. */}
-              {connLabel && (
-                <span
-                  className="inline-flex items-center gap-1"
-                  style={{ fontSize: 9, color: connColor, fontWeight: 700, letterSpacing: 0.2 }}
-                  title="Estimativa de qualidade da conexão (Android/Chrome)"
-                >
-                  📶 {connLabel}
-                </span>
-              )}
+      {/* Tela de escolha: só aparece quando nenhum aparelho foi selecionado ainda */}
+      {pickerMode && (
+      <>
+      <div className="flex gap-2 items-stretch">
+        <Button
+          onClick={() => {
+            setCurrentAddress(null);
+            setPickerMode(false);
+            // Se já existe uma posição salva de até 2 minutos atrás, mostra ela na
+            // hora (sem esperar) enquanto busca uma localização nova em tempo real
+            // por trás, que substitui a instantânea assim que chegar.
+            const existing = currentDevice ? latestByDevice[currentDevice.id] : null;
+            if (existing) {
+              const ageMs = Date.now() - new Date(existing.recorded_at).getTime();
+              if (ageMs <= 2 * 60 * 1000) {
+                setPosition({ lat: Number(existing.latitude), lng: Number(existing.longitude), accuracy: existing.accuracy ?? 0, timestamp: Date.now() });
+                setLastUpdateAt(new Date(existing.recorded_at).getTime());
+                setTracking(true);
+                setCurrentAddress(existing.address || null);
+              }
+            }
+            captureNow(true);
+          }}
+          className="flex-1 gap-2 rounded-xl py-5"
+        >
+          <Navigation size={16} />
+          📍 Compartilhar minha Localização
+        </Button>
+        <button
+          onClick={() => setInfoModal({ title: "📍 Compartilhar minha Localização", text: "Pega a sua posição de agora (do aparelho que você está usando), mostra no mapa, e deixa você compartilhar com alguém — tipo mandar sua localização pro WhatsApp. É pontual: pega uma vez e pronto." })}
+          className="flex items-center justify-center rounded-xl shrink-0"
+          style={{ width: 44, background: "#F5F5F5", border: "1px solid #E0E0E0", color: "#757575" }}
+          title="O que isso faz?"
+        >
+          <HelpCircle size={18} />
+        </button>
+      </div>
+
+      {/* Geofence section */}
+      <GeofenceSection currentPosition={position} />
+
+      {/* Perdi meu aparelho — card grande e destacado */}
+      <div
+        className="rounded-2xl p-4"
+        style={{
+          background: lostMode ? "#FFF5F5" : "#FFEBEE",
+          border: lostMode ? "1.5px solid #E53935" : "1.5px solid #FFCDD2",
+        }}
+      >
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: "#FFFFFF" }}>
+            <MapPinOff size={22} style={{ color: "#E53935" }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-[15px]" style={{ color: "#C62828" }}>
+              {foundDeviceLoc ? "🔍 Dispositivo perdido encontrado! Deseja compartilhar?" : waitingRemoteLocation ? "🔄 Aguardando aparelho..." : lostMode ? "🔴 Buscando aparelho..." : "Perdi meu aparelho"}
+            </p>
+            <p className="text-[12px]" style={{ color: "#C62828", opacity: 0.85 }}>
+              {foundDeviceLoc
+                ? (foundDeviceName ? `${foundDeviceName} — endereço abaixo` : "Endereço abaixo")
+                : waitingRemoteLocation
+                ? "Aguardando o aparelho responder..."
+                : lostMode
+                ? "Rastreio contínuo, trilha e bateria ativos"
+                : "Rastreia, salva trilha e monitora bateria"}
+            </p>
+          </div>
+          {!lostMode && !foundDeviceLoc && (
+            <button
+              onClick={() => setInfoModal({ title: "🆘 Ativar busca de aparelho", text: "Pra quando um aparelho está PERDIDO (o seu ou de outra pessoa da família). Ativa rastreio contínuo: vai atualizando a posição sozinho, salva uma trilha do caminho percorrido, e monitora a bateria. Serve tanto pra procurar seu próprio celular a partir do computador, quanto pra ligar o rastreio remotamente no aparelho que sumiu." })}
+              className="flex items-center justify-center rounded-full shrink-0"
+              style={{ width: 28, height: 28, background: "rgba(229,57,53,0.10)", color: "#E53935" }}
+              title="O que isso faz?"
+            >
+              <HelpCircle size={16} />
+            </button>
+          )}
+        </div>
+
+        {waitingRemoteLocation && (
+          <button
+            onClick={() => checkRemoteDeviceLocation()}
+            className="w-full flex items-center justify-center gap-2 py-2 rounded-xl font-semibold text-xs transition-all active:scale-95 mb-2"
+            style={{ background: "rgba(229,57,53,0.10)", color: "#C62828", border: "1px solid rgba(229,57,53,0.3)" }}
+          >
+            <Navigation size={13} /> Verificar agora
+          </button>
+        )}
+
+        <button
+          onClick={toggleLostMode}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
+          style={{ background: "#E53935", color: "#FFF" }}
+        >
+          {waitingRemoteLocation ? (
+            <>
+              <Loader2 size={16} className="animate-spin" /> Aguardando resposta...
+            </>
+          ) : lostMode ? (
+            <>
+              <X size={16} /> Desativar busca
+            </>
+          ) : (
+            <>
+              <Navigation size={16} /> Ativar busca de aparelho
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Emergency */}
+      <div className="rounded-2xl p-4" style={{ background: emergencyMode ? "#FFF5F5" : "#FFF", border: emergencyMode ? "1px solid #FFCDD2" : "1px solid #F0F0F0" }}>
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: emergencyMode ? "#FFEBEE" : "#FFF3E0" }}>
+            <AlertTriangle size={20} style={{ color: emergencyMode ? "#E53935" : "#FF9800" }} />
+          </div>
+          <div className="flex-1">
+            <h4 className="font-bold text-sm" style={{ color: "#1A1A2E" }}>Modo Emergência</h4>
+            <p className="text-[11px]" style={{ color: "#9E9E9E" }}>
+              {emergencyMode ? "Ativo — alta precisão" : "Rastreamento contínuo de emergência"}
+            </p>
+          </div>
+          {!emergencyMode && (
+            <button
+              onClick={() => setInfoModal({ title: "🚨 Modo Emergência", text: "Rastreio contínuo de ALTA FREQUÊNCIA — atualiza a cada 30 segundos, bem mais rápido que o normal (10 minutos). Pensado pra situação de risco/urgência, tipo 'quero que alguém saiba onde estou o tempo todo agora'." })}
+              className="flex items-center justify-center rounded-full shrink-0"
+              style={{ width: 28, height: 28, background: "#FFF3E0", color: "#FF9800" }}
+              title="O que isso faz?"
+            >
+              <HelpCircle size={16} />
+            </button>
+          )}
+        </div>
+        <Button onClick={toggleEmergency} variant={emergencyMode ? "destructive" : "outline"} className="w-full gap-2 rounded-xl text-xs mb-3">
+          <AlertTriangle size={14} />
+          {emergencyMode ? "Desativar" : "Ativar Emergência"}
+        </Button>
+        {emergencyMode && (
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { label: "Polícia", number: "190", emoji: "🚔" },
+              { label: "SAMU", number: "192", emoji: "🚑" },
+              { label: "Bombeiros", number: "193", emoji: "🚒" },
+            ].map((s) => (
+              <button key={s.number} onClick={() => window.open(`tel:${s.number}`, "_self")} className="flex flex-col items-center gap-1 py-3 rounded-xl active:scale-95" style={{ background: "#FFEBEE", border: "1px solid #FFCDD2" }}>
+                <span className="text-lg">{s.emoji}</span>
+                <span className="text-[11px] font-bold" style={{ color: "#C62828" }}>{s.number}</span>
+                <span className="text-[9px] font-medium" style={{ color: "#E53935" }}>{s.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      </>
+      )}
+
+      {showAlertModal && <AlertModal deviceName={showAlertModal.name} onClose={() => setShowAlertModal(null)} />}
+
+      {infoModal && (
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.4)" }} onClick={() => setInfoModal(null)}>
+          <div className="w-full max-w-sm rounded-2xl p-5" style={{ background: "#FFF" }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <h3 className="font-bold text-[15px]" style={{ color: "#1A1A2E" }}>{infoModal.title}</h3>
+              <button onClick={() => setInfoModal(null)} className="shrink-0 p-1 rounded-full hover:bg-black/5">
+                <X size={18} style={{ color: "#9E9E9E" }} />
+              </button>
+            </div>
+            <p className="text-[13px] leading-relaxed" style={{ color: "#4A5568" }}>{infoModal.text}</p>
+            <Button onClick={() => setInfoModal(null)} className="w-full rounded-xl mt-4">Entendi</Button>
+          </div>
+        </div>
+      )}
+
+      {weakSignalConfirm && (
+        <div
+          className="fixed inset-0 z-[130] flex items-end sm:items-center justify-center p-3"
+          style={{ background: "rgba(0,0,0,0.5)" }}
+        >
+          <div className="w-full max-w-md rounded-2xl p-5" style={{ background: "#FFF" }}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: "#FFF3E0" }}>
+                <span style={{ fontSize: 20 }}>📡</span>
+              </div>
+              <div>
+                <h3 className="font-bold text-base" style={{ color: "#1A1A2E" }}>Sinal de GPS fraco</h3>
+                <p className="text-[12px]" style={{ color: "#9E9E9E" }}>Margem de erro: ±{Math.round(weakSignalConfirm.accuracy)}m</p>
+              </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                className="flex items-center justify-center transition-all duration-200 hover:scale-105 disabled:opacity-100"
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: "50%",
-                  background: isRefreshing ? "#2D9E7F" : "#FFFFFF",
-                  border: isRefreshing ? "1px solid #2D9E7F" : "1px solid #EBEBEB",
-                  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-                }}
-                title={isRefreshing ? "Atualizando..." : "Atualizar dados"}
+            {weakSignalConfirm.address ? (
+              <div className="rounded-xl p-3 mb-4" style={{ background: "#FFF8E1", border: "1px solid #FFE082" }}>
+                <p className="text-[11px] font-bold mb-1" style={{ color: "#F57F17" }}>📍 Endereço aproximado encontrado</p>
+                <p className="text-[13px] font-semibold" style={{ color: "#1A1A2E" }}>{weakSignalConfirm.address}</p>
+              </div>
+            ) : (
+              <p className="text-[13px] mb-4" style={{ color: "#616161" }}>
+                Não foi possível identificar um endereço com esse sinal.
+              </p>
+            )}
+
+            <p className="text-[13px] mb-4" style={{ color: "#616161" }}>
+              Deseja compartilhar essa localização mesmo assim?
+            </p>
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1 rounded-xl"
+                onClick={() => weakSignalConfirm.resolve(false)}
               >
-                <RefreshCw
-                  size={15}
-                  className={isRefreshing ? "animate-spin" : ""}
-                  style={{ color: isRefreshing ? "#FFFFFF" : "#1A1A2E" }}
-                />
-              </button>
-              <MoonPhaseWidget />
-              <button
-                onClick={signOut}
-                className="flex items-center justify-center transition-all duration-200 hover:scale-105"
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: "50%",
-                  background: "#FFFFFF",
-                  border: "1px solid #EBEBEB",
-                  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-                }}
-                title="Sair"
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1 rounded-xl"
+                onClick={() => weakSignalConfirm.resolve(true)}
               >
-                <LogOut size={15} style={{ color: "#1A1A2E" }} />
-              </button>
+                Compartilhar mesmo assim
+              </Button>
             </div>
           </div>
         </div>
-      </header>
+      )}
 
-      {/* Content */}
-      <main className="max-w-lg mx-auto px-4 pt-2">
-        {tab === "notes" && (
-          <NotesView
-            notes={notes}
-            onAdd={addNote}
-            onDelete={deleteNote}
-            onUpdate={updateNote}
-            onSetReminder={setNoteReminder}
-            onTogglePin={togglePinNote}
-            onReorderPin={reorderPinnedNote}
-            onLockNote={lockNoteWithPin}
-            onUnlockNote={unlockNoteWithPin}
-            onVerifyPin={verifyNotePin}
-            onAddAppointment={addAppointment}
-            onRefresh={refreshNotes}
-            syncStatus={syncStatus}
-            draftCount={draftCount}
-            exportBackup={exportBackup}
-            importBackup={importBackup}
-            shouldRemindBackup={shouldRemindBackup}
-            trashedNotes={trashedNotes}
-            onRestoreNote={restoreNote}
-            onPermanentDeleteNote={permanentDeleteNote}
-            onEmptyTrash={emptyTrash}
-          />
-        )}
-        {tab === "calendar" && (
-          <CalendarView
-            appointments={appointments}
-            onAdd={addAppointment}
-            onUpdate={(id, title, date, time, desc) => updateAppointment(id, title, date, time, desc)}
-            onDelete={handleDeleteAppointment}
-            trashedAppointments={trashedAppointments}
-            onRestoreAppointment={restoreAppointment}
-            onPermanentDeleteAppointment={permanentDeleteAppointment}
-            onEmptyAppointmentTrash={emptyAppointmentTrash}
-          />
-        )}
-        {tab === "weather" && <WeatherView />}
-        {tab === "fuel" && <FuelCalculatorView />}
-        {tab === "medication" && <MedicationView />}
-        {tab === "location" && <LocationView onBack={() => changeTab("notes")} />}
-        {tab === "devices" && <DevicesView />}
-      </main>
-
-      {/* Bottom Navigation */}
-      <BottomNav active={tab} onChange={changeTab} />
-      <SnoozeAlert alert={activeAlert || reminderAlert} onDismiss={(id) => { dismissAlert(id); dismissReminderAlert(id); }} onSnooze={(id, min) => { snoozeAlert(id, min); snoozeReminderAlert(id, min); }} />
-      {showLabelModal && currentDevice && (
-        <DeviceLabelModal
-          deviceId={currentDevice.id}
-          defaultName={currentDevice.device_name}
-          onDone={() => { closeLabelModal(); fetchDevices(); }}
+      {showLostDevicePicker && (
+        <div
+          className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-3"
+          style={{ background: "rgba(0,0,0,0.5)" }}
+          onClick={() => setShowLostDevicePicker(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl p-5"
+            style={{ background: "#FFF" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-bold text-base" style={{ color: "#1A1A2E" }}>Qual aparelho está perdido?</h3>
+              <button onClick={() => setShowLostDevicePicker(false)} className="p-1"><X size={18} /></button>
+            </div>
+            <p className="text-[12px] mb-4" style={{ color: "#9E9E9E" }}>
+              Selecione o dispositivo para ativar o rastreamento de busca.
+            </p>
+            <div className="space-y-2">
+              {devices.map((d) => {
+                const name = d.custom_label || d.device_name;
+                const isPhone = d.os === "Android" || d.os === "iOS";
+                return (
+                  <button
+                    key={d.id}
+                    onClick={() => activateLostMode(d.id)}
+                    className="w-full flex items-center gap-3 p-3 rounded-xl transition-all active:scale-95"
+                    style={{ background: "#FFF5F5", border: "1px solid #FFCDD2" }}
+                  >
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#FFFFFF" }}>
+                      {isPhone ? <Smartphone size={18} style={{ color: "#E53935" }} /> : <Monitor size={18} style={{ color: "#E53935" }} />}
+                    </div>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="font-semibold text-sm truncate" style={{ color: "#1A1A2E" }}>{name}</p>
+                      <p className="text-[11px]" style={{ color: "#9E9E9E" }}>
+                        {d.is_current ? "Este aparelho" : "Rastreamento remoto"}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+      {showShareModal && (
+        <ShareLocationModal
+          lat={showShareModal.lat}
+          lng={showShareModal.lng}
+          address={showShareModal.address ?? currentAddress}
+          deviceId={currentDevice?.id ?? null}
+          onClose={() => setShowShareModal(null)}
+        />
+      )}
+      {editingDevice && (
+        <EditAddressModal
+          deviceId={editingDevice.id}
+          deviceName={editingDevice.name}
+          currentAddress={editingDevice.address}
+          lat={editingDevice.lat ?? position?.lat}
+          lng={editingDevice.lng ?? position?.lng}
+          onClose={() => setEditingDevice(null)}
+          onSaved={(savedAddress?: string) => {
+            fetchDevices();
+            if (savedAddress) {
+              setCurrentAddress(savedAddress);
+              if (showShareModal) setShowShareModal((prev) => prev ? { ...prev, address: savedAddress } : null);
+              setFoundDeviceLoc((prev) => prev ? { ...prev, address: savedAddress } : null);
+              setTrackOnce((prev) => (prev && prev.loc ? { ...prev, loc: { ...prev.loc, address: savedAddress } } : prev));
+            }
+          }}
+          onShare={(address) => {
+            setEditingDevice(null);
+            const lat = editingDevice.lat ?? position?.lat;
+            const lng = editingDevice.lng ?? position?.lng;
+            if (lat != null && lng != null) setShowShareModal({ lat, lng, address });
+          }}
         />
       )}
     </div>
   );
-};
+}
 
-export default Index;
+function ActionBtn({ icon, label, onClick, disabled }: { icon: React.ReactNode; label: string; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="flex flex-col items-center gap-1 py-2 rounded-lg active:scale-95 transition-all disabled:opacity-40"
+      style={{ background: "#F7F5F2", border: "1px solid #E2E8F0", minHeight: 48 }}
+    >
+      <span style={{ color: "#4A5568" }}>{icon}</span>
+      <span className="text-[10px] font-semibold" style={{ color: "#4A5568" }}>{label}</span>
+    </button>
+  );
+}
