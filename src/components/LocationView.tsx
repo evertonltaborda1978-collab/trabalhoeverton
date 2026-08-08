@@ -17,6 +17,11 @@ import { supabase } from "@/integrations/supabase/client";
 const INTERVAL_NORMAL = 600;
 const INTERVAL_EMERGENCY = 30;
 
+// Versão DESTE arquivo (LocationView.tsx) — cada arquivo importante tem seu
+// próprio número. Mostro o nome do arquivo junto na tela, pra ficar claro que
+// não é a mesma coisa que a versão do Index.tsx (não é inconsistência).
+const APP_VERSION = "v1.6";
+
 const ACCURACY_TARGET = 20;
 
 interface Position {
@@ -533,6 +538,12 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
 
   return (
     <div className="animate-fade-in space-y-4">
+
+      {/* Versão DESTE arquivo — com o nome escrito junto, pra não parecer
+          inconsistência quando for diferente da versão do Index.tsx */}
+      <div className="text-right" style={{ fontSize: 9, color: "#BDBDBD", fontWeight: 700, letterSpacing: 0.3 }}>
+        LocationView.tsx {APP_VERSION}
+      </div>
 
       {onBack && (
         <button
