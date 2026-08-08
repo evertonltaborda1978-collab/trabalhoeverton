@@ -36,9 +36,10 @@ const DEVICE_LABEL_PROMPT_KEY = "device_label_prompt_dismissed";
 
 // Versão do app — sobe a cada atualização entregue pelo Claude, pra você conferir
 // rapidinho se o que está no ar já é a versão mais nova, direto na tela, sem chutar.
-// Versão do app — um número só, compartilhado por todas as telas. Sobe a cada
-// atualização entregue pelo Claude, não importa qual arquivo mudou.
-const APP_VERSION = "v1.5";
+// Versão DESTE arquivo (Index.tsx) — cada arquivo importante tem seu próprio
+// número. Mostro o nome do arquivo junto do número na tela, pra ficar claro que
+// são coisas diferentes (não uma inconsistência).
+const APP_VERSION = "v1.6";
 
 const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
@@ -295,7 +296,7 @@ const Index = () => {
               className="absolute right-0"
               style={{ fontSize: 9, color: "#BDBDBD", fontWeight: 700, letterSpacing: 0.3 }}
             >
-              v{APP_VERSION.replace(/^v/i, "")}
+              Index.tsx {APP_VERSION}
             </span>
           </div>
 
