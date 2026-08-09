@@ -35,17 +35,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // Sempre exige login ao abrir o app — nunca reaproveita uma sessão salva de
-    // antes (mesmo que o navegador tenha guardado um token válido). A pessoa
-    // precisa entrar com email/senha (ou biometria) toda vez que abrir o app.
-    // Assim que ela entrar, o onAuthStateChange acima atualiza a sessão normal.
-    (supabase.auth as any)
-      .signOut()
-      .catch(() => {})
-      .finally(() => {
-        if (!isMounted) return;
-        setLoading(false);
-      });
+    // Com internet: sempre exige login ao abrir o app — nunca reaproveita uma
+    // sessão salva de antes, mesmo que o navegador tenha guardado um token
+    // válido. A pessoa entra com email/senha (ou biometria) toda vez.
+    //
+    // SEM internet: mantém a sessão salva. Sem isso seria impossível usar o
+    // app offline no trabalho, já que o login precisa do servidor. Assim que
+    // a conexão volta, o comportamento normal de exigir login é retomado no
+    // próximo abrir do app.
+    if (navigator.onLine) {
+      (supabase.auth as any)
+        .signOut()
+        .catch(() => {})
+        .finally(() => {
+          if (!isMounted) return;
+          setLoading(false);
+        });
+    } else {
+      (supabase.auth as any)
+        .getSession()
+        .then(({ data }: any) => {
+          if (!isMounted) return;
+          setSession(data?.session ?? null);
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (!isMounted) return;
+          setLoading(false);
+        });
+    }
 
     return () => {
       isMounted = false;
