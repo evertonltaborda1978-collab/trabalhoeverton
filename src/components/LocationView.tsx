@@ -20,7 +20,7 @@ const INTERVAL_EMERGENCY = 30;
 // Versão DESTE arquivo (LocationView.tsx) — cada arquivo importante tem seu
 // próprio número. Mostro o nome do arquivo junto na tela, pra ficar claro que
 // não é a mesma coisa que a versão do Index.tsx (não é inconsistência).
-const APP_VERSION = "v1.6";
+const APP_VERSION = "v1.7";
 
 const ACCURACY_TARGET = 20;
 
@@ -576,18 +576,6 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
             <span style={{ fontSize: 13 }}>⏹</span> Parar
           </button>
         )}
-      </div>
-
-      {/* DEBUG TEMPORÁRIO — mostra o estado interno real, pra diagnosticar sem
-          precisar mais chutar. Remover depois que resolver. */}
-      <div
-        className="flex flex-col gap-0.5"
-        style={{ background: "#FFF3E0", border: "1px solid #FFB74D", borderRadius: 8, padding: "6px 8px", fontSize: 9, color: "#5D4037" }}
-      >
-        <span>🐛 pickerMode: {String(pickerMode)} | tracking: {String(tracking)} | lostMode: {String(lostMode)} | emergencyMode: {String(emergencyMode)}</span>
-        <span>🐛 currentDevice: {currentDevice ? currentDevice.id.slice(0, 8) : "NULO"} | lostDeviceId: {lostDeviceId ? lostDeviceId.slice(0, 8) : "nulo"}</span>
-        <span>🐛 position: {position ? `${position.lat.toFixed(4)},${position.lng.toFixed(4)}` : "NULO"} | foundDeviceLoc: {foundDeviceLoc ? "existe" : "NULO"}</span>
-        <span>🐛 currentAddress: {currentAddress || "nulo"} | loadingAddress: {String(loadingAddress)}</span>
       </div>
 
       {/* Map */}
