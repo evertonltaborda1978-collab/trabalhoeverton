@@ -39,7 +39,10 @@ const DEVICE_LABEL_PROMPT_KEY = "device_label_prompt_dismissed";
 // Versão DESTE arquivo (Index.tsx) — cada arquivo importante tem seu próprio
 // número. Mostro o nome do arquivo junto do número na tela, pra ficar claro que
 // são coisas diferentes (não uma inconsistência).
-const APP_VERSION = "v1.6";
+// Versão do app — um número só, sempre igual em todas as telas (inclusive a
+// tela de login). Sobe a cada atualização entregue, não importa qual arquivo
+// mudou. Sempre que subir aqui, sobe também no Auth.tsx (tela de login).
+const APP_VERSION = "v1.8";
 
 const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
@@ -296,7 +299,7 @@ const Index = () => {
               className="absolute right-0"
               style={{ fontSize: 9, color: "#BDBDBD", fontWeight: 700, letterSpacing: 0.3 }}
             >
-              Index.tsx {APP_VERSION}
+              {APP_VERSION}
             </span>
           </div>
 
