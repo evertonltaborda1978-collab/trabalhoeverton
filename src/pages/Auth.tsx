@@ -10,11 +10,13 @@ import { Mail, Lock, Eye, EyeOff, Fingerprint, HelpCircle, X } from "lucide-reac
 // Versão do app — sobe a cada atualização entregue pelo Claude (mesmo número
 // mostrado no cabeçalho do app, em Index.tsx). O histórico abaixo é só um
 // resumo simples, pra você conferir o que mudou em cada versão.
-// Versão DESTE arquivo (Auth.tsx) — cada arquivo importante tem seu próprio
-// número. Mostro o nome do arquivo junto na tela de login.
-const APP_VERSION = "v1.6";
+// Versão do app — um número só, sempre igual em todas as telas (inclusive o
+// cabeçalho do app, no Index.tsx). Sobe a cada atualização entregue, não
+// importa qual arquivo mudou. É por aqui que você confirma a versão mais nova.
+const APP_VERSION = "v1.8";
 const VERSION_HISTORY: { version: string; changes: string }[] = [
-  { version: "v1.6", changes: "Cada arquivo (Index/LocationView/Auth) tem seu próprio número de versão, agora com o nome do arquivo escrito junto pra não confundir." },
+  { version: "v1.8", changes: "Voltou pra um número de versão único, sempre igual em todas as telas (inclusive o login)." },
+  { version: "v1.6", changes: "Tentativa de versão por arquivo (revertida — confundia mais do que ajudava)." },
   { version: "v1.5", changes: "Emergência agora funciona em aparelho remoto, reenviando o pedido a cada 30s. Alarme agora toca um bipe, além de vibrar." },
   { version: "v1.4", changes: "Correção: arquivo LocationView.tsx estava com conteúdo trocado (do Index.tsx) no GitHub." },
   { version: "v1.3", changes: "Tela de Localização: removida a lista de dispositivos duplicada na tela de escolha." },
@@ -212,7 +214,7 @@ export default function Auth() {
 
         {/* Versão do app + histórico de atualizações */}
         <div className="flex items-center justify-center gap-1.5 pt-1">
-          <span className="text-[10px] text-muted-foreground/50 font-semibold">Auth.tsx {APP_VERSION}</span>
+          <span className="text-[10px] text-muted-foreground/50 font-semibold">{APP_VERSION}</span>
           <button
             onClick={() => setShowVersionHistory(true)}
             className="flex items-center justify-center rounded-full text-muted-foreground/50 hover:text-muted-foreground"
