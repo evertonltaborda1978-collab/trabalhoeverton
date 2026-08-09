@@ -44,8 +44,8 @@ export default defineConfig(({ mode }) => ({
           },
           {
             // Arquivos do build (com hash no nome): podem vir do cache direto.
-            urlPattern: ({ url, request }) =>
-              url.origin === globalThis.location.origin &&
+            urlPattern: ({ sameOrigin, url, request }) =>
+              sameOrigin &&
               /\/assets\//.test(url.pathname) &&
               (request.destination === "script" || request.destination === "style"),
             handler: "CacheFirst",
