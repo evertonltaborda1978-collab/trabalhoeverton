@@ -54,7 +54,7 @@ export interface NativeReminder {
 function hashId(key: string): number {
   let h = 0;
   for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
-  return Math.abs(h) % 2147483००0 || 1;
+  return (Math.abs(h) % 2000000000) || 1;
 }
 
 /**
