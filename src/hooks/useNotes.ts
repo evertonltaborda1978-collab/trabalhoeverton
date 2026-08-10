@@ -62,6 +62,29 @@ function loadLocal(userId: string): Note[] {
   }
 }
 
+// Offline sem sessão restaurada: procura o último conjunto de notas salvo neste
+// aparelho (qualquer usuário), para nunca mostrar tela vazia por falta de login.
+function loadAnyLocal(): Note[] {
+  try {
+    const lastUser = localStorage.getItem("ultimo_usuario_id");
+    if (lastUser) {
+      const byUser = loadLocal(lastUser);
+      if (byUser.length > 0) return byUser;
+    }
+    let best: Note[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith("notas_usuario_")) continue;
+      const found = loadLocal(key.replace("notas_usuario_", ""));
+      if (found.length > best.length) best = found;
+    }
+    return best;
+  } catch {
+    return [];
+  }
+}
+
+
 function mergeNotes(local: Note[], remote: Note[]): Note[] {
   const map = new Map<string, Note>();
   for (const n of remote) map.set(n.id, { ...n, sincronizado: true });
