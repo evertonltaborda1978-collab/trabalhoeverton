@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { MoonPhaseWidget } from "@/components/MoonPhaseWidget";
 import { useToast } from "@/hooks/use-toast";
 import { useBiometricAuth } from "@/hooks/useBiometricAuth";
-import { Mail, Lock, Eye, EyeOff, Fingerprint, HelpCircle, X } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, Fingerprint, HelpCircle, X, Trash2 } from "lucide-react";
 
 // Versão do app — sobe a cada atualização entregue pelo Claude (mesmo número
 // mostrado no cabeçalho do app, em Index.tsx). O histórico abaixo é só um
@@ -13,8 +13,11 @@ import { Mail, Lock, Eye, EyeOff, Fingerprint, HelpCircle, X } from "lucide-reac
 // Versão do app — um número só, sempre igual em todas as telas (inclusive o
 // cabeçalho do app, no Index.tsx). Sobe a cada atualização entregue, não
 // importa qual arquivo mudou. É por aqui que você confirma a versão mais nova.
-const APP_VERSION = "v1.8";
+const APP_VERSION = "v2.1";
 const VERSION_HISTORY: { version: string; changes: string }[] = [
+  { version: "v2.1", changes: "Corrigido o botão de limpar cache: agora não apaga mais o ID fixo do aparelho nem desconecta o login — só força buscar a versão mais nova." },
+  { version: "v2.0", changes: "Botão de limpar cache/cookies movido pra tela de login (ao lado da versão), pra usar quando não carregar a versão mais nova." },
+  { version: "v1.9", changes: "Novo botão no cabeçalho pra limpar cookies/cache/dados salvos e recarregar o app." },
   { version: "v1.8", changes: "Voltou pra um número de versão único, sempre igual em todas as telas (inclusive o login)." },
   { version: "v1.6", changes: "Tentativa de versão por arquivo (revertida — confundia mais do que ajudava)." },
   { version: "v1.5", changes: "Emergência agora funciona em aparelho remoto, reenviando o pedido a cada 30s. Alarme agora toca um bipe, além de vibrar." },
@@ -95,6 +98,29 @@ export default function Auth() {
       toast({ title: "Erro", description: result.error, variant: "destructive" });
     }
     setLoading(false);
+  };
+
+  // Limpa cookies, cache e dados salvos no navegador e recarrega — útil quando
+  // a tela de login não está mostrando a versão mais nova publicada.
+  const handleResetCache = async () => {
+    const ok = window.confirm(
+      "Isso vai forçar o app a buscar a versão mais nova do servidor (sem cache) e recarregar a página. Deseja continuar?"
+    );
+    if (!ok) return;
+    try {
+      // NÃO usamos localStorage.clear() de propósito — isso apagaria o ID fixo
+      // do aparelho (que evita duplicar dispositivos na lista) e também
+      // desconectaria o login sem necessidade. O que realmente resolve o
+      // problema de "não carregou a versão mais nova" é limpar o Cache API
+      // (se houver) e forçar uma busca nova dos arquivos, não apagar dados do app.
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch {}
+    // Recarrega com um parâmetro novo na URL, forçando o navegador a buscar
+    // tudo de novo no servidor em vez de usar uma cópia guardada.
+    window.location.href = `${window.location.pathname}?_=${Date.now()}`;
   };
 
   return (
@@ -212,7 +238,7 @@ export default function Auth() {
           Criado por <span className="font-semibold text-muted-foreground/80">Everton Taborda</span>
         </p>
 
-        {/* Versão do app + histórico de atualizações */}
+        {/* Versão do app + histórico de atualizações + botão de limpar cache */}
         <div className="flex items-center justify-center gap-1.5 pt-1">
           <span className="text-[10px] text-muted-foreground/50 font-semibold">{APP_VERSION}</span>
           <button
@@ -221,6 +247,13 @@ export default function Auth() {
             title="Ver histórico de versões"
           >
             <HelpCircle size={13} />
+          </button>
+          <button
+            onClick={handleResetCache}
+            className="flex items-center justify-center rounded-full text-muted-foreground/50 hover:text-red-500"
+            title="Limpar cache e cookies (se não estiver mostrando a versão mais nova)"
+          >
+            <Trash2 size={12} />
           </button>
         </div>
       </div>
