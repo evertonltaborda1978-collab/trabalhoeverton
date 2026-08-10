@@ -41,10 +41,31 @@ function getLocalKey(userId: string) {
 }
 
 function saveLocal(userId: string, notes: Note[]) {
+  const key = getLocalKey(userId);
   try {
-    localStorage.setItem(getLocalKey(userId), JSON.stringify(notes));
-  } catch {}
+    localStorage.setItem(key, JSON.stringify(notes));
+    return;
+  } catch {
+    // Provável estouro de espaço do navegador (fotos em base64 dentro das notas).
+    // Nesse caso salvamos o TEXTO das notas sem as imagens — melhor ter as notas
+    // legíveis offline do que não ter nada.
+  }
+  try {
+    const semImagens = notes.map((n) => ({ ...n, images: [] }));
+    localStorage.setItem(key, JSON.stringify(semImagens));
+  } catch {
+    // Ainda não coube: guarda apenas as 100 notas mais recentes, sem imagens.
+    try {
+      const reduzido = notes
+        .slice()
+        .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+        .slice(0, 100)
+        .map((n) => ({ ...n, images: [] }));
+      localStorage.setItem(key, JSON.stringify(reduzido));
+    } catch {}
+  }
 }
+
 
 function loadLocal(userId: string): Note[] {
   try {
