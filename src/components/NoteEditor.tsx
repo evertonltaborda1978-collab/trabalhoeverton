@@ -3100,7 +3100,7 @@ ${blocksToPlainText(blocks)}`.trim() });
               <p className="text-sm text-gray-500 mb-4">De onde deseja extrair o texto?</p>
               <div className="flex gap-3">
                 <button
-                  onClick={() => ocrCameraRef.current?.click()}
+                  onClick={() => { if (isNative()) openOcrNativeCamera(); else ocrCameraRef.current?.click(); }}
                   className="flex-1 flex flex-col items-center gap-2 py-4 rounded-xl border-2 border-gray-200 hover:border-yellow-400 hover:bg-yellow-50 transition-all"
                 >
                   <Camera size={24} className="text-gray-600" />
