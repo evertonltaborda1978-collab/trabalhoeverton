@@ -62,6 +62,29 @@ function loadLocal(userId: string): Note[] {
   }
 }
 
+// Offline sem sessão restaurada: procura o último conjunto de notas salvo neste
+// aparelho (qualquer usuário), para nunca mostrar tela vazia por falta de login.
+function loadAnyLocal(): Note[] {
+  try {
+    const lastUser = localStorage.getItem("ultimo_usuario_id");
+    if (lastUser) {
+      const byUser = loadLocal(lastUser);
+      if (byUser.length > 0) return byUser;
+    }
+    let best: Note[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith("notas_usuario_")) continue;
+      const found = loadLocal(key.replace("notas_usuario_", ""));
+      if (found.length > best.length) best = found;
+    }
+    return best;
+  } catch {
+    return [];
+  }
+}
+
+
 function mergeNotes(local: Note[], remote: Note[]): Note[] {
   const map = new Map<string, Note>();
   for (const n of remote) map.set(n.id, { ...n, sincronizado: true });
@@ -110,10 +133,19 @@ export function useNotes() {
   // Save to localStorage whenever notes change. Uses "anon" as a fallback key
   // when the user session isn't available yet (e.g. offline first load), so
   // notes created before auth resolves aren't lost on refresh.
+  //
+  // IMPORTANTE: nunca grava uma lista vazia enquanto a carga inicial não
+  // terminou — senão o app apagaria as notas guardadas no aparelho logo ao
+  // abrir (era o motivo das notas "sumirem" offline).
   useEffect(() => {
     notesRef.current = notes;
+    if (loading && notes.length === 0) return;
     saveLocal(user?.id || "anon", notes);
-  }, [notes, user]);
+    if (user?.id) {
+      try { localStorage.setItem("ultimo_usuario_id", user.id); } catch {}
+    }
+  }, [notes, user, loading]);
+
 
   // Sync unsynced notes to Supabase
   const syncToSupabase = useCallback(async (notesToSync: Note[]) => {
@@ -185,8 +217,9 @@ export function useNotes() {
     // ou de um usuário anterior) para não deixar a tela vazia/travada offline.
     if (!user) {
       const anonNotes = loadLocal("anon");
-      if (anonNotes.length > 0) {
-        setNotes(anonNotes);
+      const fallback = anonNotes.length > 0 ? anonNotes : loadAnyLocal();
+      if (fallback.length > 0) {
+        setNotes(fallback);
         setSyncStatus("offline");
       }
       setLoading(false);
@@ -196,8 +229,9 @@ export function useNotes() {
     // Mescla qualquer nota criada antes da sessão ficar disponível ("anon")
     // com as notas já salvas para este usuário.
     const anonNotes = loadLocal("anon");
-    const userLocalNotes = loadLocal(user.id);
+    const userLocalNotes = loadLocal(user.id).length > 0 ? loadLocal(user.id) : loadAnyLocal();
     const savedLocalNotes = anonNotes.length > 0 ? mergeNotes(anonNotes, userLocalNotes) : userLocalNotes;
+
     const localNotes = notesRef.current.length > 0 ? mergeNotes(savedLocalNotes, notesRef.current) : savedLocalNotes;
     if (anonNotes.length > 0) {
       try { localStorage.removeItem(getLocalKey("anon")); } catch {}
