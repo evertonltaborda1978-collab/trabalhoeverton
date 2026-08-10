@@ -217,8 +217,9 @@ export function useNotes() {
     // ou de um usuário anterior) para não deixar a tela vazia/travada offline.
     if (!user) {
       const anonNotes = loadLocal("anon");
-      if (anonNotes.length > 0) {
-        setNotes(anonNotes);
+      const fallback = anonNotes.length > 0 ? anonNotes : loadAnyLocal();
+      if (fallback.length > 0) {
+        setNotes(fallback);
         setSyncStatus("offline");
       }
       setLoading(false);
@@ -228,8 +229,9 @@ export function useNotes() {
     // Mescla qualquer nota criada antes da sessão ficar disponível ("anon")
     // com as notas já salvas para este usuário.
     const anonNotes = loadLocal("anon");
-    const userLocalNotes = loadLocal(user.id);
+    const userLocalNotes = loadLocal(user.id).length > 0 ? loadLocal(user.id) : loadAnyLocal();
     const savedLocalNotes = anonNotes.length > 0 ? mergeNotes(anonNotes, userLocalNotes) : userLocalNotes;
+
     const localNotes = notesRef.current.length > 0 ? mergeNotes(savedLocalNotes, notesRef.current) : savedLocalNotes;
     if (anonNotes.length > 0) {
       try { localStorage.removeItem(getLocalKey("anon")); } catch {}
