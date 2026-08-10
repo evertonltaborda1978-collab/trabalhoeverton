@@ -1524,6 +1524,15 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
+    await runOcrOnFile(file);
+  };
+
+  const openOcrNativeCamera = async () => {
+    const file = await takeNativePhoto("camera");
+    if (file) await runOcrOnFile(file);
+  };
+
+  const runOcrOnFile = async (file: File) => {
     setShowOcrModal(false);
     setOcrLoading(true);
     try {
