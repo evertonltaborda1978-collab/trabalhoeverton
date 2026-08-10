@@ -193,6 +193,41 @@ const Index = () => {
     }
   };
 
+  // Notificações em segundo plano (app nativo): reprograma alarmes locais dos
+  // lembretes de notas e dos compromissos da agenda. Funciona com o app fechado.
+  useEffect(() => {
+    const reminders: NativeReminder[] = [];
+
+    for (const note of notes) {
+      if (!note.reminderDate || !note.reminderTime) continue;
+      const at = new Date(`${note.reminderDate}T${note.reminderTime}`);
+      if (isNaN(at.getTime())) continue;
+      reminders.push({
+        key: `note-${note.id}`,
+        title: "Lembrete de nota",
+        body: note.title || "Você tem um lembrete.",
+        at,
+      });
+    }
+
+    for (const apt of appointments) {
+      if (!apt.date || !apt.time) continue;
+      const d = new Date(apt.date);
+      const [h, m] = apt.time.split(":").map(Number);
+      if (isNaN(d.getTime()) || isNaN(h)) continue;
+      d.setHours(h, m || 0, 0, 0);
+      reminders.push({
+        key: `apt-${apt.id}`,
+        title: apt.title || "Compromisso",
+        body: apt.description || `Às ${apt.time}`,
+        at: d,
+      });
+    }
+
+    syncNativeReminders(reminders);
+  }, [notes, appointments]);
+
+
   // Limpa cookies, cache e dados salvos no navegador (localStorage, sessionStorage,
   // Cache API) e recarrega — útil pra garantir que está vendo a versão mais nova
   // publicada, sem depender de Ctrl+Shift+R manual. Desconecta o login também,
