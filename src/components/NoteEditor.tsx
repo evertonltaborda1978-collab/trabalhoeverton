@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useLayoutEffect, Component, ReactNode } from "react";
 import { Note } from "@/hooks/useNotes";
+import { takeNativePhoto, isNative } from "@/lib/native";
 import {
   Camera,
   X,
@@ -1524,6 +1525,15 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
+    await runOcrOnFile(file);
+  };
+
+  const openOcrNativeCamera = async () => {
+    const file = await takeNativePhoto("camera");
+    if (file) await runOcrOnFile(file);
+  };
+
+  const runOcrOnFile = async (file: File) => {
     setShowOcrModal(false);
     setOcrLoading(true);
     try {
@@ -2771,8 +2781,8 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                       style={{ bottom: 60, left: 0, minWidth: 180 }}
                     >
                       {[
-                        { icon: <Camera size={18} />, label: "Câmera", action: () => { cameraInputRef.current?.click(); setShowFab(false); } },
-                        { icon: <ImagePlus size={18} />, label: "Galeria", action: () => { fileInputRef.current?.click(); setShowFab(false); } },
+                        { icon: <Camera size={18} />, label: "Câmera", action: async () => { setShowFab(false); if (isNative()) { const f = await takeNativePhoto("camera"); if (f) await insertImageAtBlock(f); } else { cameraInputRef.current?.click(); } } },
+                        { icon: <ImagePlus size={18} />, label: "Galeria", action: async () => { setShowFab(false); if (isNative()) { const f = await takeNativePhoto("gallery"); if (f) await insertImageAtBlock(f); } else { fileInputRef.current?.click(); } } },
                         { icon: ocrLoading ? <Loader2 size={18} className="animate-spin" /> : <ScanSearch size={18} />, label: "OCR", action: () => { setShowOcrModal(true); setShowFab(false); } },
                         { icon: qrLoading ? <Loader2 size={18} className="animate-spin" /> : <ScanLine size={18} />, label: "QR", action: () => { handleStartQrScanner(); setShowFab(false); } },
                         { icon: <ListChecks size={18} />, label: "Lista", action: () => { addChecklist(); setShowFab(false); } },
@@ -3090,7 +3100,7 @@ ${blocksToPlainText(blocks)}`.trim() });
               <p className="text-sm text-gray-500 mb-4">De onde deseja extrair o texto?</p>
               <div className="flex gap-3">
                 <button
-                  onClick={() => ocrCameraRef.current?.click()}
+                  onClick={() => { if (isNative()) openOcrNativeCamera(); else ocrCameraRef.current?.click(); }}
                   className="flex-1 flex flex-col items-center gap-2 py-4 rounded-xl border-2 border-gray-200 hover:border-yellow-400 hover:bg-yellow-50 transition-all"
                 >
                   <Camera size={24} className="text-gray-600" />
