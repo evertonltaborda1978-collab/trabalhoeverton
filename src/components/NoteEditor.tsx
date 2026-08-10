@@ -2781,8 +2781,8 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                       style={{ bottom: 60, left: 0, minWidth: 180 }}
                     >
                       {[
-                        { icon: <Camera size={18} />, label: "Câmera", action: () => { cameraInputRef.current?.click(); setShowFab(false); } },
-                        { icon: <ImagePlus size={18} />, label: "Galeria", action: () => { fileInputRef.current?.click(); setShowFab(false); } },
+                        { icon: <Camera size={18} />, label: "Câmera", action: async () => { setShowFab(false); if (isNative()) { const f = await takeNativePhoto("camera"); if (f) await insertImageAtBlock(f); } else { cameraInputRef.current?.click(); } } },
+                        { icon: <ImagePlus size={18} />, label: "Galeria", action: async () => { setShowFab(false); if (isNative()) { const f = await takeNativePhoto("gallery"); if (f) await insertImageAtBlock(f); } else { fileInputRef.current?.click(); } } },
                         { icon: ocrLoading ? <Loader2 size={18} className="animate-spin" /> : <ScanSearch size={18} />, label: "OCR", action: () => { setShowOcrModal(true); setShowFab(false); } },
                         { icon: qrLoading ? <Loader2 size={18} className="animate-spin" /> : <ScanLine size={18} />, label: "QR", action: () => { handleStartQrScanner(); setShowFab(false); } },
                         { icon: <ListChecks size={18} />, label: "Lista", action: () => { addChecklist(); setShowFab(false); } },
