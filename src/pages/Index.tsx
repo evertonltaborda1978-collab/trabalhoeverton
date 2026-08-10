@@ -18,7 +18,7 @@ import { useDeviceLocations, reverseGeocodeFetch } from "@/hooks/useDeviceLocati
 import { useVersionCheck } from "@/hooks/useVersionCheck";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { LogOut, RefreshCw } from "lucide-react";
+import { LogOut, RefreshCw, Trash2 } from "lucide-react";
 
 type Tab = "notes" | "calendar" | "weather" | "location" | "devices" | "fuel" | "medication";
 
@@ -42,7 +42,7 @@ const DEVICE_LABEL_PROMPT_KEY = "device_label_prompt_dismissed";
 // Versão do app — um número só, sempre igual em todas as telas (inclusive a
 // tela de login). Sobe a cada atualização entregue, não importa qual arquivo
 // mudou. Sempre que subir aqui, sobe também no Auth.tsx (tela de login).
-const APP_VERSION = "v1.8";
+const APP_VERSION = "v2.1";
 
 const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
@@ -190,6 +190,28 @@ const Index = () => {
     } finally {
       setTimeout(() => setIsRefreshing(false), 600);
     }
+  };
+
+  // Limpa cookies, cache e dados salvos no navegador (localStorage, sessionStorage,
+  // Cache API) e recarrega — útil pra garantir que está vendo a versão mais nova
+  // publicada, sem depender de Ctrl+Shift+R manual. Desconecta o login também,
+  // por isso pede confirmação antes.
+  const handleResetCache = async () => {
+    const ok = window.confirm(
+      "Isso vai forçar o app a buscar a versão mais nova do servidor (sem cache) e recarregar. Deseja continuar?"
+    );
+    if (!ok) return;
+    try {
+      // NÃO usamos localStorage.clear() de propósito — isso apagaria o ID fixo
+      // do aparelho (que evita duplicar dispositivos na lista) e desconectaria
+      // o login sem necessidade. O que resolve o problema de "não carregou a
+      // versão mais nova" é limpar o Cache API e forçar buscar tudo de novo.
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch {}
+    window.location.href = `${window.location.pathname}?_=${Date.now()}`;
   };
 
   // Registrar/desregistrar modais para o botão voltar
@@ -371,6 +393,21 @@ const Index = () => {
                 />
               </button>
               <MoonPhaseWidget />
+              <button
+                onClick={handleResetCache}
+                className="flex items-center justify-center transition-all duration-200 hover:scale-105"
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: "50%",
+                  background: "#FFFFFF",
+                  border: "1px solid #EBEBEB",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+                }}
+                title="Limpar cache e cookies"
+              >
+                <Trash2 size={14} style={{ color: "#E53935" }} />
+              </button>
               <button
                 onClick={signOut}
                 className="flex items-center justify-center transition-all duration-200 hover:scale-105"
