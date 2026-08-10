@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useLayoutEffect, Component, ReactNode } from "react";
 import { Note } from "@/hooks/useNotes";
+import { takeNativePhoto, isNative } from "@/lib/native";
 import {
   Camera,
   X,
