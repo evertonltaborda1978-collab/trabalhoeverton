@@ -133,10 +133,19 @@ export function useNotes() {
   // Save to localStorage whenever notes change. Uses "anon" as a fallback key
   // when the user session isn't available yet (e.g. offline first load), so
   // notes created before auth resolves aren't lost on refresh.
+  //
+  // IMPORTANTE: nunca grava uma lista vazia enquanto a carga inicial não
+  // terminou — senão o app apagaria as notas guardadas no aparelho logo ao
+  // abrir (era o motivo das notas "sumirem" offline).
   useEffect(() => {
     notesRef.current = notes;
+    if (loading && notes.length === 0) return;
     saveLocal(user?.id || "anon", notes);
-  }, [notes, user]);
+    if (user?.id) {
+      try { localStorage.setItem("ultimo_usuario_id", user.id); } catch {}
+    }
+  }, [notes, user, loading]);
+
 
   // Sync unsynced notes to Supabase
   const syncToSupabase = useCallback(async (notesToSync: Note[]) => {
