@@ -334,7 +334,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   const [resps, setResps] = useState<string[]>(saved?.resps ?? ["Everton"]);
   const [headerCollapsed, setHeaderCollapsed] = useState(!!saved);
   const [paramsCollapsed, setParamsCollapsed] = useState(true);
-  const [jumbosCollapsed, setJumbosCollapsed] = useState(true);
+  const [jumbosCollapsed, setJumbosCollapsed] = useState(!saved);
   const [consumidosCollapsed, setConsumidosCollapsed] = useState(true);
   const [clCollapsed, setClCollapsed] = useState(true);
   const [rcCollapsed, setRcCollapsed] = useState(true);
@@ -373,7 +373,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   const [paradasRebob, setParadasRebob] = useState<Parada[]>(saved?.paradasRebob ?? []);
 
   // ── Modais ──
-  const [inputModal, setInputModal] = useState<{ title: string; subtitle?: string; placeholder?: string; onConfirm: (v: string) => void } | null>(null);
+  const [inputModal, setInputModal] = useState<{ title: string; subtitle?: string; placeholder?: string; inputMode?: "text" | "numeric" | "decimal"; onConfirm: (v: string) => void } | null>(null);
   const [confirmDeleteItem, setConfirmDeleteItem] = useState<number | null>(null);
   const [numTeclado, setNumTeclado] = useState<{ label: string; valor: string; onConfirm: (v: string) => void } | null>(null);
   const [numValor, setNumValor] = useState("");
@@ -816,11 +816,11 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
             updateJumbo(j.id, "largura", "");
             updateJumbo(j.id, "diametro", "");
             setInputModal({
-              title: "Largura personalizada", placeholder: "Ex: 600",
+              title: "Largura personalizada", placeholder: "Ex: 600", inputMode: "numeric",
               onConfirm: (vLargura) => {
                 updateJumbo(j.id, "largura", vLargura);
                 setInputModal({
-                  title: "Diâmetro personalizado", placeholder: "Ex: 1500",
+                  title: "Diâmetro personalizado", placeholder: "Ex: 1500", inputMode: "numeric",
                   onConfirm: (vDiametro) => {
                     updateJumbo(j.id, "diametro", vDiametro);
                     setFormatos(prev => prev.some(f => f.largura === vLargura && f.diametro === vDiametro)
@@ -1216,7 +1216,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
         </div>
       )}
 
-      <InputModal open={!!inputModal} title={inputModal?.title || ""} subtitle={inputModal?.subtitle} placeholder={inputModal?.placeholder} inputMode={(inputModal as any)?.inputMode} onConfirm={v => inputModal?.onConfirm(v)} onCancel={() => setInputModal(null)} />
+      <InputModal open={!!inputModal} title={inputModal?.title || ""} subtitle={inputModal?.subtitle} placeholder={inputModal?.placeholder} inputMode={inputModal?.inputMode} onConfirm={v => inputModal?.onConfirm(v)} onCancel={() => setInputModal(null)} />
       <ConfirmModal
         open={confirmDeleteItem !== null}
         title="Excluir item?"
