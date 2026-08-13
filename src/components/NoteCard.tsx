@@ -1,5 +1,6 @@
+import { useEffect, useRef, useState } from "react";
 import { Note } from "@/hooks/useNotes";
-import { Trash2, Clock, ChevronRight, Pencil, Bell, Lock, Pin } from "lucide-react";
+import { Trash2, Clock, ChevronRight, Pencil, Bell, Lock, Pin, MoreVertical } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { HighlightText } from "./HighlightText";
@@ -64,6 +65,22 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, on
   const plainContent = getPlainContent(note.content);
   const preview = note.isLocked ? "🔒 Nota protegida" : (plainContent.length > 140 ? plainContent.slice(0, 140) + "…" : plainContent);
 
+  // Menu "•••" — esconde Alarme/Bloquear/Excluir, deixando só Fixar visível
+  // de cara. Ganha espaço na lista e reduz o risco de excluir sem querer.
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showMenu]);
+
   return (
     <div
       onClick={() => onClick(note)}
@@ -81,7 +98,6 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, on
       }}
     >
       <div className="w-1 shrink-0 rounded-l-[18px]" style={{ background: colors.bar }} />
-
       {note.isPinned && (onMoveUp || onMoveDown) && (
         <div className="flex flex-col items-center justify-center shrink-0 gap-0.5 pl-1.5" onClick={(e) => e.stopPropagation()}>
           <button
@@ -104,7 +120,6 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, on
           </button>
         </div>
       )}
-
       {note.isPinned && (
         <Pin
           size={11}
@@ -113,7 +128,6 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, on
           style={{ color: "#F9A825" }}
         />
       )}
-
       <div className="flex items-center gap-2 px-2 py-2 flex-1 min-w-0" style={{ padding: 8 }}>
         <div className="flex-1 min-w-0 overflow-hidden">
           <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
@@ -155,8 +169,7 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, on
             )}
           </div>
         </div>
-
-        <div className="flex items-center gap-0.5 shrink-0">
+        <div className="flex items-center gap-0.5 shrink-0 relative">
           <button
             onClick={(e) => { e.stopPropagation(); onPinClick?.(note); }}
             className="flex items-center justify-center rounded-full transition-colors"
@@ -169,42 +182,59 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, on
           >
             <Pin size={14} fill={note.isPinned ? "#F9A825" : "none"} className={note.isPinned ? "rotate-45" : ""} />
           </button>
+
+          {/* Menu "•••" — Alarme, Bloquear e Excluir ficam aqui dentro */}
           <button
-            onClick={(e) => { e.stopPropagation(); onBellClick?.(note); }}
+            onClick={(e) => { e.stopPropagation(); setShowMenu((v) => !v); }}
             className="flex items-center justify-center rounded-full transition-colors"
             style={{
               width: 30, height: 30,
-              color: hasReminder ? "#F9A825" : "#9E9E9E",
-              background: hasReminder ? "rgba(249,168,37,0.14)" : "rgba(158,158,158,0.10)",
+              color: (hasReminder || note.isLocked) ? "#F9A825" : "#9E9E9E",
+              background: showMenu ? "rgba(0,0,0,0.10)" : (hasReminder || note.isLocked) ? "rgba(249,168,37,0.14)" : "rgba(158,158,158,0.10)",
             }}
-            title={hasReminder ? "Editar lembrete" : "Adicionar lembrete"}
+            title="Mais opções"
           >
-            <Bell size={14} />
+            <MoreVertical size={14} />
           </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onLockClick?.(note); }}
-            className="flex items-center justify-center rounded-full transition-colors"
-            style={{
-              width: 30, height: 30,
-              color: note.isLocked ? "#F9A825" : "#9E9E9E",
-              background: note.isLocked ? "rgba(249,168,37,0.14)" : "rgba(158,158,158,0.10)",
-            }}
-            title={note.isLocked ? "Gerenciar bloqueio" : "Bloquear nota"}
-          >
-            <Lock size={14} />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(note.id); }}
-            className="flex items-center justify-center rounded-full transition-colors"
-            style={{
-              width: 30, height: 30,
-              color: "#E53935",
-              background: "rgba(229,57,53,0.10)",
-            }}
-            title="Excluir nota"
-          >
-            <Trash2 size={14} />
-          </button>
+
+          {showMenu && (
+            <div
+              ref={menuRef}
+              onClick={(e) => e.stopPropagation()}
+              className="absolute top-full right-0 mt-1 rounded-xl overflow-hidden z-20"
+              style={{ background: "#FFF", border: "1px solid #F0F0F0", boxShadow: "0 8px 24px -4px rgba(0,0,0,0.15)", minWidth: 168 }}
+            >
+              <button
+                onClick={(e) => { e.stopPropagation(); onBellClick?.(note); setShowMenu(false); }}
+                className="flex items-center gap-2.5 w-full transition-colors hover:bg-black/5"
+                style={{ padding: "10px 14px" }}
+              >
+                <Bell size={15} style={{ color: hasReminder ? "#F9A825" : "#6B6B7D" }} />
+                <span className="text-[13px] font-semibold" style={{ color: "#1A1A2E" }}>
+                  {hasReminder ? "Editar lembrete" : "Adicionar lembrete"}
+                </span>
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onLockClick?.(note); setShowMenu(false); }}
+                className="flex items-center gap-2.5 w-full transition-colors hover:bg-black/5"
+                style={{ padding: "10px 14px" }}
+              >
+                <Lock size={15} style={{ color: note.isLocked ? "#F9A825" : "#6B6B7D" }} />
+                <span className="text-[13px] font-semibold" style={{ color: "#1A1A2E" }}>
+                  {note.isLocked ? "Gerenciar bloqueio" : "Bloquear nota"}
+                </span>
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(note.id); setShowMenu(false); }}
+                className="flex items-center gap-2.5 w-full transition-colors hover:bg-red-50"
+                style={{ padding: "10px 14px" }}
+              >
+                <Trash2 size={15} style={{ color: "#E53935" }} />
+                <span className="text-[13px] font-semibold" style={{ color: "#E53935" }}>Excluir nota</span>
+              </button>
+            </div>
+          )}
+
           <ChevronRight
             size={13}
             onClick={(e) => { e.stopPropagation(); onClick(note); }}
