@@ -41,6 +41,7 @@ import {
   Volume2,
   VolumeX,
   BookOpen,
+  MoreHorizontal,
 } from "lucide-react";
 import {
   Dialog,
@@ -800,6 +801,9 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const [showUnsavedPrompt, setShowUnsavedPrompt] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showFab, setShowFab] = useState(false);
+  // Menu "•••" que esconde a barra de ferramentas (cor, copiar, tema, tamanho de
+  // fonte, formatação de texto etc.), deixando só uma linha limpa pra digitar.
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [editorFontSize, setEditorFontSize] = useState<number>(() => {
     const stored = parseInt(localStorage.getItem("editor_font_size") || "", 10);
@@ -1914,6 +1918,16 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
               )}
 
               <button
+                onClick={() => setShowMoreMenu((v) => !v)}
+                className="p-2 rounded-lg hover:bg-black/10 transition-colors shrink-0"
+                style={{ background: showMoreMenu ? "rgba(0,0,0,0.08)" : "transparent" }}
+                title="Mais opções"
+                aria-label="Mais opções"
+              >
+                <MoreHorizontal size={20} style={{ color: textColor }} />
+              </button>
+
+              <button
                 onClick={() => {
                   // Save current work then go back to home
                   handleClose();
@@ -1927,7 +1941,9 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
               </button>
             </div>
 
-            {/* Linha 2: ações (cor, cadeado/copiar/compartilhar/editar) */}
+            {/* Linha 2: ações (cor, cadeado/copiar/compartilhar/editar) — escondida
+                atrás do botão "•••", só aparece quando showMoreMenu é true */}
+            {showMoreMenu && (
             <div className="flex items-center gap-1 px-2 pb-1.5 overflow-x-auto no-scrollbar" style={{ WebkitOverflowScrolling: "touch" }}>
               {/* Cor da nota — sempre visível em modo edição */}
               {!readOnly && (
@@ -1996,6 +2012,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                 </button>
               )}
             </div>
+            )}
           </div>
 
           {/* Color picker dropdown */}
@@ -2022,7 +2039,8 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
             </div>
           )}
 
-          {/* ── Sub-header ── */}
+          {/* ── Sub-header — escondido atrás do "•••" ── */}
+          {showMoreMenu && (
           <div className="flex items-center justify-between gap-2 flex-wrap px-4 py-1.5 text-[13px] shrink-0" style={{ color: theme.textMuted, transition: "color 0.3s ease" }}>
             <span className="font-medium">
               {readOnly ? "👁️ Visualização" : (editingNote ? "✏️ Editando" : "Nova nota")}
@@ -2097,9 +2115,11 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
               </button>
             </div>
           </div>
+          )}
 
-          {/* ── Barra de formatação de texto (aparece com um bloco de texto em foco) ── */}
-          {!readOnly && activeBlockIdx !== null && blocks[activeBlockIdx]?.type === "text" && (
+          {/* ── Barra de formatação de texto (aparece com um bloco de texto em foco
+               E o menu "•••" aberto — assim não ocupa espaço desde o início) ── */}
+          {showMoreMenu && !readOnly && activeBlockIdx !== null && blocks[activeBlockIdx]?.type === "text" && (
             <div
               className="flex items-center gap-2 flex-wrap px-3 py-2 shrink-0"
               style={{ background: theme.toolbarBg, borderBottom: `1px solid ${theme.lines}` }}
