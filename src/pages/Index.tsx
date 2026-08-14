@@ -19,7 +19,7 @@ import { useVersionCheck } from "@/hooks/useVersionCheck";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { syncNativeReminders, type NativeReminder } from "@/lib/native";
-import { LogOut, RefreshCw, Trash2 } from "lucide-react";
+import { LogOut, RefreshCw, RotateCcw, Cloud, CloudOff, Download, Upload } from "lucide-react";
 
 type Tab = "notes" | "calendar" | "weather" | "location" | "devices" | "fuel" | "medication";
 
@@ -43,7 +43,7 @@ const DEVICE_LABEL_PROMPT_KEY = "device_label_prompt_dismissed";
 // Versão do app — um número só, sempre igual em todas as telas (inclusive a
 // tela de login). Sobe a cada atualização entregue, não importa qual arquivo
 // mudou. Sempre que subir aqui, sobe também no Auth.tsx (tela de login).
-const APP_VERSION = "v2.1";
+const APP_VERSION = "v2.3";
 
 const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
@@ -59,6 +59,11 @@ const Index = () => {
   const { recordLocation } = useDeviceLocations();
   const [showLabelModal, setShowLabelModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  // Nuvem (backup) e "Atualizar notas" — movidos do NotesView.tsx pro cabeçalho
+  // compartilhado, pra aparecerem juntos com o resto (sinal, lua) em todas as abas.
+  const [isRefreshingNotes, setIsRefreshingNotes] = useState(false);
+  const [showBackupMenu, setShowBackupMenu] = useState(false);
+  const importRef = useRef<HTMLInputElement>(null);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const { updateAvailable, applyUpdate, debugInfo, checkNow } = useVersionCheck();
 
@@ -250,6 +255,42 @@ const Index = () => {
     window.location.href = `${window.location.pathname}?_=${Date.now()}`;
   };
 
+  // "Atualizar notas" — só as notas, mais rápido que o "Atualizar dados" geral
+  const handleRefreshNotes = async () => {
+    if (isRefreshingNotes || syncStatus === "syncing") return;
+    setIsRefreshingNotes(true);
+    try {
+      await refreshNotes();
+    } finally {
+      setTimeout(() => setIsRefreshingNotes(false), 500);
+    }
+  };
+
+  const handleExportBackup = () => {
+    exportBackup();
+    toast({ title: "Backup exportado ✓", description: "Arquivo JSON salvo com sucesso." });
+    setShowBackupMenu(false);
+  };
+
+  const handleImportBackupFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    try {
+      const count = await importBackup(file);
+      toast({ title: `${count} notas importadas com sucesso!` });
+    } catch (err: any) {
+      toast({ title: "Erro na importação", description: err.message });
+    }
+    setShowBackupMenu(false);
+  };
+
+  const syncIcon = () => {
+    if (syncStatus === "synced") return <Cloud size={15} style={{ color: "#4CAF50" }} />;
+    if (syncStatus === "syncing") return <RefreshCw size={15} className="animate-spin" style={{ color: "#F9A825" }} />;
+    return <CloudOff size={15} style={{ color: "#BDBDBD" }} />;
+  };
+
   // Registrar/desregistrar modais para o botão voltar
   useEffect(() => {
     (window as any).__registerModal = (id: string, onClose: () => void) => {
@@ -344,26 +385,38 @@ const Index = () => {
             </button>
           )}
 
-          {/* Linha 1 — título centralizado, com a versão discreta no canto direito.
-              Como esse cabeçalho é compartilhado, aparece em todas as abas sozinho. */}
-          <div className="relative flex items-center justify-center" style={{ marginBottom: 6 }}>
+          {/* Linha 1 — lua+data à esquerda, título centralizado, ícone de resetar
+              cache + versão à direita. Compartilhado por todas as abas. */}
+          <div className="flex items-center justify-between gap-2" style={{ marginBottom: 6 }}>
+            <div className="shrink-0">
+              <MoonPhaseWidget />
+            </div>
             <h1
-              className="font-display text-center"
+              className="font-display text-center flex-1 min-w-0 truncate"
               style={{ fontWeight: 800, fontSize: 19, color: "#1A1A2E" }}
             >
               {titles[tab]}
             </h1>
-            <span
-              className="absolute right-0"
-              style={{ fontSize: 9, color: "#BDBDBD", fontWeight: 700, letterSpacing: 0.3 }}
-            >
-              {APP_VERSION}
-            </span>
+            <div className="shrink-0 flex items-center gap-1.5">
+              <button
+                onClick={handleResetCache}
+                className="flex items-center justify-center transition-all hover:scale-105"
+                style={{ width: 22, height: 22, color: "#BDBDBD" }}
+                title="Limpar cache e buscar a versão mais nova"
+              >
+                <RotateCcw size={13} />
+              </button>
+              <span
+                style={{ fontSize: 9, color: "#BDBDBD", fontWeight: 700, letterSpacing: 0.3 }}
+              >
+                {APP_VERSION}
+              </span>
+            </div>
           </div>
 
-          {/* Linha 2 — online à esquerda, lua + sair à direita */}
+          {/* Linha 2 — online + nuvem/atualizações à esquerda, lua + sair à direita */}
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <span
                 className="inline-flex items-center gap-1"
                 style={{
@@ -394,6 +447,70 @@ const Index = () => {
                 </span>
               </span>
 
+              {/* Nuvem — abre o menu de exportar/importar backup */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowBackupMenu((v) => !v)}
+                  className="flex items-center justify-center rounded-full transition-all"
+                  style={{ width: 26, height: 26, background: "#FFFFFF", border: "1px solid #EBEBEB" }}
+                  title={syncStatus === "synced" ? "Sincronizado — toque para backup" : syncStatus === "syncing" ? "Sincronizando..." : "Sem conexão — toque para backup"}
+                >
+                  {syncIcon()}
+                </button>
+                {showBackupMenu && (
+                  <div
+                    className="absolute top-full left-0 mt-1 rounded-xl p-2 flex flex-col gap-1 z-20"
+                    style={{ background: "#FFF", border: "1px solid #EBEBEB", boxShadow: "0 8px 24px -4px rgba(0,0,0,0.15)", minWidth: 190 }}
+                  >
+                    <button onClick={handleExportBackup} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors" style={{ color: "#1A1A2E" }}>
+                      <Download size={16} /> Exportar backup (.json)
+                    </button>
+                    <button onClick={() => importRef.current?.click()} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors" style={{ color: "#1A1A2E" }}>
+                      <Upload size={16} /> Importar backup
+                    </button>
+                    <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImportBackupFile} />
+                  </div>
+                )}
+              </div>
+
+              {/* Atualizar notas */}
+              <button
+                onClick={handleRefreshNotes}
+                disabled={isRefreshingNotes || syncStatus === "syncing"}
+                className="flex items-center justify-center rounded-full transition-all disabled:opacity-100"
+                style={{
+                  width: 26, height: 26,
+                  background: isRefreshingNotes ? "#2D9E7F" : "#FFFFFF",
+                  border: isRefreshingNotes ? "1px solid #2D9E7F" : "1px solid #EBEBEB",
+                }}
+                title={isRefreshingNotes ? "Atualizando notas..." : "Atualizar notas"}
+              >
+                <RefreshCw
+                  size={13}
+                  className={isRefreshingNotes || syncStatus === "syncing" ? "animate-spin" : ""}
+                  style={{ color: isRefreshingNotes ? "#FFFFFF" : "#9E9E9E" }}
+                />
+              </button>
+
+              {/* Atualizar dados (notas + agenda + dispositivos) */}
+              <button
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="flex items-center justify-center rounded-full transition-all disabled:opacity-100"
+                style={{
+                  width: 26, height: 26,
+                  background: isRefreshing ? "#2D9E7F" : "#FFFFFF",
+                  border: isRefreshing ? "1px solid #2D9E7F" : "1px solid #EBEBEB",
+                }}
+                title={isRefreshing ? "Atualizando dados..." : "Atualizar todos os dados"}
+              >
+                <RefreshCw
+                  size={13}
+                  className={isRefreshing ? "animate-spin" : ""}
+                  style={{ color: isRefreshing ? "#FFFFFF" : "#1A1A2E" }}
+                />
+              </button>
+
               {/* Qualidade estimada da conexão — só aparece se o navegador suportar
                   (hoje, só Android/Chrome). É uma estimativa, não o sinal real. */}
               {connLabel && (
@@ -408,42 +525,6 @@ const Index = () => {
             </div>
 
             <div className="flex items-center gap-3">
-              <button
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                className="flex items-center justify-center transition-all duration-200 hover:scale-105 disabled:opacity-100"
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: "50%",
-                  background: isRefreshing ? "#2D9E7F" : "#FFFFFF",
-                  border: isRefreshing ? "1px solid #2D9E7F" : "1px solid #EBEBEB",
-                  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-                }}
-                title={isRefreshing ? "Atualizando..." : "Atualizar dados"}
-              >
-                <RefreshCw
-                  size={15}
-                  className={isRefreshing ? "animate-spin" : ""}
-                  style={{ color: isRefreshing ? "#FFFFFF" : "#1A1A2E" }}
-                />
-              </button>
-              <MoonPhaseWidget />
-              <button
-                onClick={handleResetCache}
-                className="flex items-center justify-center transition-all duration-200 hover:scale-105"
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: "50%",
-                  background: "#FFFFFF",
-                  border: "1px solid #EBEBEB",
-                  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-                }}
-                title="Limpar cache e cookies"
-              >
-                <Trash2 size={14} style={{ color: "#E53935" }} />
-              </button>
               <button
                 onClick={signOut}
                 className="flex items-center justify-center transition-all duration-200 hover:scale-105"
