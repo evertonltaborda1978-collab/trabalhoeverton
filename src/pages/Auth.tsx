@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { MoonPhaseWidget } from "@/components/MoonPhaseWidget";
 import { useToast } from "@/hooks/use-toast";
 import { useBiometricAuth } from "@/hooks/useBiometricAuth";
-import { Mail, Lock, Eye, EyeOff, Fingerprint, HelpCircle, X, Trash2 } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, Fingerprint, HelpCircle, X, RotateCcw } from "lucide-react";
 
 // Versão do app — sobe a cada atualização entregue pelo Claude (mesmo número
 // mostrado no cabeçalho do app, em Index.tsx). O histórico abaixo é só um
@@ -13,8 +13,10 @@ import { Mail, Lock, Eye, EyeOff, Fingerprint, HelpCircle, X, Trash2 } from "luc
 // Versão do app — um número só, sempre igual em todas as telas (inclusive o
 // cabeçalho do app, no Index.tsx). Sobe a cada atualização entregue, não
 // importa qual arquivo mudou. É por aqui que você confirma a versão mais nova.
-const APP_VERSION = "v2.1";
+const APP_VERSION = "v2.3";
 const VERSION_HISTORY: { version: string; changes: string }[] = [
+  { version: "v2.3", changes: "Lua+data movidos pra linha do título; ícone de limpar cache trocado (não parece mais 'excluir tudo')." },
+  { version: "v2.2", changes: "Menu \"•••\" no NoteEditor e nos cards de notas (esconde botões, deixa a tela mais limpa); cabeçalho principal reorganizado com nuvem/backup/atualizações agrupados." },
   { version: "v2.1", changes: "Corrigido o botão de limpar cache: agora não apaga mais o ID fixo do aparelho nem desconecta o login — só força buscar a versão mais nova." },
   { version: "v2.0", changes: "Botão de limpar cache/cookies movido pra tela de login (ao lado da versão), pra usar quando não carregar a versão mais nova." },
   { version: "v1.9", changes: "Novo botão no cabeçalho pra limpar cookies/cache/dados salvos e recarregar o app." },
@@ -253,7 +255,7 @@ export default function Auth() {
             className="flex items-center justify-center rounded-full text-muted-foreground/50 hover:text-red-500"
             title="Limpar cache e cookies (se não estiver mostrando a versão mais nova)"
           >
-            <Trash2 size={12} />
+            <RotateCcw size={12} />
           </button>
         </div>
       </div>
