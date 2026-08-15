@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Note } from "@/hooks/useNotes";
 import { Trash2, Clock, ChevronRight, Pencil, Bell, Lock, Pin, MoreVertical } from "lucide-react";
 import { format } from "date-fns";
@@ -69,11 +70,16 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, on
   // de cara. Ganha espaço na lista e reduz o risco de excluir sem querer.
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
 
   useEffect(() => {
     if (!showMenu) return;
     const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+      if (
+        menuRef.current && !menuRef.current.contains(e.target as Node) &&
+        menuBtnRef.current && !menuBtnRef.current.contains(e.target as Node)
+      ) {
         setShowMenu(false);
       }
     };
@@ -183,9 +189,19 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, on
             <Pin size={14} fill={note.isPinned ? "#F9A825" : "none"} className={note.isPinned ? "rotate-45" : ""} />
           </button>
 
-          {/* Menu "•••" — Alarme, Bloquear e Excluir ficam aqui dentro */}
+          {/* Menu "•••" — Alarme, Bloquear e Excluir ficam aqui dentro. Renderizado
+              via portal (fora do card) porque o card usa overflow-hidden pros
+              cantos arredondados, o que cortava o menu antes. */}
           <button
-            onClick={(e) => { e.stopPropagation(); setShowMenu((v) => !v); }}
+            ref={menuBtnRef}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!showMenu && menuBtnRef.current) {
+                const r = menuBtnRef.current.getBoundingClientRect();
+                setMenuPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+              }
+              setShowMenu((v) => !v);
+            }}
             className="flex items-center justify-center rounded-full transition-colors"
             style={{
               width: 30, height: 30,
@@ -197,12 +213,12 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, on
             <MoreVertical size={14} />
           </button>
 
-          {showMenu && (
+          {showMenu && menuPos && createPortal(
             <div
               ref={menuRef}
               onClick={(e) => e.stopPropagation()}
-              className="absolute top-full right-0 mt-1 rounded-xl overflow-hidden z-20"
-              style={{ background: "#FFF", border: "1px solid #F0F0F0", boxShadow: "0 8px 24px -4px rgba(0,0,0,0.15)", minWidth: 168 }}
+              className="fixed rounded-xl overflow-hidden"
+              style={{ top: menuPos.top, right: menuPos.right, background: "#FFF", border: "1px solid #F0F0F0", boxShadow: "0 8px 24px -4px rgba(0,0,0,0.15)", minWidth: 168, zIndex: 1000 }}
             >
               <button
                 onClick={(e) => { e.stopPropagation(); onBellClick?.(note); setShowMenu(false); }}
@@ -232,7 +248,8 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, on
                 <Trash2 size={15} style={{ color: "#E53935" }} />
                 <span className="text-[13px] font-semibold" style={{ color: "#E53935" }}>Excluir nota</span>
               </button>
-            </div>
+            </div>,
+            document.body
           )}
 
           <ChevronRight
