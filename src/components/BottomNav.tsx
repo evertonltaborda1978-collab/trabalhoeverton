@@ -49,7 +49,7 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
         background: "rgba(255,255,255,0.98)",
         borderTop: "1px solid #F0F0F0",
         boxShadow: "0 -4px 16px rgba(0,0,0,0.04)",
-        paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)",
+        paddingBottom: "calc(env(safe-area-inset-bottom) + 4px)",
       }}
     >
       {/* "Mais" overflow menu */}
@@ -97,92 +97,64 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
       )}
 
       <div
-        className="flex items-center justify-center gap-12"
+        className="flex items-center justify-center gap-10"
         style={{
           paddingLeft: 4,
           paddingRight: 4,
+          paddingTop: 5,
+          paddingBottom: 3,
         }}
       >
         {/* Notas button */}
         <button
           onClick={() => onChange("notes")}
-          className="flex flex-col items-center gap-0.5 rounded-xl transition-all duration-200 shrink-0"
+          className="flex items-center gap-1.5 rounded-full transition-all duration-200 shrink-0"
           style={{
-            padding: "3px 18px",
-            minWidth: 72,
+            padding: "6px 14px",
+            background: isNotesActive ? "rgba(26,26,46,0.06)" : "transparent",
           }}
         >
-          <div
-            className="flex items-center justify-center rounded-xl transition-colors"
-            style={{
-              width: 30,
-              height: 30,
-              background: isNotesActive ? "rgba(26,26,46,0.06)" : "transparent",
-            }}
-          >
-            <StickyNote
-              size={20}
-              strokeWidth={isNotesActive ? 2.5 : 2}
-              style={{ color: isNotesActive ? "#1A1A2E" : "#6B6B7D" }}
-            />
-          </div>
+          <StickyNote
+            size={16}
+            strokeWidth={isNotesActive ? 2.5 : 2}
+            style={{ color: isNotesActive ? "#1A1A2E" : "#6B6B7D" }}
+          />
           <span
             className="font-extrabold tracking-wide"
             style={{
-              fontSize: 10.5,
+              fontSize: 10,
               color: isNotesActive ? "#1A1A2E" : "#6B6B7D",
               whiteSpace: "nowrap",
             }}
           >
             Notas
           </span>
-          {isNotesActive && (
-            <div
-              className="w-1 h-1 rounded-full"
-              style={{ background: "#1A1A2E" }}
-            />
-          )}
         </button>
 
         {/* "Mais" button */}
         <button
           onClick={() => setShowMore((v) => !v)}
-          className="flex flex-col items-center gap-0.5 rounded-xl transition-all duration-200 shrink-0"
+          className="flex items-center gap-1.5 rounded-full transition-all duration-200 shrink-0"
           style={{
-            padding: "3px 18px",
-            minWidth: 72,
+            padding: "6px 14px",
+            background: (isMoreActive || showMore) ? "rgba(26,26,46,0.06)" : "transparent",
           }}
         >
-          <div
-            className="flex items-center justify-center rounded-xl transition-colors"
-            style={{
-              width: 30,
-              height: 30,
-              background: (isMoreActive || showMore) ? "rgba(26,26,46,0.06)" : "transparent",
-            }}
-          >
-            <MoreHorizontal
-              size={20}
-              strokeWidth={(isMoreActive || showMore) ? 2.5 : 2}
-              style={{ color: (isMoreActive || showMore) ? "#1A1A2E" : "#6B6B7D" }}
-            />
-          </div>
+          <MoreHorizontal
+            size={16}
+            strokeWidth={(isMoreActive || showMore) ? 2.5 : 2}
+            style={{ color: (isMoreActive || showMore) ? "#1A1A2E" : "#6B6B7D" }}
+          />
           <span
             className="font-extrabold tracking-wide"
             style={{
-              fontSize: 10.5,
+              fontSize: 10,
               color: (isMoreActive || showMore) ? "#1A1A2E" : "#6B6B7D",
               whiteSpace: "nowrap",
             }}
           >
             Mais
           </span>
-          {isMoreActive && !showMore && (
-            <div
-              className="w-1 h-1 rounded-full"
-              style={{ background: "#1A1A2E" }}
-            />
-          )}
         </button>
       </div>
     </nav>
