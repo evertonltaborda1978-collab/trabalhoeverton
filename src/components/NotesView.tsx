@@ -5,7 +5,7 @@ import { ReminderModal } from "./ReminderModal";
 import { LockNoteModal } from "./LockNoteModal";
 import { TrashView } from "./TrashView";
 import { Note, SyncStatus } from "@/hooks/useNotes";
-import { Search, Cloud, CloudOff, RefreshCw, Download, Upload, Mic, MicOff, Trash2 } from "lucide-react";
+import { Search, Cloud, CloudOff, RefreshCw, Download, Upload, Mic, MicOff, Trash2, MoreVertical } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import {
@@ -51,24 +51,15 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [searchFocused, setSearchFocused] = useState(false);
-  const [showBackupMenu, setShowBackupMenu] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
   const [showRelatorio, setShowRelatorio] = useState(false);
+  // Menu "•••" que esconde os tamanhos de fonte + atalho do Relatório de Turno
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [relatorioInitialState, setRelatorioInitialState] = useState<any>(null);
   const [showRebobinadeira, setShowRebobinadeira] = useState(false);
   const [rebobInitialState, setRebobInitialState] = useState<any>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteTitle, setConfirmDeleteTitle] = useState("");
-  const importRef = useRef<HTMLInputElement>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const handleRefresh = async () => {
-    if (!onRefresh || isRefreshing) return;
-    setIsRefreshing(true);
-    try { await onRefresh(); } finally {
-      setTimeout(() => setIsRefreshing(false), 600);
-    }
-  };
 
   // Editor always opens in read-only mode; user toggles to edit via pencil icon
   const [editorReadOnly, setEditorReadOnly] = useState(true);
@@ -283,31 +274,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
     setPendingUnlockNote(null);
   };
 
-  const handleExport = () => {
-    exportBackup();
-    toast({ title: "Backup exportado ✓", description: "Arquivo JSON salvo com sucesso." });
-    setShowBackupMenu(false);
-  };
-
-  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = "";
-    try {
-      const count = await importBackup(file);
-      toast({ title: `${count} notas importadas com sucesso!` });
-    } catch (err: any) {
-      toast({ title: "Erro na importação", description: err.message });
-    }
-    setShowBackupMenu(false);
-  };
-
-  const syncIcon = () => {
-    if (syncStatus === "synced") return <Cloud size={16} style={{ color: "#4CAF50" }} />;
-    if (syncStatus === "syncing") return <RefreshCw size={16} className="animate-spin" style={{ color: "#F9A825" }} />;
-    return <CloudOff size={16} style={{ color: "#BDBDBD" }} />;
-  };
-
   // Handle delete with confirmation
   const handleDeleteWithConfirm = (id: string) => {
     const note = notes.find((n) => n.id === id);
@@ -338,70 +304,13 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
 
   return (
     <div>
-      {/* Sync indicator + draft counter + trash */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowBackupMenu(!showBackupMenu)}
-            className="flex items-center justify-center w-8 h-8 rounded-full bg-white border border-[#EBEBEB] shadow-sm transition-opacity hover:opacity-70"
-            title={syncStatus === "synced" ? "Sincronizado" : syncStatus === "syncing" ? "Sincronizando..." : "Sem conexão"}
-          >
-            {syncIcon()}
-          </button>
-          {onRefresh && (
-            <button
-              onClick={handleRefresh}
-              disabled={syncStatus === "syncing" || isRefreshing}
-              className="flex items-center justify-center w-8 h-8 rounded-full shadow-sm transition-all disabled:opacity-100"
-              style={{
-                background: isRefreshing ? "#2D9E7F" : "#FFFFFF",
-                border: isRefreshing ? "1px solid #2D9E7F" : "1px solid #EBEBEB",
-              }}
-              title={isRefreshing ? "Atualizando notas..." : "Atualizar notas"}
-            >
-              <RefreshCw
-                size={14}
-                className={isRefreshing || syncStatus === "syncing" ? "animate-spin" : ""}
-                style={{ color: isRefreshing ? "#FFFFFF" : "#9E9E9E" }}
-              />
-            </button>
-          )}
-          {draftCount > 0 && (
-            <span className="text-[11px] font-semibold" style={{ color: "#F9A825" }}>
-              ✏️ {draftCount} rascunho{draftCount > 1 ? "s" : ""} pendente{draftCount > 1 ? "s" : ""}
-            </span>
-          )}
-        </div>
-        <button
-          onClick={() => setShowTrash(true)}
-          className="relative flex items-center justify-center w-9 h-9 rounded-full bg-white border border-[#EBEBEB] shadow-sm transition-colors hover:bg-black/5"
-          title="Lixeira"
-        >
-          <Trash2 size={18} style={{ color: "#999" }} />
-          {trashedNotes.length > 0 && (
-            <span
-              className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-white text-[10px] font-bold"
-              style={{ background: "#E53935" }}
-            >
-              {trashedNotes.length}
-            </span>
-          )}
-        </button>
-      </div>
-
-      {/* Backup dropdown */}
-      {showBackupMenu && (
-        <div className="mb-3 rounded-xl p-3 flex flex-col gap-2" style={{ background: "#FFF", border: "1px solid #EBEBEB", boxShadow: "0 4px 12px rgba(0,0,0,0.06)" }}>
-          <button onClick={handleExport} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors" style={{ color: "#1A1A2E" }}>
-            <Download size={16} /> Exportar backup (.json)
-          </button>
-          <button onClick={() => importRef.current?.click()} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors" style={{ color: "#1A1A2E" }}>
-            <Upload size={16} /> Importar backup
-          </button>
-          <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImportFile} />
-        </div>
+      {/* Contador de rascunhos — nuvem/atualizar/backup foram movidos pro
+          cabeçalho compartilhado (Index.tsx); a lixeira foi pra linha de busca */}
+      {draftCount > 0 && (
+        <p className="text-[11px] font-semibold mb-1" style={{ color: "#F9A825" }}>
+          ✏️ {draftCount} rascunho{draftCount > 1 ? "s" : ""} pendente{draftCount > 1 ? "s" : ""}
+        </p>
       )}
-
       <div className="flex items-center gap-3 mb-2">
         <div
           className="relative flex-1 transition-all duration-200"
@@ -440,13 +349,69 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
             </button>
           )}
         </div>
+        {/* "•••" — abre fontes + atalho do Relatório de Turno, escondidos até precisar */}
+        <div className="relative shrink-0">
+          <button
+            onClick={() => setShowMoreMenu((v) => !v)}
+            className="flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95"
+            style={{ width: 46, height: 46, borderRadius: 14, background: showMoreMenu ? "#1A1A2E" : "#FFF", border: "1.5px solid #EBEBEB" }}
+            title="Mais opções"
+          >
+            <MoreVertical size={20} style={{ color: showMoreMenu ? "#FFF" : "#6B6B7D" }} />
+          </button>
+          {showMoreMenu && (
+            <div
+              className="absolute top-full right-0 mt-1 rounded-xl p-3 z-20"
+              style={{ background: "#FFF", border: "1px solid #EBEBEB", boxShadow: "0 8px 24px -4px rgba(0,0,0,0.15)", minWidth: 210 }}
+            >
+              <p className="text-[10px] font-bold mb-1.5" style={{ color: "#BDBDBD" }}>TAMANHO DA FONTE</p>
+              <div className="flex items-center gap-1.5 mb-2">
+                {(["sm", "md", "lg", "xl"] as const).map((size, i) => (
+                  <button
+                    key={size}
+                    onClick={() => changeFontSize(size)}
+                    className="flex items-center justify-center rounded-lg transition-all"
+                    style={{
+                      width: 28, height: 28,
+                      background: fontSize === size ? "#1A1A2E" : "rgba(0,0,0,0.04)",
+                      border: fontSize === size ? "none" : "0.5px solid #E0E0E0",
+                      fontSize: 9 + i * 2,
+                      fontWeight: 700,
+                      color: fontSize === size ? "white" : "#888",
+                      cursor: "pointer",
+                      lineHeight: 1,
+                    }}
+                  >
+                    A
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => { localStorage.removeItem("relatorio_turno_rascunho"); setRelatorioInitialState(null); setShowRelatorio(true); setShowMoreMenu(false); }}
+                className="flex items-center gap-2.5 w-full transition-colors hover:bg-black/5 rounded-lg"
+                style={{ padding: "8px 6px" }}
+              >
+                <ClipboardList size={16} style={{ color: "#F57C00" }} />
+                <span className="text-[13px] font-semibold" style={{ color: "#1A1A2E" }}>Relatório de Turno</span>
+              </button>
+            </div>
+          )}
+        </div>
         <button
-          onClick={() => { localStorage.removeItem("relatorio_turno_rascunho"); setRelatorioInitialState(null); setShowRelatorio(true); }}
-          className="shrink-0 flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95"
-          style={{ width: 46, height: 46, borderRadius: 14, background: "#F57C00", boxShadow: "0 4px 14px -2px rgba(245,124,0,0.35)" }}
-          title="Relatório de Turno"
+          onClick={() => setShowTrash(true)}
+          className="relative shrink-0 flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95"
+          style={{ width: 46, height: 46, borderRadius: 14, background: "#FFF", border: "1.5px solid #EBEBEB" }}
+          title="Lixeira"
         >
-          <ClipboardList size={20} color="white" />
+          <Trash2 size={20} style={{ color: "#999" }} />
+          {trashedNotes.length > 0 && (
+            <span
+              className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-white text-[10px] font-bold"
+              style={{ background: "#E53935" }}
+            >
+              {trashedNotes.length}
+            </span>
+          )}
         </button>
         <button
           onClick={openNew}
@@ -463,27 +428,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
         <p className="text-xs font-semibold" style={{ color: "#BDBDBD", fontSize: 12 }}>
           {filtered.length} {filtered.length === 1 ? "nota" : "notas"}
         </p>
-        <div className="flex items-center gap-1.5">
-          {(["sm", "md", "lg", "xl"] as const).map((size, i) => (
-            <button
-              key={size}
-              onClick={() => changeFontSize(size)}
-              className="flex items-center justify-center rounded-lg transition-all"
-              style={{
-                width: 28, height: 28,
-                background: fontSize === size ? "#1A1A2E" : "rgba(0,0,0,0.04)",
-                border: fontSize === size ? "none" : "0.5px solid #E0E0E0",
-                fontSize: 9 + i * 2,
-                fontWeight: 700,
-                color: fontSize === size ? "white" : "#888",
-                cursor: "pointer",
-                lineHeight: 1,
-              }}
-            >
-              A
-            </button>
-          ))}
-        </div>
       </div>
 
       {filtered.length === 0 ? (
