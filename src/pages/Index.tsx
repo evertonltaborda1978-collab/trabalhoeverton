@@ -43,7 +43,7 @@ const DEVICE_LABEL_PROMPT_KEY = "device_label_prompt_dismissed";
 // Versão do app — um número só, sempre igual em todas as telas (inclusive a
 // tela de login). Sobe a cada atualização entregue, não importa qual arquivo
 // mudou. Sempre que subir aqui, sobe também no Auth.tsx (tela de login).
-const APP_VERSION = "v2.3";
+const APP_VERSION = "v2.4";
 
 const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
@@ -59,9 +59,6 @@ const Index = () => {
   const { recordLocation } = useDeviceLocations();
   const [showLabelModal, setShowLabelModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  // Nuvem (backup) e "Atualizar notas" — movidos do NotesView.tsx pro cabeçalho
-  // compartilhado, pra aparecerem juntos com o resto (sinal, lua) em todas as abas.
-  const [isRefreshingNotes, setIsRefreshingNotes] = useState(false);
   const [showBackupMenu, setShowBackupMenu] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
@@ -255,16 +252,8 @@ const Index = () => {
     window.location.href = `${window.location.pathname}?_=${Date.now()}`;
   };
 
-  // "Atualizar notas" — só as notas, mais rápido que o "Atualizar dados" geral
-  const handleRefreshNotes = async () => {
-    if (isRefreshingNotes || syncStatus === "syncing") return;
-    setIsRefreshingNotes(true);
-    try {
-      await refreshNotes();
-    } finally {
-      setTimeout(() => setIsRefreshingNotes(false), 500);
-    }
-  };
+  // "Atualizar notas" e "atualizar dados" foram unificados num botão só
+  // (handleRefresh), a pedido do Everton — menos ícones repetidos no cabeçalho.
 
   const handleExportBackup = () => {
     exportBackup();
@@ -414,40 +403,39 @@ const Index = () => {
             </div>
           </div>
 
-          {/* Linha 2 — online + nuvem/atualizações à esquerda, lua + sair à direita */}
+          {/* Linha 2 — esquerda: online+sinal juntos | centro: nuvem+atualizar | direita: sair */}
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Esquerda: Online + qualidade do sinal, num badge só */}
+            <span
+              className="inline-flex items-center gap-1"
+              style={{
+                padding: "2px 8px 2px 6px",
+                borderRadius: 999,
+                background: syncBadge.bg,
+                transition: "background 0.3s",
+              }}
+            >
               <span
-                className="inline-flex items-center gap-1"
-                style={{
-                  padding: "2px 8px 2px 6px",
-                  borderRadius: 999,
-                  background: syncBadge.bg,
-                  transition: "background 0.3s",
-                }}
+                className="inline-block rounded-full"
+                style={{ width: 6, height: 6, background: syncBadge.dot }}
+              />
+              <span
+                className="font-bold"
+                style={{ fontSize: 10, color: syncBadge.text, letterSpacing: 0.2, whiteSpace: "nowrap" }}
               >
-                <span
-                  className="inline-block rounded-full"
-                  style={{
-                    width: 6,
-                    height: 6,
-                    background: syncBadge.dot,
-                  }}
-                />
-                <span
-                  className="font-bold"
-                  style={{
-                    fontSize: 10,
-                    color: syncBadge.text,
-                    letterSpacing: 0.2,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {syncBadge.label}
-                </span>
+                {syncBadge.label}
               </span>
+              {/* Qualidade estimada da conexão — só aparece se o navegador suportar
+                  (hoje, só Android/Chrome). É uma estimativa, não o sinal real. */}
+              {connLabel && (
+                <span style={{ fontSize: 10, color: connColor, fontWeight: 700 }} title="Estimativa de qualidade da conexão (Android/Chrome)">
+                  · 📶 {connLabel}
+                </span>
+              )}
+            </span>
 
-              {/* Nuvem — abre o menu de exportar/importar backup */}
+            {/* Centro: nuvem (backup) + atualizar (unificado — notas + agenda + dispositivos) */}
+            <div className="flex items-center gap-1.5">
               <div className="relative">
                 <button
                   onClick={() => setShowBackupMenu((v) => !v)}
@@ -459,7 +447,7 @@ const Index = () => {
                 </button>
                 {showBackupMenu && (
                   <div
-                    className="absolute top-full left-0 mt-1 rounded-xl p-2 flex flex-col gap-1 z-20"
+                    className="absolute top-full left-1/2 -translate-x-1/2 mt-1 rounded-xl p-2 flex flex-col gap-1 z-20"
                     style={{ background: "#FFF", border: "1px solid #EBEBEB", boxShadow: "0 8px 24px -4px rgba(0,0,0,0.15)", minWidth: 190 }}
                   >
                     <button onClick={handleExportBackup} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors" style={{ color: "#1A1A2E" }}>
@@ -473,26 +461,7 @@ const Index = () => {
                 )}
               </div>
 
-              {/* Atualizar notas */}
-              <button
-                onClick={handleRefreshNotes}
-                disabled={isRefreshingNotes || syncStatus === "syncing"}
-                className="flex items-center justify-center rounded-full transition-all disabled:opacity-100"
-                style={{
-                  width: 26, height: 26,
-                  background: isRefreshingNotes ? "#2D9E7F" : "#FFFFFF",
-                  border: isRefreshingNotes ? "1px solid #2D9E7F" : "1px solid #EBEBEB",
-                }}
-                title={isRefreshingNotes ? "Atualizando notas..." : "Atualizar notas"}
-              >
-                <RefreshCw
-                  size={13}
-                  className={isRefreshingNotes || syncStatus === "syncing" ? "animate-spin" : ""}
-                  style={{ color: isRefreshingNotes ? "#FFFFFF" : "#9E9E9E" }}
-                />
-              </button>
-
-              {/* Atualizar dados (notas + agenda + dispositivos) */}
+              {/* Atualizar — unificado (antes eram dois botões: notas / tudo) */}
               <button
                 onClick={handleRefresh}
                 disabled={isRefreshing}
@@ -502,7 +471,7 @@ const Index = () => {
                   background: isRefreshing ? "#2D9E7F" : "#FFFFFF",
                   border: isRefreshing ? "1px solid #2D9E7F" : "1px solid #EBEBEB",
                 }}
-                title={isRefreshing ? "Atualizando dados..." : "Atualizar todos os dados"}
+                title={isRefreshing ? "Atualizando..." : "Atualizar notas, agenda e dispositivos"}
               >
                 <RefreshCw
                   size={13}
@@ -510,37 +479,24 @@ const Index = () => {
                   style={{ color: isRefreshing ? "#FFFFFF" : "#1A1A2E" }}
                 />
               </button>
-
-              {/* Qualidade estimada da conexão — só aparece se o navegador suportar
-                  (hoje, só Android/Chrome). É uma estimativa, não o sinal real. */}
-              {connLabel && (
-                <span
-                  className="inline-flex items-center gap-1"
-                  style={{ fontSize: 9, color: connColor, fontWeight: 700, letterSpacing: 0.2 }}
-                  title="Estimativa de qualidade da conexão (Android/Chrome)"
-                >
-                  📶 {connLabel}
-                </span>
-              )}
             </div>
 
-            <div className="flex items-center gap-3">
-              <button
-                onClick={signOut}
-                className="flex items-center justify-center transition-all duration-200 hover:scale-105"
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: "50%",
-                  background: "#FFFFFF",
-                  border: "1px solid #EBEBEB",
-                  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-                }}
-                title="Sair"
-              >
-                <LogOut size={15} style={{ color: "#1A1A2E" }} />
-              </button>
-            </div>
+            {/* Direita: só o Sair */}
+            <button
+              onClick={signOut}
+              className="flex items-center justify-center transition-all duration-200 hover:scale-105"
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: "50%",
+                background: "#FFFFFF",
+                border: "1px solid #EBEBEB",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+              }}
+              title="Sair"
+            >
+              <LogOut size={15} style={{ color: "#1A1A2E" }} />
+            </button>
           </div>
         </div>
       </header>
