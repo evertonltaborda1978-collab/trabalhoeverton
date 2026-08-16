@@ -13,8 +13,10 @@ import { Mail, Lock, Eye, EyeOff, Fingerprint, HelpCircle, X, RotateCcw } from "
 // Versão do app — um número só, sempre igual em todas as telas (inclusive o
 // cabeçalho do app, no Index.tsx). Sobe a cada atualização entregue, não
 // importa qual arquivo mudou. É por aqui que você confirma a versão mais nova.
-const APP_VERSION = "v2.4";
+const APP_VERSION = "v2.6";
 const VERSION_HISTORY: { version: string; changes: string }[] = [
+  { version: "v2.6", changes: "Badge \"Online\" + texto de sinal trocado por um ícone único de barrinhas de sinal (cor e preenchimento já mostram tudo)." },
+  { version: "v2.5", changes: "Na aba Notas, o título \"Minhas Notas\" some — fica só a lua+data centralizada." },
   { version: "v2.4", changes: "Corrigido menu '•••' que não abria nos cards de notas; unificados Online+sinal e os dois botões de atualizar; reorganizada a linha de busca das Notas (fonte+relatório escondidos, lixeira ao lado do +); rodapé Notas/Mais mais compacto." },
   { version: "v2.3", changes: "Lua+data movidos pra linha do título; ícone de limpar cache trocado (não parece mais 'excluir tudo')." },
   { version: "v2.2", changes: "Menu \"•••\" no NoteEditor e nos cards de notas (esconde botões, deixa a tela mais limpa); cabeçalho principal reorganizado com nuvem/backup/atualizações agrupados." },
