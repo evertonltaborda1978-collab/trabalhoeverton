@@ -19,7 +19,7 @@ import { useVersionCheck } from "@/hooks/useVersionCheck";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { syncNativeReminders, type NativeReminder } from "@/lib/native";
-import { LogOut, RefreshCw, RotateCcw, Cloud, CloudOff, Download, Upload } from "lucide-react";
+import { LogOut, RefreshCw, RotateCcw, Cloud, CloudOff, Download, Upload, SignalHigh, SignalMedium, SignalLow, SignalZero } from "lucide-react";
 
 type Tab = "notes" | "calendar" | "weather" | "location" | "devices" | "fuel" | "medication";
 
@@ -43,7 +43,7 @@ const DEVICE_LABEL_PROMPT_KEY = "device_label_prompt_dismissed";
 // Versão do app — um número só, sempre igual em todas as telas (inclusive a
 // tela de login). Sobe a cada atualização entregue, não importa qual arquivo
 // mudou. Sempre que subir aqui, sobe também no Auth.tsx (tela de login).
-const APP_VERSION = "v2.4";
+const APP_VERSION = "v2.6";
 
 const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
@@ -330,17 +330,20 @@ const Index = () => {
   // sinal fraco). Agora prioriza o syncStatus real — só diz "Online" quando as notas
   // realmente conseguiram sincronizar com o servidor, não só quando o celular "acha"
   // que tem sinal.
-  const syncBadge = (() => {
-    if (!isOnline) {
-      return { label: "Sem sinal", bg: "#F5F5F5", dot: "#9E9E9E", text: "#757575" };
+  // Ícone único de "barrinhas de sinal" — substitui o badge "Online" + texto de
+  // qualidade separado por um só elemento visual (ícone + cor já dizem tudo).
+  const signalInfo = (() => {
+    if (!isOnline || syncStatus === "offline") {
+      return { Icon: SignalZero, color: "#9E9E9E", label: !isOnline ? "Sem conexão" : "Sinal fraco — sincronização com dificuldade" };
     }
     if (syncStatus === "syncing") {
-      return { label: "Sincronizando...", bg: "#FFF8E1", dot: "#F9A825", text: "#F57F17" };
+      return { Icon: SignalMedium, color: "#F9A825", label: "Sincronizando..." };
     }
-    if (syncStatus === "offline") {
-      return { label: "Sinal fraco", bg: "#FFF3E0", dot: "#EF6C00", text: "#E65100" };
-    }
-    return { label: "Online", bg: "#E8F5E9", dot: "#43A047", text: "#2E7D32" };
+    // Online e sincronizado — usa a qualidade estimada da conexão quando disponível
+    if (connInfo?.effectiveType === "4g") return { Icon: SignalHigh, color: "#43A047", label: "Online — sinal bom" };
+    if (connInfo?.effectiveType === "3g") return { Icon: SignalMedium, color: "#F9A825", label: "Online — sinal médio" };
+    if (connInfo) return { Icon: SignalLow, color: "#E53935", label: "Online — sinal fraco" };
+    return { Icon: SignalHigh, color: "#43A047", label: "Online" };
   })();
 
   return (
@@ -375,17 +378,27 @@ const Index = () => {
           )}
 
           {/* Linha 1 — lua+data à esquerda, título centralizado, ícone de resetar
-              cache + versão à direita. Compartilhado por todas as abas. */}
+              cache + versão à direita. Compartilhado por todas as abas.
+              Exceção: na aba Notas, some o texto do título e a lua+data fica
+              centralizada sozinha (ganha espaço, já que "Minhas Notas" é meio óbvio). */}
           <div className="flex items-center justify-between gap-2" style={{ marginBottom: 6 }}>
-            <div className="shrink-0">
-              <MoonPhaseWidget />
-            </div>
-            <h1
-              className="font-display text-center flex-1 min-w-0 truncate"
-              style={{ fontWeight: 800, fontSize: 19, color: "#1A1A2E" }}
-            >
-              {titles[tab]}
-            </h1>
+            {tab === "notes" ? (
+              <div className="flex-1 flex justify-center">
+                <MoonPhaseWidget />
+              </div>
+            ) : (
+              <>
+                <div className="shrink-0">
+                  <MoonPhaseWidget />
+                </div>
+                <h1
+                  className="font-display text-center flex-1 min-w-0 truncate"
+                  style={{ fontWeight: 800, fontSize: 19, color: "#1A1A2E" }}
+                >
+                  {titles[tab]}
+                </h1>
+              </>
+            )}
             <div className="shrink-0 flex items-center gap-1.5">
               <button
                 onClick={handleResetCache}
@@ -403,36 +416,17 @@ const Index = () => {
             </div>
           </div>
 
-          {/* Linha 2 — esquerda: online+sinal juntos | centro: nuvem+atualizar | direita: sair */}
+          {/* Linha 2 — esquerda: ícone de sinal | centro: nuvem+atualizar | direita: sair */}
           <div className="flex items-center justify-between">
-            {/* Esquerda: Online + qualidade do sinal, num badge só */}
-            <span
-              className="inline-flex items-center gap-1"
-              style={{
-                padding: "2px 8px 2px 6px",
-                borderRadius: 999,
-                background: syncBadge.bg,
-                transition: "background 0.3s",
-              }}
+            {/* Esquerda: um ícone só de barrinhas de sinal — cor e preenchimento
+                já dizem se está online e a qualidade da conexão */}
+            <div
+              className="flex items-center justify-center rounded-full"
+              style={{ width: 26, height: 26, background: "#FFFFFF", border: "1px solid #EBEBEB" }}
+              title={signalInfo.label}
             >
-              <span
-                className="inline-block rounded-full"
-                style={{ width: 6, height: 6, background: syncBadge.dot }}
-              />
-              <span
-                className="font-bold"
-                style={{ fontSize: 10, color: syncBadge.text, letterSpacing: 0.2, whiteSpace: "nowrap" }}
-              >
-                {syncBadge.label}
-              </span>
-              {/* Qualidade estimada da conexão — só aparece se o navegador suportar
-                  (hoje, só Android/Chrome). É uma estimativa, não o sinal real. */}
-              {connLabel && (
-                <span style={{ fontSize: 10, color: connColor, fontWeight: 700 }} title="Estimativa de qualidade da conexão (Android/Chrome)">
-                  · 📶 {connLabel}
-                </span>
-              )}
-            </span>
+              <signalInfo.Icon size={15} style={{ color: signalInfo.color }} />
+            </div>
 
             {/* Centro: nuvem (backup) + atualizar (unificado — notas + agenda + dispositivos) */}
             <div className="flex items-center gap-1.5">
