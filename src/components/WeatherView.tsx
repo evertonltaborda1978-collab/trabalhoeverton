@@ -3,6 +3,7 @@ import { Cloud, CloudRain, CloudSnow, Sun, CloudLightning, Wind, Droplets, Therm
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { HolidaysView } from "./HolidaysView";
+import { MoonPhaseWidget } from "./MoonPhaseWidget";
 
 interface WeatherData {
   temperature: number;
@@ -15,13 +16,11 @@ interface WeatherData {
   lat: number;
   lng: number;
 }
-
 interface FavoriteCity {
   name: string;
   lat: number;
   lng: number;
 }
-
 const weatherDescriptions: Record<number, { label: string; icon: typeof Sun }> = {
   0: { label: "Céu limpo", icon: Sun },
   1: { label: "Parcialmente limpo", icon: CloudSun },
@@ -45,11 +44,9 @@ const weatherDescriptions: Record<number, { label: string; icon: typeof Sun }> =
   96: { label: "Tempestade com granizo", icon: CloudLightning },
   99: { label: "Tempestade severa", icon: CloudLightning },
 };
-
 function getWeatherInfo(code: number) {
   return weatherDescriptions[code] || { label: "Indefinido", icon: Cloud };
 }
-
 function loadFavorites(): FavoriteCity[] {
   try {
     const raw = localStorage.getItem("weather_favorite_cities");
@@ -57,11 +54,9 @@ function loadFavorites(): FavoriteCity[] {
   } catch {}
   return [];
 }
-
 function saveFavorites(cities: FavoriteCity[]) {
   localStorage.setItem("weather_favorite_cities", JSON.stringify(cities));
 }
-
 export function WeatherView() {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -70,7 +65,6 @@ export function WeatherView() {
   const [geoError, setGeoError] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<FavoriteCity[]>(loadFavorites);
   const [searchResults, setSearchResults] = useState<{ name: string; lat: number; lng: number; country: string; admin1?: string }[]>([]);
-
   const fetchCityName = async (lat: number, lng: number): Promise<string> => {
     try {
       const res = await fetch(
@@ -83,7 +77,6 @@ export function WeatherView() {
     } catch {}
     return "Localização atual";
   };
-
   const fetchWeather = useCallback(async (latitude: number, longitude: number, city?: string) => {
     setLoading(true);
     try {
@@ -111,7 +104,6 @@ export function WeatherView() {
       setLoading(false);
     }
   }, []);
-
   useEffect(() => {
     const saved = localStorage.getItem("weather_last_city");
     if (saved) {
@@ -131,7 +123,6 @@ export function WeatherView() {
       setGeoError("Geolocalização não suportada");
     }
   }, [fetchWeather]);
-
   const searchByCity = async () => {
     const q = searchCity.trim();
     if (!q) return;
@@ -166,15 +157,12 @@ export function WeatherView() {
       setSearching(false);
     }
   };
-
   const selectSearchResult = async (result: { name: string; lat: number; lng: number }) => {
     setSearchResults([]);
     setSearchCity("");
     await fetchWeather(result.lat, result.lng, result.name);
   };
-
   const isFavorite = (cityName: string) => favorites.some((f) => f.name === cityName);
-
   const toggleFavorite = () => {
     if (!weather) return;
     const exists = favorites.findIndex((f) => f.name === weather.cityName);
@@ -189,18 +177,21 @@ export function WeatherView() {
     setFavorites(next);
     saveFavorites(next);
   };
-
   const removeFavorite = (name: string) => {
     const next = favorites.filter((f) => f.name !== name);
     setFavorites(next);
     saveFavorites(next);
   };
-
   const info = weather ? getWeatherInfo(weather.weatherCode) : null;
   const WeatherIcon = info?.icon || Cloud;
-
   return (
     <div className="animate-fade-in space-y-5">
+      {/* Lua + data — movidos do cabeçalho principal pra cá, já que fazem mais
+          sentido dentro da aba de Tempo */}
+      <div className="flex justify-center">
+        <MoonPhaseWidget />
+      </div>
+
       {/* Search bar */}
       <div className="flex gap-2">
         <div className="relative flex-1">
@@ -223,7 +214,6 @@ export function WeatherView() {
           {searching ? <Loader2 size={16} className="animate-spin" /> : "Buscar"}
         </Button>
       </div>
-
       {/* Search results dropdown */}
       {searchResults.length > 0 && (
         <div className="rounded-xl overflow-hidden" style={{ background: "#FFF", border: "1px solid #EBEBEB", boxShadow: "0 4px 16px rgba(0,0,0,0.08)" }}>
@@ -254,7 +244,6 @@ export function WeatherView() {
           </button>
         </div>
       )}
-
       {/* Use my location + favorite toggle */}
       <div className="flex items-center justify-between">
         <button
@@ -284,7 +273,6 @@ export function WeatherView() {
           </button>
         )}
       </div>
-
       {/* Main weather card */}
       {loading ? (
         <div className="rounded-2xl p-8 flex items-center justify-center" style={{ background: "linear-gradient(135deg, #4FC3F7 0%, #039BE5 100%)" }}>
@@ -338,7 +326,6 @@ export function WeatherView() {
           <p className="text-xs mt-1" style={{ color: "#BDBDBD" }}>Busque uma cidade acima para ver o clima</p>
         </div>
       )}
-
       {/* Favorite cities */}
       {favorites.length > 0 && (
         <div>
@@ -375,14 +362,12 @@ export function WeatherView() {
           </div>
         </div>
       )}
-
       {/* Divider */}
       <div className="flex items-center gap-3 pt-2">
         <div className="flex-1 h-px" style={{ background: "#EBEBEB" }} />
         <span className="text-[10px] font-bold tracking-wider uppercase" style={{ color: "#BDBDBD" }}>Feriados</span>
         <div className="flex-1 h-px" style={{ background: "#EBEBEB" }} />
       </div>
-
       {/* Holidays section */}
       <HolidaysView />
     </div>
