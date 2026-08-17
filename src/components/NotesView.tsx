@@ -349,15 +349,23 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
             </button>
           )}
         </div>
-        {/* "•••" — abre fontes + atalho do Relatório de Turno, escondidos até precisar */}
+        {/* "•••" — fontes, Relatório de Turno e lixeira, escondidos até precisar */}
         <div className="relative shrink-0">
           <button
             onClick={() => setShowMoreMenu((v) => !v)}
-            className="flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95"
+            className="relative flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95"
             style={{ width: 46, height: 46, borderRadius: 14, background: showMoreMenu ? "#1A1A2E" : "#FFF", border: "1.5px solid #EBEBEB" }}
             title="Mais opções"
           >
             <MoreVertical size={20} style={{ color: showMoreMenu ? "#FFF" : "#6B6B7D" }} />
+            {trashedNotes.length > 0 && (
+              <span
+                className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-white text-[10px] font-bold"
+                style={{ background: "#E53935" }}
+              >
+                {trashedNotes.length}
+              </span>
+            )}
           </button>
           {showMoreMenu && (
             <div
@@ -394,25 +402,19 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
                 <ClipboardList size={16} style={{ color: "#F57C00" }} />
                 <span className="text-[13px] font-semibold" style={{ color: "#1A1A2E" }}>Relatório de Turno</span>
               </button>
+              <button
+                onClick={() => { setShowTrash(true); setShowMoreMenu(false); }}
+                className="flex items-center gap-2.5 w-full transition-colors hover:bg-black/5 rounded-lg"
+                style={{ padding: "8px 6px" }}
+              >
+                <Trash2 size={16} style={{ color: "#999" }} />
+                <span className="text-[13px] font-semibold" style={{ color: "#1A1A2E" }}>
+                  Lixeira {trashedNotes.length > 0 && `(${trashedNotes.length})`}
+                </span>
+              </button>
             </div>
           )}
         </div>
-        <button
-          onClick={() => setShowTrash(true)}
-          className="relative shrink-0 flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95"
-          style={{ width: 46, height: 46, borderRadius: 14, background: "#FFF", border: "1.5px solid #EBEBEB" }}
-          title="Lixeira"
-        >
-          <Trash2 size={20} style={{ color: "#999" }} />
-          {trashedNotes.length > 0 && (
-            <span
-              className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-white text-[10px] font-bold"
-              style={{ background: "#E53935" }}
-            >
-              {trashedNotes.length}
-            </span>
-          )}
-        </button>
         <button
           onClick={openNew}
           className="shrink-0 flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95"
