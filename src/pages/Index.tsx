@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { MoonPhaseWidget } from "@/components/MoonPhaseWidget";
 import { BottomNav } from "@/components/BottomNav";
 import { NotesView } from "@/components/NotesView";
 import { CalendarView } from "@/components/CalendarView";
@@ -43,7 +42,7 @@ const DEVICE_LABEL_PROMPT_KEY = "device_label_prompt_dismissed";
 // Versão do app — um número só, sempre igual em todas as telas (inclusive a
 // tela de login). Sobe a cada atualização entregue, não importa qual arquivo
 // mudou. Sempre que subir aqui, sobe também no Auth.tsx (tela de login).
-const APP_VERSION = "v2.6";
+const APP_VERSION = "v2.7";
 
 const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
@@ -377,28 +376,16 @@ const Index = () => {
             </button>
           )}
 
-          {/* Linha 1 — lua+data à esquerda, título centralizado, ícone de resetar
-              cache + versão à direita. Compartilhado por todas as abas.
-              Exceção: na aba Notas, some o texto do título e a lua+data fica
-              centralizada sozinha (ganha espaço, já que "Minhas Notas" é meio óbvio). */}
+          {/* Linha 1 — título centralizado (sempre, em todas as abas — a lua+data
+              saiu daqui, agora mora só na aba Tempo), ícone de resetar cache +
+              versão à direita. Compartilhado por todas as abas. */}
           <div className="flex items-center justify-between gap-2" style={{ marginBottom: 6 }}>
-            {tab === "notes" ? (
-              <div className="flex-1 flex justify-center">
-                <MoonPhaseWidget />
-              </div>
-            ) : (
-              <>
-                <div className="shrink-0">
-                  <MoonPhaseWidget />
-                </div>
-                <h1
-                  className="font-display text-center flex-1 min-w-0 truncate"
-                  style={{ fontWeight: 800, fontSize: 19, color: "#1A1A2E" }}
-                >
-                  {titles[tab]}
-                </h1>
-              </>
-            )}
+            <h1
+              className="font-display text-center flex-1 min-w-0 truncate"
+              style={{ fontWeight: 800, fontSize: 19, color: "#1A1A2E" }}
+            >
+              {titles[tab]}
+            </h1>
             <div className="shrink-0 flex items-center gap-1.5">
               <button
                 onClick={handleResetCache}
