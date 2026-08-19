@@ -5,7 +5,7 @@ import { ReminderModal } from "./ReminderModal";
 import { LockNoteModal } from "./LockNoteModal";
 import { TrashView } from "./TrashView";
 import { Note, SyncStatus } from "@/hooks/useNotes";
-import { Search, Mic, MicOff } from "lucide-react";
+import { Search, Mic, MicOff, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import {
