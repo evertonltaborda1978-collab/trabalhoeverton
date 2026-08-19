@@ -18,7 +18,7 @@ import { useVersionCheck } from "@/hooks/useVersionCheck";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { syncNativeReminders, type NativeReminder } from "@/lib/native";
-import { LogOut, RefreshCw, RotateCcw, Cloud, CloudOff, Download, Upload, SignalHigh, SignalMedium, SignalLow, SignalZero } from "lucide-react";
+import { LogOut, RefreshCw, RotateCcw, Cloud, CloudOff, Download, Upload, SignalHigh, SignalMedium, SignalLow, SignalZero, MoreHorizontal } from "lucide-react";
 
 type Tab = "notes" | "calendar" | "weather" | "location" | "devices" | "fuel" | "medication";
 
@@ -34,14 +34,6 @@ const titles: Record<Tab, string> = {
 
 const DEVICE_LABEL_PROMPT_KEY = "device_label_prompt_dismissed";
 
-// Versão do app — sobe a cada atualização entregue pelo Claude, pra você conferir
-// rapidinho se o que está no ar já é a versão mais nova, direto na tela, sem chutar.
-// Versão DESTE arquivo (Index.tsx) — cada arquivo importante tem seu próprio
-// número. Mostro o nome do arquivo junto do número na tela, pra ficar claro que
-// são coisas diferentes (não uma inconsistência).
-// Versão do app — um número só, sempre igual em todas as telas (inclusive a
-// tela de login). Sobe a cada atualização entregue, não importa qual arquivo
-// mudou. Sempre que subir aqui, sobe também no Auth.tsx (tela de login).
 const APP_VERSION = "v2.8";
 
 const Index = () => {
@@ -63,7 +55,7 @@ const Index = () => {
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const { updateAvailable, applyUpdate, debugInfo, checkNow } = useVersionCheck();
 
-  // Escuta global de comandos remotos — funciona em qualquer aba, não só na Local
+  // Escuta global de comandos remotos
   const { markExecuted } = useDeviceCommands(currentDevice?.id ?? null, async (cmd) => {
     if (cmd.command === "update_now") {
       if (!navigator.geolocation || !currentDevice) return;
@@ -79,9 +71,6 @@ const Index = () => {
       );
     } else if (cmd.command === "ring") {
       if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500, 200, 500]);
-      // Som de alarme (bipe alto e repetido), além da vibração — só funciona se
-      // a aba estiver aberta (limitação de PWA; um app nativo consegue tocar som
-      // mesmo com a tela apagada).
       try {
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
         const playBeep = (startAt: number) => {
@@ -113,41 +102,24 @@ const Index = () => {
     };
   }, []);
 
-  // Qualidade estimada da conexão (Network Information API — só existe hoje no
-  // Android/Chrome; no iPhone/Safari simplesmente não existe, e nesse caso o app
-  // não mostra nada, sem erro). Não é a "força do sinal" de verdade — nenhum
-  // navegador dá acesso a isso — é só uma estimativa aproximada (2g/3g/4g +
-  // velocidade), mas ajuda a perceber se a conexão está fraca ou melhorando.
   const [connInfo, setConnInfo] = useState<{ effectiveType: string; downlink: number } | null>(null);
   useEffect(() => {
     const conn = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
-    if (!conn) return; // API não suportada neste navegador (ex: iPhone) — segue sem indicador
+    if (!conn) return;
     const update = () => setConnInfo({ effectiveType: conn.effectiveType, downlink: conn.downlink });
     update();
     conn.addEventListener("change", update);
     return () => conn.removeEventListener("change", update);
   }, []);
 
-  const connLabel = connInfo
-    ? connInfo.effectiveType === "4g"
-      ? "Boa"
-      : connInfo.effectiveType === "3g"
-        ? "Média"
-        : "Fraca"
-    : null;
-  const connColor = connInfo
-    ? connInfo.effectiveType === "4g" ? "#43A047" : connInfo.effectiveType === "3g" ? "#F9A825" : "#E53935"
-    : "#9E9E9E";
   useEffect(() => {
     const SENTINEL = { page: "app-sentinel" };
     window.history.replaceState(SENTINEL, "");
     window.history.pushState(SENTINEL, "");
 
     const handlePopState = () => {
-      // Reempurra IMEDIATAMENTE para nunca fechar o app
       window.history.pushState(SENTINEL, "");
 
-      // Se há modal aberto, fecha o modal
       if (activeModalRef.current && onModalCloseRef.current) {
         onModalCloseRef.current();
         activeModalRef.current = null;
@@ -155,7 +127,6 @@ const Index = () => {
         return;
       }
 
-      // Volta para aba anterior se houver histórico
       const history = tabHistoryRef.current;
       if (history.length > 0) {
         const prev = history[history.length - 1];
@@ -169,14 +140,12 @@ const Index = () => {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  // Função para trocar de aba guardando histórico
   const changeTab = (newTab: Tab) => {
     tabHistoryRef.current = [...tabHistoryRef.current, tabRef.current];
     tabRef.current = newTab;
     setTab(newTab);
   };
 
-  // Botão de refresh global: recarrega notas, agenda e dispositivos
   const handleRefresh = async () => {
     if (isRefreshing) return;
     setIsRefreshing(true);
@@ -194,8 +163,6 @@ const Index = () => {
     }
   };
 
-  // Notificações em segundo plano (app nativo): reprograma alarmes locais dos
-  // lembretes de notas e dos compromissos da agenda. Funciona com o app fechado.
   useEffect(() => {
     const reminders: NativeReminder[] = [];
 
@@ -228,31 +195,21 @@ const Index = () => {
     syncNativeReminders(reminders);
   }, [notes, appointments]);
 
-
-  // Limpa cookies, cache e dados salvos no navegador (localStorage, sessionStorage,
-  // Cache API) e recarrega — útil pra garantir que está vendo a versão mais nova
-  // publicada, sem depender de Ctrl+Shift+R manual. Desconecta o login também,
-  // por isso pede confirmação antes.
   const handleResetCache = async () => {
-    const ok = window.confirm(
-      "Isso vai forçar o app a buscar a versão mais nova do servidor (sem cache) e recarregar. Deseja continuar?"
-    );
-    if (!ok) return;
+    toast({
+      title: "Atualizando aplicativo",
+      description: "Limpando cache e buscando versão mais recente...",
+    });
     try {
-      // NÃO usamos localStorage.clear() de propósito — isso apagaria o ID fixo
-      // do aparelho (que evita duplicar dispositivos na lista) e desconectaria
-      // o login sem necessidade. O que resolve o problema de "não carregou a
-      // versão mais nova" é limpar o Cache API e forçar buscar tudo de novo.
       if ("caches" in window) {
         const keys = await caches.keys();
         await Promise.all(keys.map((k) => caches.delete(k)));
       }
     } catch {}
-    window.location.href = `${window.location.pathname}?_=${Date.now()}`;
+    setTimeout(() => {
+      window.location.href = `${window.location.pathname}?_=${Date.now()}`;
+    }, 800);
   };
-
-  // "Atualizar notas" e "atualizar dados" foram unificados num botão só
-  // (handleRefresh), a pedido do Everton — menos ícones repetidos no cabeçalho.
 
   const handleExportBackup = () => {
     exportBackup();
@@ -279,7 +236,6 @@ const Index = () => {
     return <CloudOff size={15} style={{ color: "#BDBDBD" }} />;
   };
 
-  // Registrar/desregistrar modais para o botão voltar
   useEffect(() => {
     (window as any).__registerModal = (id: string, onClose: () => void) => {
       activeModalRef.current = id;
@@ -310,12 +266,10 @@ const Index = () => {
     setShowLabelModal(false);
   };
 
-  // When deleting an appointment, also clear matching note reminders
   const handleDeleteAppointment = (id: string) => {
     const apt = appointments.find((a) => a.id === id);
     if (apt) {
       const dateStr = apt.date.toISOString().split("T")[0];
-      // Clear reminders from notes that match this appointment's date/time
       notes.forEach((note) => {
         if (note.reminderDate === dateStr && note.reminderTime === apt.time) {
           setNoteReminder(note.id, null, null);
@@ -325,12 +279,6 @@ const Index = () => {
     deleteAppointment(id);
   };
 
-  // Badge "Online": antes só olhava se o celular tinha rede ativa (podia mentir com
-  // sinal fraco). Agora prioriza o syncStatus real — só diz "Online" quando as notas
-  // realmente conseguiram sincronizar com o servidor, não só quando o celular "acha"
-  // que tem sinal.
-  // Ícone único de "barrinhas de sinal" — substitui o badge "Online" + texto de
-  // qualidade separado por um só elemento visual (ícone + cor já dizem tudo).
   const signalInfo = (() => {
     if (!isOnline || syncStatus === "offline") {
       return { Icon: SignalZero, color: "#9E9E9E", label: !isOnline ? "Sem conexão" : "Sinal fraco — sincronização com dificuldade" };
@@ -338,7 +286,6 @@ const Index = () => {
     if (syncStatus === "syncing") {
       return { Icon: SignalMedium, color: "#F9A825", label: "Sincronizando..." };
     }
-    // Online e sincronizado — usa a qualidade estimada da conexão quando disponível
     if (connInfo?.effectiveType === "4g") return { Icon: SignalHigh, color: "#43A047", label: "Online — sinal bom" };
     if (connInfo?.effectiveType === "3g") return { Icon: SignalMedium, color: "#F9A825", label: "Online — sinal médio" };
     if (connInfo) return { Icon: SignalLow, color: "#E53935", label: "Online — sinal fraco" };
@@ -356,7 +303,6 @@ const Index = () => {
         }}
       >
         <div className="max-w-lg mx-auto px-4 pt-2 pb-2">
-          {/* Faixa de nova versão disponível */}
           {updateAvailable && (
             <button
               onClick={applyUpdate}
@@ -376,108 +322,86 @@ const Index = () => {
             </button>
           )}
 
-          {/* Linha 1 — título centralizado (sempre, em todas as abas — a lua+data
-              saiu daqui, agora mora só na aba Tempo), ícone de resetar cache +
-              versão à direita. Compartilhado por todas as abas. */}
-          <div className="flex items-center justify-between gap-2" style={{ marginBottom: 6 }}>
-            <h1
-              className="font-display text-center flex-1 min-w-0 truncate"
-              style={{ fontWeight: 800, fontSize: 19, color: "#1A1A2E" }}
-            >
-              {titles[tab]}
-            </h1>
-            <div className="shrink-0 flex items-center gap-1.5">
-              <button
-                onClick={handleResetCache}
-                className="flex items-center justify-center transition-all hover:scale-105"
-                style={{ width: 22, height: 22, color: "#BDBDBD" }}
-                title="Limpar cache e buscar a versão mais nova"
-              >
-                <RotateCcw size={13} />
-              </button>
-              <span
-                style={{ fontSize: 9, color: "#BDBDBD", fontWeight: 700, letterSpacing: 0.3 }}
-              >
-                {APP_VERSION}
-              </span>
-            </div>
-          </div>
-
-          {/* Linha 2 — esquerda: ícone de sinal | centro: nuvem+atualizar | direita: sair */}
-          <div className="flex items-center justify-between">
-            {/* Esquerda: um ícone só de barrinhas de sinal — cor e preenchimento
-                já dizem se está online e a qualidade da conexão */}
+          {/* Topo Reorganizado: Esquerda (Sinal) | Centro (Título + Versão) | Direita (Menu ••• + Sair) */}
+          <div className="flex items-center justify-between gap-2">
+            {/* Lado Esquerdo: Sinal de Conexão */}
             <div
-              className="flex items-center justify-center rounded-full"
-              style={{ width: 26, height: 26, background: "#FFFFFF", border: "1px solid #EBEBEB" }}
+              className="flex items-center justify-center rounded-full shrink-0"
+              style={{ width: 32, height: 32, background: "#FFFFFF", border: "1px solid #EBEBEB" }}
               title={signalInfo.label}
             >
-              <signalInfo.Icon size={15} style={{ color: signalInfo.color }} />
+              <signalInfo.Icon size={16} style={{ color: signalInfo.color }} />
             </div>
 
-            {/* Centro: nuvem (backup) + atualizar (unificado — notas + agenda + dispositivos) */}
-            <div className="flex items-center gap-1.5">
+            {/* Centro: Título e Versão integrados */}
+            <div className="flex flex-col items-center flex-1 min-w-0">
+              <h1
+                className="font-display text-center truncate w-full"
+                style={{ fontWeight: 800, fontSize: 17, color: "#1A1A2E", lineHeight: 1.2 }}
+              >
+                {titles[tab]}
+              </h1>
+              <div className="flex items-center gap-1 mt-0.5">
+                <span style={{ fontSize: 9, color: "#9E9E9E", fontWeight: 700, letterSpacing: 0.3 }}>
+                  {APP_VERSION}
+                </span>
+                <button
+                  onClick={handleResetCache}
+                  className="flex items-center justify-center transition-all hover:scale-105"
+                  style={{ width: 14, height: 14, color: "#BDBDBD" }}
+                  title="Limpar cache e buscar a versão mais nova"
+                >
+                  <RotateCcw size={11} />
+                </button>
+              </div>
+            </div>
+
+            {/* Lado Direito: Menu ••• (backup/atualizar) + Sair */}
+            <div className="flex items-center gap-1.5 shrink-0">
               <div className="relative">
                 <button
                   onClick={() => setShowBackupMenu((v) => !v)}
                   className="flex items-center justify-center rounded-full transition-all"
-                  style={{ width: 26, height: 26, background: "#FFFFFF", border: "1px solid #EBEBEB" }}
-                  title={syncStatus === "synced" ? "Sincronizado — toque para backup" : syncStatus === "syncing" ? "Sincronizando..." : "Sem conexão — toque para backup"}
+                  style={{ width: 32, height: 32, background: "#FFFFFF", border: "1px solid #EBEBEB" }}
+                  title="Opções extras e Backup"
                 >
-                  {syncIcon()}
+                  <MoreHorizontal size={17} style={{ color: "#1A1A2E" }} />
                 </button>
                 {showBackupMenu && (
                   <div
-                    className="absolute top-full left-1/2 -translate-x-1/2 mt-1 rounded-xl p-2 flex flex-col gap-1 z-20"
-                    style={{ background: "#FFF", border: "1px solid #EBEBEB", boxShadow: "0 8px 24px -4px rgba(0,0,0,0.15)", minWidth: 190 }}
+                    className="absolute top-full right-0 mt-1 rounded-xl p-2 flex flex-col gap-1 z-20"
+                    style={{ background: "#FFF", border: "1px solid #EBEBEB", boxShadow: "0 8px 24px -4px rgba(0,0,0,0.15)", minWidth: 210 }}
                   >
+                    <button onClick={handleRefresh} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors" style={{ color: "#1A1A2E" }}>
+                      <RefreshCw size={15} className={isRefreshing ? "animate-spin" : ""} /> Atualizar dados
+                    </button>
                     <button onClick={handleExportBackup} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors" style={{ color: "#1A1A2E" }}>
-                      <Download size={16} /> Exportar backup (.json)
+                      <Download size={15} /> Exportar backup (.json)
                     </button>
                     <button onClick={() => importRef.current?.click()} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors" style={{ color: "#1A1A2E" }}>
-                      <Upload size={16} /> Importar backup
+                      <Upload size={15} /> Importar backup
                     </button>
                     <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImportBackupFile} />
                   </div>
                 )}
               </div>
 
-              {/* Atualizar — unificado (antes eram dois botões: notas / tudo) */}
               <button
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                className="flex items-center justify-center rounded-full transition-all disabled:opacity-100"
+                onClick={signOut}
+                className="flex items-center justify-center transition-all duration-200 hover:scale-105"
                 style={{
-                  width: 26, height: 26,
-                  background: isRefreshing ? "#2D9E7F" : "#FFFFFF",
-                  border: isRefreshing ? "1px solid #2D9E7F" : "1px solid #EBEBEB",
+                  width: 32,
+                  height: 32,
+                  borderRadius: "50%",
+                  background: "#FFFFFF",
+                  border: "1px solid #EBEBEB",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
                 }}
-                title={isRefreshing ? "Atualizando..." : "Atualizar notas, agenda e dispositivos"}
+                title="Sair"
               >
-                <RefreshCw
-                  size={13}
-                  className={isRefreshing ? "animate-spin" : ""}
-                  style={{ color: isRefreshing ? "#FFFFFF" : "#1A1A2E" }}
-                />
+                <LogOut size={15} style={{ color: "#1A1A2E" }} />
               </button>
             </div>
-
-            {/* Direita: só o Sair */}
-            <button
-              onClick={signOut}
-              className="flex items-center justify-center transition-all duration-200 hover:scale-105"
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: "50%",
-                background: "#FFFFFF",
-                border: "1px solid #EBEBEB",
-                boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-              }}
-              title="Sair"
-            >
-              <LogOut size={15} style={{ color: "#1A1A2E" }} />
-            </button>
           </div>
         </div>
       </header>
