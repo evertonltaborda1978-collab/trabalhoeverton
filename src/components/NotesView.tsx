@@ -345,7 +345,69 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
             <path d="M10 4V16M4 10H16" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
           </svg>
         </button>
+
+        {/* Menu de opções unificado */}
+        <div className="relative shrink-0" ref={menuRef}>
+          <button
+            onClick={() => setShowMenu((v) => !v)}
+            className="flex items-center justify-center rounded-xl bg-white border border-[#EBEBEB] hover:bg-black/5 text-[#1A1A2E] shadow-sm transition-colors"
+            style={{ width: 46, height: 46, borderRadius: 14 }}
+            title="Opções e Atalhos"
+          >
+            <MoreVertical size={18} />
+          </button>
+
+          {showMenu && (
+            <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl p-3 shadow-2xl border border-[#EBEBEB] z-50">
+              <div className="mb-3 pb-2 border-b border-[#EBEBEB]">
+                <p className="text-[10px] font-bold mb-1.5 text-gray-400">TAMANHO DA FONTE</p>
+                <div className="flex items-center gap-1.5">
+                  {(["sm", "md", "lg", "xl"] as const).map((size) => (
+                    <button
+                      key={size}
+                      onClick={() => changeFontSize(size)}
+                      className={`flex items-center justify-center w-[30px] h-[28px] rounded-lg font-bold text-xs transition-all ${
+                        fontSize === size
+                          ? "bg-[#1A1A2E] text-white"
+                          : "bg-black/5 border border-[#E0E0E0] text-gray-500 hover:bg-black/10"
+                      }`}
+                    >
+                      A
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={() => { setShowMenu(false); setShowRelatorio(true); }}
+                className="flex items-center gap-2.5 w-full px-2 py-2 rounded-xl text-sm font-semibold text-[#1A1A2E] hover:bg-black/5 transition-colors text-left"
+              >
+                <ClipboardList size={16} className="text-amber-500 shrink-0" />
+                <span>Relatório de Turno</span>
+              </button>
+
+              <button
+                onClick={() => { setShowMenu(false); setShowTrash(true); }}
+                className="flex items-center gap-2.5 w-full px-2 py-2 rounded-xl text-sm font-semibold text-[#1A1A2E] hover:bg-black/5 transition-colors text-left"
+              >
+                <Trash2 size={16} className="text-rose-500 shrink-0" />
+                <span>Lixeira {trashedNotes.length > 0 && `(${trashedNotes.length})`}</span>
+              </button>
+
+              <div className="my-1.5 border-t border-[#EBEBEB]" />
+
+              <button
+                onClick={() => { setShowMenu(false); onRefresh?.(); }}
+                className="flex items-center gap-2.5 w-full px-2 py-2 rounded-xl text-sm font-semibold text-[#1A1A2E] hover:bg-black/5 transition-colors text-left"
+              >
+                <RefreshCw size={16} className="text-blue-500 shrink-0" />
+                <span>Atualizar Dados</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+
 
       <div className="flex items-center justify-between mb-3">
         <p className="text-xs font-semibold text-[#BDBDBD]">
