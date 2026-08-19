@@ -216,75 +216,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
 
   return (
     <div>
-      {/* Cabeçalho superior contendo o botão ••• que estava faltando os atalhos */}
-      <div className="flex items-center justify-between mb-3 px-1">
-        <div className="flex items-center gap-2">
-          <h1 className="text-lg font-bold text-[#1A1A2E]">Minhas Notas</h1>
-          <span className="text-[10px] bg-black/5 px-2 py-0.5 rounded-full text-gray-500 font-medium">v2.8</span>
-        </div>
 
-        <div className="flex items-center gap-2">
-          {/* Menu de Três Pontos com todos os atalhos */}
-          <div className="relative" ref={menuRef}>
-            <button
-              onClick={() => setShowMenu((v) => !v)}
-              className="p-2 rounded-xl bg-white border border-[#EBEBEB] hover:bg-black/5 text-[#1A1A2E] shadow-sm transition-colors"
-              title="Opções e Atalhos"
-            >
-              <MoreVertical size={18} />
-            </button>
-
-            {showMenu && (
-              <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl p-3 shadow-2xl border border-[#EBEBEB] z-50">
-                <div className="mb-3 pb-2 border-b border-[#EBEBEB]">
-                  <p className="text-[10px] font-bold mb-1.5 text-gray-400">TAMANHO DA FONTE</p>
-                  <div className="flex items-center gap-1.5">
-                    {(["sm", "md", "lg", "xl"] as const).map((size) => (
-                      <button
-                        key={size}
-                        onClick={() => changeFontSize(size)}
-                        className={`flex items-center justify-center w-[30px] h-[28px] rounded-lg font-bold text-xs transition-all ${
-                          fontSize === size 
-                            ? "bg-[#1A1A2E] text-white" 
-                            : "bg-black/5 border border-[#E0E0E0] text-gray-500 hover:bg-black/10"
-                        }`}
-                      >
-                        A
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => { setShowMenu(false); setShowRelatorio(true); }}
-                  className="flex items-center gap-2.5 w-full px-2 py-2 rounded-xl text-sm font-semibold text-[#1A1A2E] hover:bg-black/5 transition-colors text-left"
-                >
-                  <ClipboardList size={16} className="text-amber-500 shrink-0" />
-                  <span>Relatório de Turno</span>
-                </button>
-
-                <button
-                  onClick={() => { setShowMenu(false); setShowTrash(true); }}
-                  className="flex items-center gap-2.5 w-full px-2 py-2 rounded-xl text-sm font-semibold text-[#1A1A2E] hover:bg-black/5 transition-colors text-left"
-                >
-                  <Trash2 size={16} className="text-rose-500 shrink-0" />
-                  <span>Lixeira {trashedNotes.length > 0 && `(${trashedNotes.length})`}</span>
-                </button>
-
-                <div className="my-1.5 border-t border-[#EBEBEB]" />
-
-                <button
-                  onClick={() => { setShowMenu(false); onRefresh?.(); }}
-                  className="flex items-center gap-2.5 w-full px-2 py-2 rounded-xl text-sm font-semibold text-[#1A1A2E] hover:bg-black/5 transition-colors text-left"
-                >
-                  <RefreshCw size={16} className="text-blue-500 shrink-0" />
-                  <span>Atualizar Dados</span>
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
 
       {draftCount > 0 && (
         <p className="text-[11px] font-semibold mb-1 text-[#F9A825]">
