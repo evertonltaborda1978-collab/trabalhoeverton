@@ -13,8 +13,9 @@ import { Mail, Lock, Eye, EyeOff, Fingerprint, HelpCircle, X, RotateCcw } from "
 // Versão do app — um número só, sempre igual em todas as telas (inclusive o
 // cabeçalho do app, no Index.tsx). Sobe a cada atualização entregue, não
 // importa qual arquivo mudou. É por aqui que você confirma a versão mais nova.
-const APP_VERSION = "v2.7";
+const APP_VERSION = "v2.8";
 const VERSION_HISTORY: { version: string; changes: string }[] = [
+  { version: "v2.8", changes: "Corrigido bug: fechar uma nota (X) estava navegando pra outra aba (Combustível/Localização) em vez de voltar pra Notas — removido um window.history.back() desnecessário." },
   { version: "v2.7", changes: "Lua+data movidos pro cabeçalho para dentro da aba Tempo; título volta a aparecer em todas as abas; lixeira de notas movida pro menu '•••' (linha de busca fica só com busca + criar nota)." },
   { version: "v2.6", changes: "Badge \"Online\" + texto de sinal trocado por um ícone único de barrinhas de sinal (cor e preenchimento já mostram tudo)." },
   { version: "v2.5", changes: "Na aba Notas, o título \"Minhas Notas\" some — fica só a lua+data centralizada." },
