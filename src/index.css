@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { NotesView } from "./NotesView";
 import { AgendaView } from "./AgendaView";
 import { SettingsView } from "./SettingsView";
@@ -53,7 +53,7 @@ export function Index() {
   } = useAppointments();
 
   return (
-    <div className="min-h-screen pb-20 flex flex-col" style={{ background: "#F7F6F3" }}>
+    <div className="min-h-screen pb-20 flex flex-col bg-[#F7F6F3]">
       {/* Cabeçalho Fixo / Superior */}
       <header className="sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-[#F7F6F3]/90 backdrop-blur-md border-b border-[#EBEBEB]">
         <div className="flex items-center gap-2">
@@ -85,29 +85,20 @@ export function Index() {
               </button>
 
               {showTopMenu && (
-                <div
-                  className="absolute right-0 top-full mt-2 w-56 rounded-2xl bg-white p-3 shadow-2xl border border-[#EBEBEB] z-50"
-                  style={{ background: "#FFFFFF" }}
-                >
+                <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl bg-white p-3 shadow-2xl border border-[#EBEBEB] z-50">
                   {/* Seção de Tamanho da Fonte */}
                   <div className="mb-3 pb-2 border-b border-[#EBEBEB]">
                     <p className="text-[10px] font-bold mb-1.5 text-gray-400">TAMANHO DA FONTE</p>
                     <div className="flex items-center gap-1.5">
-                      {(["sm", "md", "lg", "xl"] as const).map((size, i) => (
+                      {(["sm", "md", "lg", "xl"] as const).map((size) => (
                         <button
                           key={size}
                           onClick={() => changeFontSize(size)}
-                          className="flex items-center justify-center rounded-lg transition-all"
-                          style={{
-                            width: 30, height: 28,
-                            background: fontSize === size ? "#1A1A2E" : "rgba(0,0,0,0.04)",
-                            border: fontSize === size ? "none" : "0.5px solid #E0E0E0",
-                            fontSize: 10 + i * 2,
-                            fontWeight: 700,
-                            color: fontSize === size ? "white" : "#888",
-                            cursor: "pointer",
-                            lineHeight: 1,
-                          }}
+                          className={`flex items-center justify-center w-[30px] h-[28px] rounded-lg font-bold transition-all ${
+                            fontSize === size 
+                              ? "bg-[#1A1A2E] text-white" 
+                              : "bg-black/5 border border-[#E0E0E0] text-gray-500 hover:bg-black/10"
+                          }`}
                         >
                           A
                         </button>
