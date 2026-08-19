@@ -3,7 +3,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { NotesView } from "@/components/NotesView";
 import { CalendarView } from "@/components/CalendarView";
 import { LocationView } from "@/components/LocationView";
-import { Weatheriew } from "@/components/WeatherView";
+import { WeatherView } from "@/components/WeatherView";
 import { DevicesView } from "@/components/DevicesView";
 import { FuelCalculatorView } from "@/components/FuelCalculatorView";
 import { MedicationView } from "@/components/MedicationView";
