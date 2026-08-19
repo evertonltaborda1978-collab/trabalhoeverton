@@ -7,9 +7,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useBiometricAuth } from "@/hooks/useBiometricAuth";
 import { Mail, Lock, Eye, EyeOff, Fingerprint, HelpCircle, X, RotateCcw } from "lucide-react";
 
-// Versão do app — sobe a cada atualização entregue pelo Claude (mesmo número
-// mostrado no cabeçalho do app, em Index.tsx). O histórico abaixo é só um
-// resumo simples, pra você conferir o que mudou em cada versão.
 // Versão do app — um número só, sempre igual em todas as telas (inclusive o
 // cabeçalho do app, no Index.tsx). Sobe a cada atualização entregue, não
 // importa qual arquivo mudou. É por aqui que você confirma a versão mais nova.
@@ -110,10 +107,11 @@ export default function Auth() {
   // Limpa cookies, cache e dados salvos no navegador e recarrega — útil quando
   // a tela de login não está mostrando a versão mais nova publicada.
   const handleResetCache = async () => {
-    const ok = window.confirm(
-      "Isso vai forçar o app a buscar a versão mais nova do servidor (sem cache) e recarregar a página. Deseja continuar?"
-    );
-    if (!ok) return;
+    toast({
+      title: "Atualizando aplicativo",
+      description: "Limpando cache e buscando versão mais recente...",
+    });
+
     try {
       // NÃO usamos localStorage.clear() de propósito — isso apagaria o ID fixo
       // do aparelho (que evita duplicar dispositivos na lista) e também
@@ -125,9 +123,11 @@ export default function Auth() {
         await Promise.all(keys.map((k) => caches.delete(k)));
       }
     } catch {}
-    // Recarrega com um parâmetro novo na URL, forçando o navegador a buscar
-    // tudo de novo no servidor em vez de usar uma cópia guardada.
-    window.location.href = `${window.location.pathname}?_=${Date.now()}`;
+
+    // Recarrega com um parâmetro novo na URL após breve delay para exibir o toast
+    setTimeout(() => {
+      window.location.href = `${window.location.pathname}?_=${Date.now()}`;
+    }, 800);
   };
 
   return (
