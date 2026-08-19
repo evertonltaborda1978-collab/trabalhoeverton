@@ -1928,11 +1928,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
               </button>
 
               <button
-                onClick={() => {
-                  // Save current work then go back to home
-                  handleClose();
-                  setTimeout(() => window.history.back(), 100);
-                }}
+                onClick={handleClose}
                 className="p-2 rounded-lg hover:bg-black/10 transition-colors shrink-0"
                 title="Fechar aplicativo"
                 aria-label="Fechar aplicativo"
