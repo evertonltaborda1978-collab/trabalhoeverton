@@ -5,7 +5,7 @@ import { ReminderModal } from "./ReminderModal";
 import { LockNoteModal } from "./LockNoteModal";
 import { TrashView } from "./TrashView";
 import { Note, SyncStatus } from "@/hooks/useNotes";
-import { Search, Cloud, CloudOff, RefreshCw, Download, Upload, Mic, MicOff, Trash2, MoreVertical } from "lucide-react";
+import { Search, Mic, MicOff, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import {
@@ -18,7 +18,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { RelatorioTurno } from "./RelatorioTurno";
 import { RelatorioRebobinadeira } from "./RelatorioRebobinadeira";
-import { ClipboardList } from "lucide-react";
 
 export { getFontClass, getSizeClass } from "./NoteEditor";
 
@@ -44,9 +43,6 @@ interface NotesViewProps {
   onRestoreNote: (id: string) => void;
   onPermanentDeleteNote: (id: string) => void;
   onEmptyTrash: () => void;
-  // Propulsores extras opcionais injetados do topo se necessários, ou gerenciados via props/callbacks
-  externalShowTrash?: boolean;
-  setExternalShowTrash?: (v: boolean) => void;
 }
 
 export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onTogglePin, onReorderPin, onLockNote, onUnlockNote, onVerifyPin, onAddAppointment, onRefresh, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, trashedNotes, onRestoreNote, onPermanentDeleteNote, onEmptyTrash }: NotesViewProps) {
@@ -62,23 +58,29 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteTitle, setConfirmDeleteTitle] = useState("");
 
-  // Editor always opens in read-only mode; user toggles to edit via pencil icon
   const [editorReadOnly, setEditorReadOnly] = useState(true);
 
-  // Reminder modal
   const [reminderNote, setReminderNote] = useState<Note | null>(null);
-  // Lock modal
   const [lockNote, setLockNote] = useState<Note | null>(null);
   const [lockMode, setLockMode] = useState<"set" | "unlock" | "manage">("set");
-  // For unlocking to open editor
   const [pendingUnlockNote, setPendingUnlockNote] = useState<Note | null>(null);
 
-  // Font size preference
+  // Font size state sincronizada com o Index via evento global
   const [fontSize, setFontSize] = useState<"sm" | "md" | "lg" | "xl">(() => {
     return (localStorage.getItem("notes_font_size") as "sm" | "md" | "lg" | "xl") || "md";
   });
-  
-  // Escutar eventos globais disparados pelo menu superior (Index.tsx) se aplicável
+
+  useEffect(() => {
+    const handleFontSizeChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        setFontSize(customEvent.detail);
+      }
+    };
+    window.addEventListener("notes-font-size-changed", handleFontSizeChange);
+    return () => window.removeEventListener("notes-font-size-changed", handleFontSizeChange);
+  }, []);
+
   useEffect(() => {
     const handleOpenTrash = () => setShowTrash(true);
     const handleOpenRelatorio = () => {
@@ -94,19 +96,13 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
     };
   }, []);
 
-  const changeFontSize = (size: "sm" | "md" | "lg" | "xl") => {
-    setFontSize(size);
-    localStorage.setItem("notes_font_size", size);
-  };
   const fontSizeMap = { sm: 12, md: 14, lg: 18, xl: 22 };
 
-  // Voice search
   const handleVoiceResult = useCallback((text: string) => {
     setSearch((prev) => (prev + " " + text).trim());
   }, []);
   const { isListening, isSupported: voiceSupported, toggle: toggleVoice } = useSpeechRecognition(handleVoiceResult);
 
-  // Backup reminder - show once on first open, auto-dismiss
   useEffect(() => {
     const shownKey = "backup_reminder_shown_session";
     if (sessionStorage.getItem(shownKey)) return;
@@ -124,7 +120,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Detect shared content from other apps (via Share Target API)
   const [sharedData, setSharedData] = useState<{ title: string; content: string } | null>(null);
   useEffect(() => {
     try {
@@ -418,7 +413,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
         } : undefined}
       />
 
-      {/* Reminder Modal */}
       <ReminderModal
         open={!!reminderNote}
         onOpenChange={(v) => { if (!v) setReminderNote(null); }}
@@ -429,7 +423,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
         onRemove={handleReminderRemove}
       />
 
-      {/* Lock Modal */}
       <LockNoteModal
         open={!!lockNote}
         onOpenChange={(v) => { if (!v) { setLockNote(null); setPendingUnlockNote(null); } }}
@@ -440,7 +433,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
         onForceReset={handleForceReset}
       />
 
-      {/* Delete Confirmation Modal */}
       <Dialog open={!!confirmDeleteId} onOpenChange={(v) => { if (!v) setConfirmDeleteId(null); }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -463,7 +455,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
         </DialogContent>
       </Dialog>
 
-      {/* Relatório de Turno */}
       {showRelatorio && (
         <RelatorioTurno
           initialState={relatorioInitialState}
