@@ -7,11 +7,12 @@ import { useToast } from "@/hooks/use-toast";
 import { useBiometricAuth } from "@/hooks/useBiometricAuth";
 import { Mail, Lock, Eye, EyeOff, Fingerprint, HelpCircle, X, RotateCcw } from "lucide-react";
 
-// Versão do app — um número só, sempre igual em todas as telas (inclusive o
+// Versão do app — um número só, sempre igual em todas las telas (inclusive o
 // cabeçalho do app, no Index.tsx). Sobe a cada atualização entregue, não
 // importa qual arquivo mudou. É por aqui que você confirma a versão mais nova.
-const APP_VERSION = "v2.8";
+const APP_VERSION = "v2.9";
 const VERSION_HISTORY: { version: string; changes: string }[] = [
+  { version: "v2.9", changes: "Topo da tela principal reorganizado: sinal à esquerda, título/versão integrados no centro, menu ••• unificado e Sair à direita; barra de busca ocupando a largura total com o botão + ao lado." },
   { version: "v2.8", changes: "Corrigido bug: fechar uma nota (X) estava navegando pra outra aba (Combustível/Localização) em vez de voltar pra Notas — removido um window.history.back() desnecessário." },
   { version: "v2.7", changes: "Lua+data movidos pro cabeçalho para dentro da aba Tempo; título volta a aparecer em todas as abas; lixeira de notas movida pro menu '•••' (linha de busca fica só com busca + criar nota)." },
   { version: "v2.6", changes: "Badge \"Online\" + texto de sinal trocado por um ícone único de barrinhas de sinal (cor e preenchimento já mostram tudo)." },
@@ -63,7 +64,6 @@ export default function Auth() {
         const { error } = await (supabase.auth as any).signInWithPassword({ email, password });
         if (error) throw error;
 
-        // After successful login, offer biometric if available and not enabled
         if (biometricAvailable && !biometricEnabled) {
           const enabled = await enableBiometric(email, password);
           if (enabled) {
@@ -104,8 +104,6 @@ export default function Auth() {
     setLoading(false);
   };
 
-  // Limpa cookies, cache e dados salvos no navegador e recarrega — útil quando
-  // a tela de login não está mostrando a versão mais nova publicada.
   const handleResetCache = async () => {
     toast({
       title: "Atualizando aplicativo",
@@ -113,18 +111,12 @@ export default function Auth() {
     });
 
     try {
-      // NÃO usamos localStorage.clear() de propósito — isso apagaria o ID fixo
-      // do aparelho (que evita duplicar dispositivos na lista) e também
-      // desconectaria o login sem necessidade. O que realmente resolve o
-      // problema de "não carregou a versão mais nova" é limpar o Cache API
-      // (se houver) e forçar uma busca nova dos arquivos, não apagar dados do app.
       if ("caches" in window) {
         const keys = await caches.keys();
         await Promise.all(keys.map((k) => caches.delete(k)));
       }
     } catch {}
 
-    // Recarrega com um parâmetro novo na URL após breve delay para exibir o toast
     setTimeout(() => {
       window.location.href = `${window.location.pathname}?_=${Date.now()}`;
     }, 800);
