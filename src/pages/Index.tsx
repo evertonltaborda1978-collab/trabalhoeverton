@@ -33,7 +33,6 @@ const titles: Record<Tab, string> = {
 };
 
 const DEVICE_LABEL_PROMPT_KEY = "device_label_prompt_dismissed";
-
 const APP_VERSION = "v2.8";
 
 const Index = () => {
@@ -53,9 +52,8 @@ const Index = () => {
   const [showBackupMenu, setShowBackupMenu] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
-  const { updateAvailable, applyUpdate, debugInfo, checkNow } = useVersionCheck();
+  const { updateAvailable, applyUpdate } = useVersionCheck();
 
-  // Escuta global de comandos remotos
   const { markExecuted } = useDeviceCommands(currentDevice?.id ?? null, async (cmd) => {
     if (cmd.command === "update_now") {
       if (!navigator.geolocation || !currentDevice) return;
@@ -230,12 +228,6 @@ const Index = () => {
     setShowBackupMenu(false);
   };
 
-  const syncIcon = () => {
-    if (syncStatus === "synced") return <Cloud size={15} style={{ color: "#4CAF50" }} />;
-    if (syncStatus === "syncing") return <RefreshCw size={15} className="animate-spin" style={{ color: "#F9A825" }} />;
-    return <CloudOff size={15} style={{ color: "#BDBDBD" }} />;
-  };
-
   useEffect(() => {
     (window as any).__registerModal = (id: string, onClose: () => void) => {
       activeModalRef.current = id;
@@ -322,7 +314,7 @@ const Index = () => {
             </button>
           )}
 
-          {/* Topo Reorganizado: Esquerda (Sinal) | Centro (Título + Versão) | Direita (Menu ••• + Sair) */}
+          {/* Linha 1: Esquerda (Sinal) | Centro (Título + Versão) | Direita (Menu ••• unificado + Sair) */}
           <div className="flex items-center justify-between gap-2">
             {/* Lado Esquerdo: Sinal de Conexão */}
             <div
@@ -356,7 +348,7 @@ const Index = () => {
               </div>
             </div>
 
-            {/* Lado Direito: Menu ••• (backup/atualizar) + Sair */}
+            {/* Lado Direito: Menu ••• (com opções de atualização e backup) + Sair */}
             <div className="flex items-center gap-1.5 shrink-0">
               <div className="relative">
                 <button
