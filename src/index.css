@@ -1,121 +1,252 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Playfair+Display:wght@400;500;600;700&family=Caveat:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=Nunito:wght@400;500;600;700;800&family=Dancing+Script:wght@400;500;600;700&display=swap');
+import { useState, useEffect } from "react";
+import { NotesView } from "./NotesView";
+import { AgendaView } from "./AgendaView";
+import { SettingsView } from "./SettingsView";
+import { useNotes } from "@/hooks/useNotes";
+import { useAppointments } from "@/hooks/useAppointments";
+import { 
+  Cloud, CloudOff, RefreshCw, LogOut, 
+  Trash2, ClipboardList, MoreVertical, Calendar, FileText, Settings 
+} from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+export function Index() {
+  const [activeTab, setActiveTab] = useState<"notes" | "agenda" | "settings">("notes");
+  const [showTopMenu, setShowTopMenu] = useState(false);
+  const [fontSize, setFontSize] = useState<"sm" | "md" | "lg" | "xl">(() => {
+    return (localStorage.getItem("notes_font_size") as "sm" | "md" | "lg" | "xl") || "md";
+  });
 
-@layer base {
-  :root {
-    --background: 30 18% 95%;
-    --foreground: 220 20% 14%;
+  const changeFontSize = (size: "sm" | "md" | "lg" | "xl") => {
+    setFontSize(size);
+    localStorage.setItem("notes_font_size", size);
+    window.dispatchEvent(new CustomEvent("notes-font-size-changed", { detail: size }));
+  };
 
-    --card: 40 25% 99%;
-    --card-foreground: 220 20% 14%;
+  const {
+    notes,
+    trashedNotes,
+    syncStatus,
+    draftCount,
+    addNote,
+    deleteNote,
+    updateNote,
+    setReminder,
+    togglePin,
+    reorderPin,
+    lockNote,
+    unlockNote,
+    verifyPin,
+    refreshNotes,
+    exportBackup,
+    importBackup,
+    shouldRemindBackup,
+    restoreNote,
+    permanentDeleteNote,
+    emptyTrash,
+  } = useNotes();
 
-    --popover: 40 25% 99%;
-    --popover-foreground: 220 20% 14%;
+  const {
+    appointments,
+    addAppointment,
+    deleteAppointment,
+  } = useAppointments();
 
-    --primary: 172 50% 36%;
-    --primary-foreground: 0 0% 100%;
+  return (
+    <div className="min-h-screen pb-20 flex flex-col" style={{ background: "#F7F6F3" }}>
+      {/* Cabeçalho Fixo / Superior */}
+      <header className="sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-[#F7F6F3]/90 backdrop-blur-md border-b border-[#EBEBEB]">
+        <div className="flex items-center gap-2">
+          {/* Indicador de Sincronização / Status */}
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-white border border-[#EBEBEB]">
+            {syncStatus === "synced" && <Cloud size={14} className="text-emerald-500" />}
+            {syncStatus === "syncing" && <RefreshCw size={14} className="text-amber-500 animate-spin" />}
+            {syncStatus === "offline" && <CloudOff size={14} className="text-gray-400" />}
+            <span className="text-[10px] font-bold text-gray-500">v2.9</span>
+          </div>
+        </div>
 
-    --secondary: 40 30% 93%;
-    --secondary-foreground: 220 20% 14%;
+        <h1 className="text-base font-bold tracking-tight text-[#1A1A2E]">
+          {activeTab === "notes" && "Minhas Notas"}
+          {activeTab === "agenda" && "Agenda"}
+          {activeTab === "settings" && "Configurações"}
+        </h1>
 
-    --muted: 40 15% 93%;
-    --muted-foreground: 220 10% 46%;
+        <div className="flex items-center gap-2">
+          {/* Menu superior unificado (•••) */}
+          {activeTab === "notes" && (
+            <div className="relative">
+              <button
+                onClick={() => setShowTopMenu((v) => !v)}
+                className="flex items-center justify-center w-9 h-9 rounded-xl bg-white border border-[#EBEBEB] shadow-sm transition-all hover:scale-105 active:scale-95"
+                title="Opções extras"
+              >
+                <MoreVertical size={18} className="text-[#1A1A2E]" />
+              </button>
 
-    --accent: 32 80% 55%;
-    --accent-foreground: 0 0% 100%;
+              {showTopMenu && (
+                <div
+                  className="absolute right-0 top-full mt-2 w-56 rounded-2xl bg-white p-3 shadow-2xl border border-[#EBEBEB] z-50"
+                  style={{ background: "#FFFFFF" }}
+                >
+                  {/* Seção de Tamanho da Fonte */}
+                  <div className="mb-3 pb-2 border-b border-[#EBEBEB]">
+                    <p className="text-[10px] font-bold mb-1.5" style={{ color: "#BDBDBD" }}>TAMANHO DA FONTE</p>
+                    <div className="flex items-center gap-1.5">
+                      {(["sm", "md", "lg", "xl"] as const).map((size, i) => (
+                        <button
+                          key={size}
+                          onClick={() => changeFontSize(size)}
+                          className="flex items-center justify-center rounded-lg transition-all"
+                          style={{
+                            width: 30, height: 28,
+                            background: fontSize === size ? "#1A1A2E" : "rgba(0,0,0,0.04)",
+                            border: fontSize === size ? "none" : "0.5px solid #E0E0E0",
+                            fontSize: 10 + i * 2,
+                            fontWeight: 700,
+                            color: fontSize === size ? "white" : "#888",
+                            cursor: "pointer",
+                            lineHeight: 1,
+                          }}
+                        >
+                          A
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
+                  <button
+                    onClick={() => {
+                      setShowTopMenu(false);
+                      window.dispatchEvent(new CustomEvent("open-relatorio-turno"));
+                    }}
+                    className="flex items-center gap-2.5 w-full px-2 py-2 rounded-xl text-sm font-semibold text-[#1A1A2E] hover:bg-black/5 transition-colors text-left"
+                  >
+                    <ClipboardList size={16} className="text-amber-500 shrink-0" />
+                    <span>Relatório de Turno</span>
+                  </button>
 
-    --border: 40 15% 88%;
-    --input: 40 15% 88%;
-    --ring: 172 50% 36%;
+                  <button
+                    onClick={() => {
+                      setShowTopMenu(false);
+                      window.dispatchEvent(new CustomEvent("open-trash-view"));
+                    }}
+                    className="flex items-center gap-2.5 w-full px-2 py-2 rounded-xl text-sm font-semibold text-[#1A1A2E] hover:bg-black/5 transition-colors text-left"
+                  >
+                    <Trash2 size={16} className="text-rose-500 shrink-0" />
+                    <span>Lixeira {trashedNotes.length > 0 && `(${trashedNotes.length})`}</span>
+                  </button>
 
-    --radius: 0.75rem;
+                  <div className="my-1.5 border-t border-[#EBEBEB]" />
 
-    --sidebar-background: 40 20% 95%;
-    --sidebar-foreground: 220 20% 14%;
-    --sidebar-primary: 172 50% 36%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 40 30% 90%;
-    --sidebar-accent-foreground: 220 20% 14%;
-    --sidebar-border: 40 15% 88%;
-    --sidebar-ring: 172 50% 36%;
+                  <button
+                    onClick={() => {
+                      setShowTopMenu(false);
+                      refreshNotes?.();
+                    }}
+                    className="flex items-center gap-2.5 w-full px-2 py-2 rounded-xl text-sm font-semibold text-[#1A1A2E] hover:bg-black/5 transition-colors text-left"
+                  >
+                    <RefreshCw size={16} className="text-blue-500 shrink-0" />
+                    <span>Atualizar Dados</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
-    --moon: 45 80% 70%;
-    --moon-glow: 45 60% 85%;
-    --nav-active: 172 50% 36%;
-    --surface-warm: 35 30% 95%;
-    --surface-cool: 200 20% 96%;
-  }
+          {/* Botão de Sair / Ações */}
+          <button
+            onClick={() => {
+              toast({ title: "Sessão", description: "Para sair, feche a aba ou navegador." });
+            }}
+            className="flex items-center justify-center w-9 h-9 rounded-xl bg-white border border-[#EBEBEB] shadow-sm transition-all hover:scale-105 active:scale-95 text-rose-500"
+            title="Sair"
+          >
+            <LogOut size={16} />
+          </button>
+        </div>
+      </header>
 
-  .dark {
-    --background: 220 20% 8%;
-    --foreground: 40 20% 92%;
+      {/* Conteúdo da Aba Ativa */}
+      <main className="flex-1 px-4 py-4 max-w-md mx-auto w-full">
+        {activeTab === "notes" && (
+          <NotesView
+            notes={notes}
+            onAdd={addNote}
+            onDelete={deleteNote}
+            onUpdate={updateNote}
+            onSetReminder={setReminder}
+            onTogglePin={togglePin}
+            onReorderPin={reorderPin}
+            onLockNote={lockNote}
+            onUnlockNote={unlockNote}
+            onVerifyPin={verifyPin}
+            onAddAppointment={(title, date, time, desc) => {
+              addAppointment({ title, date, time, description: desc });
+            }}
+            onRefresh={refreshNotes}
+            syncStatus={syncStatus}
+            draftCount={draftCount}
+            exportBackup={exportBackup}
+            importBackup={importBackup}
+            shouldRemindBackup={shouldRemindBackup}
+            trashedNotes={trashedNotes}
+            onRestoreNote={restoreNote}
+            onPermanentDeleteNote={permanentDeleteNote}
+            onEmptyTrash={emptyTrash}
+          />
+        )}
 
-    --card: 220 18% 12%;
-    --card-foreground: 40 20% 92%;
+        {activeTab === "agenda" && (
+          <AgendaView
+            appointments={appointments}
+            onAdd={(title, date, time, desc) => addAppointment({ title, date, time, description: desc })}
+            onDelete={deleteAppointment}
+          />
+        )}
 
-    --popover: 220 18% 12%;
-    --popover-foreground: 40 20% 92%;
+        {activeTab === "settings" && (
+          <SettingsView
+            exportBackup={exportBackup}
+            importBackup={importBackup}
+          />
+        )}
+      </main>
 
-    --primary: 172 50% 45%;
-    --primary-foreground: 0 0% 100%;
+      {/* Barra de Navegação Inferior */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/90 backdrop-blur-md border-t border-[#EBEBEB] px-6 py-2">
+        <div className="max-w-md mx-auto flex items-center justify-around">
+          <button
+            onClick={() => setActiveTab("notes")}
+            className={`flex flex-col items-center gap-1 py-1 px-4 rounded-2xl transition-all ${
+              activeTab === "notes" ? "text-[#1A1A2E] font-bold bg-[#1A1A2E]/5" : "text-gray-400 font-medium"
+            }`}
+          >
+            <FileText size={20} />
+            <span className="text-[10px]">Notas</span>
+          </button>
 
-    --secondary: 220 15% 18%;
-    --secondary-foreground: 40 20% 92%;
+          <button
+            onClick={() => setActiveTab("agenda")}
+            className={`flex flex-col items-center gap-1 py-1 px-4 rounded-2xl transition-all ${
+              activeTab === "agenda" ? "text-[#1A1A2E] font-bold bg-[#1A1A2E]/5" : "text-gray-400 font-medium"
+            }`}
+          >
+            <Calendar size={20} />
+            <span className="text-[10px]">Agenda</span>
+          </button>
 
-    --muted: 220 15% 18%;
-    --muted-foreground: 220 10% 55%;
-
-    --accent: 32 80% 55%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 220 15% 20%;
-    --input: 220 15% 20%;
-    --ring: 172 50% 45%;
-
-    --moon: 45 70% 60%;
-    --moon-glow: 45 40% 30%;
-    --nav-active: 172 50% 45%;
-    --surface-warm: 220 15% 14%;
-    --surface-cool: 210 15% 14%;
-  }
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-
-  body {
-    @apply bg-background text-foreground font-body antialiased;
-  }
-
-  h1, h2, h3, h4 {
-    @apply font-display;
-  }
-}
-
-@layer utilities {
-  .moon-glow {
-    box-shadow: 0 0 20px 8px hsl(var(--moon-glow));
-  }
-
-  .glass-card {
-    @apply bg-card/80 backdrop-blur-sm border border-border/50 shadow-sm;
-  }
-
-  .note-shadow {
-    box-shadow: 0 2px 12px -2px hsl(var(--foreground) / 0.06), 0 1px 4px -1px hsl(var(--foreground) / 0.04);
-  }
-
-  .no-scrollbar::-webkit-scrollbar { display: none; }
-  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+          <button
+            onClick={() => setActiveTab("settings")}
+            className={`flex flex-col items-center gap-1 py-1 px-4 rounded-2xl transition-all ${
+              activeTab === "settings" ? "text-[#1A1A2E] font-bold bg-[#1A1A2E]/5" : "text-gray-400 font-medium"
+            }`}
+          >
+            <Settings size={20} />
+            <span className="text-[10px]">Ajustes</span>
+          </button>
+        </div>
+      </nav>
+    </div>
+  );
 }
