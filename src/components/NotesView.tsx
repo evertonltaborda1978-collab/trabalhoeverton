@@ -44,6 +44,9 @@ interface NotesViewProps {
   onRestoreNote: (id: string) => void;
   onPermanentDeleteNote: (id: string) => void;
   onEmptyTrash: () => void;
+  // Propulsores extras opcionais injetados do topo se necessários, ou gerenciados via props/callbacks
+  externalShowTrash?: boolean;
+  setExternalShowTrash?: (v: boolean) => void;
 }
 
 export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onTogglePin, onReorderPin, onLockNote, onUnlockNote, onVerifyPin, onAddAppointment, onRefresh, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, trashedNotes, onRestoreNote, onPermanentDeleteNote, onEmptyTrash }: NotesViewProps) {
@@ -53,8 +56,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
   const [searchFocused, setSearchFocused] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
   const [showRelatorio, setShowRelatorio] = useState(false);
-  // Menu "•••" que esconde os tamanhos de fonte + atalho do Relatório de Turno
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [relatorioInitialState, setRelatorioInitialState] = useState<any>(null);
   const [showRebobinadeira, setShowRebobinadeira] = useState(false);
   const [rebobInitialState, setRebobInitialState] = useState<any>(null);
@@ -76,6 +77,23 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
   const [fontSize, setFontSize] = useState<"sm" | "md" | "lg" | "xl">(() => {
     return (localStorage.getItem("notes_font_size") as "sm" | "md" | "lg" | "xl") || "md";
   });
+  
+  // Escutar eventos globais disparados pelo menu superior (Index.tsx) se aplicável
+  useEffect(() => {
+    const handleOpenTrash = () => setShowTrash(true);
+    const handleOpenRelatorio = () => {
+      localStorage.removeItem("relatorio_turno_rascunho");
+      setRelatorioInitialState(null);
+      setShowRelatorio(true);
+    };
+    window.addEventListener("open-trash-view", handleOpenTrash);
+    window.addEventListener("open-relatorio-turno", handleOpenRelatorio);
+    return () => {
+      window.removeEventListener("open-trash-view", handleOpenTrash);
+      window.removeEventListener("open-relatorio-turno", handleOpenRelatorio);
+    };
+  }, []);
+
   const changeFontSize = (size: "sm" | "md" | "lg" | "xl") => {
     setFontSize(size);
     localStorage.setItem("notes_font_size", size);
@@ -116,7 +134,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
         const data = JSON.parse(raw);
         if (data.title || data.content) {
           setSharedData(data);
-          // Open editor with pre-filled content
           setEditingNote(null);
           setEditorReadOnly(false);
           setDialogOpen(true);
@@ -134,14 +151,12 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
   const openNew = () => { setEditingNote(null); setEditorReadOnly(false); setDialogOpen(true); };
 
   const openEdit = (note: Note) => {
-    // If locked, unlock first
     if (note.isLocked) {
       setPendingUnlockNote(note);
       setLockNote(note);
       setLockMode("unlock");
       return;
     }
-    // Detectar nota de Rebobinadeira
     if (note.title && note.title.includes("Rebobinadeira")) {
       const stateKey = `rebobinadeira_state_${note.title.replace(/\s/g, "_")}`;
       const raw = localStorage.getItem(stateKey);
@@ -152,8 +167,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
           return;
         } catch {}
       }
-      // Respaldo: lê o estado embutido no próprio texto da nota (sobrevive a
-      // limpeza de cache e troca de aparelho, pois vem do Supabase junto com a nota)
       const rebobMatch = note.content.match(/<!--relatorio-rebobinadeira-state:([\s\S]*?)-->/);
       if (rebobMatch) {
         try {
@@ -163,7 +176,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
         } catch {}
       }
     }
-    // Detectar se é uma nota de Relatório de Turno pelo título
     if (note.title && note.title.includes("Relatório")) {
       const stateKey = `relatorio_state_${note.title.replace(/\s/g, "_")}`;
       const raw = localStorage.getItem(stateKey);
@@ -176,7 +188,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
         } catch {}
       }
     }
-    // Compatibilidade com notas antigas que ainda têm o comentário HTML
     const match = note.content.match(/<!--relatorio-turno-state:([\s\S]*?)-->/);
     if (match) {
       try {
@@ -186,7 +197,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
         return;
       } catch {}
     }
-    // Always open in read-only mode
     setEditorReadOnly(true);
     setEditingNote(note);
     setDialogOpen(true);
@@ -200,10 +210,8 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
     }
   };
 
-  // Bell click
   const handleBellClick = (note: Note) => setReminderNote(note);
 
-  // Pin click
   const handlePinClick = (note: Note) => {
     onTogglePin(note.id);
     toast({ title: note.isPinned ? "📌 Nota desafixada" : "📌 Nota fixada" });
@@ -212,7 +220,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
   const handleReminderSave = (date: string, time: string) => {
     if (!reminderNote) return;
     onSetReminder(reminderNote.id, date, time);
-    // Also create appointment in agenda
     if (onAddAppointment) {
       onAddAppointment(reminderNote.title || "Lembrete", new Date(date + "T00:00:00"), time, `Lembrete da nota: ${reminderNote.title}`);
     }
@@ -225,7 +232,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
     toast({ title: "Lembrete removido" });
   };
 
-  // Lock click
   const handleLockClick = (note: Note) => {
     setLockNote(note);
     setLockMode(note.isLocked ? "manage" : "set");
@@ -241,7 +247,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
     if (!lockNote) return false;
     const payload = await onVerifyPin(lockNote.id, pin);
     if (!payload) return false;
-    // If unlocking to open editor, give the editor a temporarily decrypted note
     if (pendingUnlockNote?.id === lockNote.id) {
       setEditingNote({ ...pendingUnlockNote, ...(payload as any), isLocked: true });
       setEditorReadOnly(true);
@@ -253,9 +258,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
 
   const handleRemoveLock = async () => {
     if (!lockNote) return;
-    // mode 'manage' first verifies PIN via handleUnlockAttempt; here we permanently unlock using stored decrypted state
-    // The modal calls onUnlock(pin) -> handleUnlockAttempt; on success the note is decrypted in-memory.
-    // To persist removal, we need the PIN — handled in handleManageRemove below.
   };
 
   const handleManageRemove = async (pin: string): Promise<boolean> => {
@@ -274,7 +276,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
     setPendingUnlockNote(null);
   };
 
-  // Handle delete with confirmation
   const handleDeleteWithConfirm = (id: string) => {
     const note = notes.find((n) => n.id === id);
     setConfirmDeleteTitle(note?.title || "Sem título");
@@ -304,8 +305,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
 
   return (
     <div>
-      {/* Contador de rascunhos — nuvem/atualizar/backup foram movidos pro
-          cabeçalho compartilhado (Index.tsx); a lixeira foi pra linha de busca */}
       {draftCount > 0 && (
         <p className="text-[11px] font-semibold mb-1" style={{ color: "#F9A825" }}>
           ✏️ {draftCount} rascunho{draftCount > 1 ? "s" : ""} pendente{draftCount > 1 ? "s" : ""}
@@ -349,76 +348,12 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
             </button>
           )}
         </div>
-        {/* "•••" — fontes, Relatório de Turno e lixeira, escondidos até precisar */}
-        <div className="relative shrink-0">
-          <button
-            onClick={() => setShowMoreMenu((v) => !v)}
-            className="relative flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95"
-            style={{ width: 46, height: 46, borderRadius: 14, background: showMoreMenu ? "#1A1A2E" : "#FFF", border: "1.5px solid #EBEBEB" }}
-            title="Mais opções"
-          >
-            <MoreVertical size={20} style={{ color: showMoreMenu ? "#FFF" : "#6B6B7D" }} />
-            {trashedNotes.length > 0 && (
-              <span
-                className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-white text-[10px] font-bold"
-                style={{ background: "#E53935" }}
-              >
-                {trashedNotes.length}
-              </span>
-            )}
-          </button>
-          {showMoreMenu && (
-            <div
-              className="absolute top-full right-0 mt-1 rounded-xl p-3 z-20"
-              style={{ background: "#FFF", border: "1px solid #EBEBEB", boxShadow: "0 8px 24px -4px rgba(0,0,0,0.15)", minWidth: 210 }}
-            >
-              <p className="text-[10px] font-bold mb-1.5" style={{ color: "#BDBDBD" }}>TAMANHO DA FONTE</p>
-              <div className="flex items-center gap-1.5 mb-2">
-                {(["sm", "md", "lg", "xl"] as const).map((size, i) => (
-                  <button
-                    key={size}
-                    onClick={() => changeFontSize(size)}
-                    className="flex items-center justify-center rounded-lg transition-all"
-                    style={{
-                      width: 28, height: 28,
-                      background: fontSize === size ? "#1A1A2E" : "rgba(0,0,0,0.04)",
-                      border: fontSize === size ? "none" : "0.5px solid #E0E0E0",
-                      fontSize: 9 + i * 2,
-                      fontWeight: 700,
-                      color: fontSize === size ? "white" : "#888",
-                      cursor: "pointer",
-                      lineHeight: 1,
-                    }}
-                  >
-                    A
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={() => { localStorage.removeItem("relatorio_turno_rascunho"); setRelatorioInitialState(null); setShowRelatorio(true); setShowMoreMenu(false); }}
-                className="flex items-center gap-2.5 w-full transition-colors hover:bg-black/5 rounded-lg"
-                style={{ padding: "8px 6px" }}
-              >
-                <ClipboardList size={16} style={{ color: "#F57C00" }} />
-                <span className="text-[13px] font-semibold" style={{ color: "#1A1A2E" }}>Relatório de Turno</span>
-              </button>
-              <button
-                onClick={() => { setShowTrash(true); setShowMoreMenu(false); }}
-                className="flex items-center gap-2.5 w-full transition-colors hover:bg-black/5 rounded-lg"
-                style={{ padding: "8px 6px" }}
-              >
-                <Trash2 size={16} style={{ color: "#999" }} />
-                <span className="text-[13px] font-semibold" style={{ color: "#1A1A2E" }}>
-                  Lixeira {trashedNotes.length > 0 && `(${trashedNotes.length})`}
-                </span>
-              </button>
-            </div>
-          )}
-        </div>
+
         <button
           onClick={openNew}
           className="shrink-0 flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95"
           style={{ width: 46, height: 46, borderRadius: 14, background: "#1A1A2E", boxShadow: "0 4px 14px -2px rgba(26,26,46,0.35)" }}
+          title="Criar nova nota"
         >
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
             <path d="M10 4V16M4 10H16" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
@@ -535,7 +470,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
           onOpenRebobinadeira={() => { setShowRelatorio(false); setShowRebobinadeira(true); }}
           onClose={() => { setShowRelatorio(false); setRelatorioInitialState(null); }}
           onSaveAsNote={(title, content) => {
-            // Atualiza nota existente se título já existe, senão cria nova
             const existing = notes.find(n => n.title === title);
             if (existing) {
               onUpdate(existing.id, title, content, [], existing.color || "bg-blue-100", "default", "medium", "publicada");
