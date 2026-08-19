@@ -5,7 +5,7 @@ import { ReminderModal } from "./ReminderModal";
 import { LockNoteModal } from "./LockNoteModal";
 import { TrashView } from "./TrashView";
 import { Note, SyncStatus } from "@/hooks/useNotes";
-import { Search, Mic, MicOff, Trash2 } from "lucide-react";
+import { Search, Mic, MicOff, MoreVertical, Trash2, ClipboardList, RefreshCw } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import {
@@ -59,41 +59,31 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
   const [confirmDeleteTitle, setConfirmDeleteTitle] = useState("");
 
   const [editorReadOnly, setEditorReadOnly] = useState(true);
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const [reminderNote, setReminderNote] = useState<Note | null>(null);
   const [lockNote, setLockNote] = useState<Note | null>(null);
   const [lockMode, setLockMode] = useState<"set" | "unlock" | "manage">("set");
   const [pendingUnlockNote, setPendingUnlockNote] = useState<Note | null>(null);
 
-  // Font size state sincronizada com o Index via evento global
   const [fontSize, setFontSize] = useState<"sm" | "md" | "lg" | "xl">(() => {
     return (localStorage.getItem("notes_font_size") as "sm" | "md" | "lg" | "xl") || "md";
   });
 
-  useEffect(() => {
-    const handleFontSizeChange = (e: Event) => {
-      const customEvent = e as CustomEvent;
-      if (customEvent.detail) {
-        setFontSize(customEvent.detail);
-      }
-    };
-    window.addEventListener("notes-font-size-changed", handleFontSizeChange);
-    return () => window.removeEventListener("notes-font-size-changed", handleFontSizeChange);
-  }, []);
+  const changeFontSize = (size: "sm" | "md" | "lg" | "xl") => {
+    setFontSize(size);
+    localStorage.setItem("notes_font_size", size);
+  };
 
   useEffect(() => {
-    const handleOpenTrash = () => setShowTrash(true);
-    const handleOpenRelatorio = () => {
-      localStorage.removeItem("relatorio_turno_rascunho");
-      setRelatorioInitialState(null);
-      setShowRelatorio(true);
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
     };
-    window.addEventListener("open-trash-view", handleOpenTrash);
-    window.addEventListener("open-relatorio-turno", handleOpenRelatorio);
-    return () => {
-      window.removeEventListener("open-trash-view", handleOpenTrash);
-      window.removeEventListener("open-relatorio-turno", handleOpenRelatorio);
-    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const fontSizeMap = { sm: 12, md: 14, lg: 18, xl: 22 };
@@ -102,40 +92,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
     setSearch((prev) => (prev + " " + text).trim());
   }, []);
   const { isListening, isSupported: voiceSupported, toggle: toggleVoice } = useSpeechRecognition(handleVoiceResult);
-
-  useEffect(() => {
-    const shownKey = "backup_reminder_shown_session";
-    if (sessionStorage.getItem(shownKey)) return;
-    if (!shouldRemindBackup()) return;
-    
-    sessionStorage.setItem(shownKey, "true");
-    const timer = setTimeout(() => {
-      toast({
-        title: "📦 Hora do backup!",
-        description: "Faz mais de uma semana desde seu último backup. Que tal exportar suas notas?",
-        duration: 6000,
-      });
-    }, 2000);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const [sharedData, setSharedData] = useState<{ title: string; content: string } | null>(null);
-  useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem("shared_note_data");
-      if (raw) {
-        sessionStorage.removeItem("shared_note_data");
-        const data = JSON.parse(raw);
-        if (data.title || data.content) {
-          setSharedData(data);
-          setEditingNote(null);
-          setEditorReadOnly(false);
-          setDialogOpen(true);
-        }
-      }
-    } catch {}
-  }, []);
 
   const filtered = notes.filter(
     (n) =>
@@ -151,46 +107,6 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
       setLockNote(note);
       setLockMode("unlock");
       return;
-    }
-    if (note.title && note.title.includes("Rebobinadeira")) {
-      const stateKey = `rebobinadeira_state_${note.title.replace(/\s/g, "_")}`;
-      const raw = localStorage.getItem(stateKey);
-      if (raw) {
-        try {
-          setRebobInitialState(JSON.parse(raw));
-          setShowRebobinadeira(true);
-          return;
-        } catch {}
-      }
-      const rebobMatch = note.content.match(/<!--relatorio-rebobinadeira-state:([\s\S]*?)-->/);
-      if (rebobMatch) {
-        try {
-          setRebobInitialState(JSON.parse(rebobMatch[1]));
-          setShowRebobinadeira(true);
-          return;
-        } catch {}
-      }
-    }
-    if (note.title && note.title.includes("Relatório")) {
-      const stateKey = `relatorio_state_${note.title.replace(/\s/g, "_")}`;
-      const raw = localStorage.getItem(stateKey);
-      if (raw) {
-        try {
-          const state = JSON.parse(raw);
-          setRelatorioInitialState(state);
-          setShowRelatorio(true);
-          return;
-        } catch {}
-      }
-    }
-    const match = note.content.match(/<!--relatorio-turno-state:([\s\S]*?)-->/);
-    if (match) {
-      try {
-        const state = JSON.parse(match[1]);
-        setRelatorioInitialState(state);
-        setShowRelatorio(true);
-        return;
-      } catch {}
     }
     setEditorReadOnly(true);
     setEditingNote(note);
@@ -300,11 +216,83 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
 
   return (
     <div>
+      {/* Cabeçalho superior contendo o botão ••• que estava faltando os atalhos */}
+      <div className="flex items-center justify-between mb-3 px-1">
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-bold text-[#1A1A2E]">Minhas Notas</h1>
+          <span className="text-[10px] bg-black/5 px-2 py-0.5 rounded-full text-gray-500 font-medium">v2.8</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Menu de Três Pontos com todos os atalhos */}
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setShowMenu((v) => !v)}
+              className="p-2 rounded-xl bg-white border border-[#EBEBEB] hover:bg-black/5 text-[#1A1A2E] shadow-sm transition-colors"
+              title="Opções e Atalhos"
+            >
+              <MoreVertical size={18} />
+            </button>
+
+            {showMenu && (
+              <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl p-3 shadow-2xl border border-[#EBEBEB] z-50">
+                <div className="mb-3 pb-2 border-b border-[#EBEBEB]">
+                  <p className="text-[10px] font-bold mb-1.5 text-gray-400">TAMANHO DA FONTE</p>
+                  <div className="flex items-center gap-1.5">
+                    {(["sm", "md", "lg", "xl"] as const).map((size) => (
+                      <button
+                        key={size}
+                        onClick={() => changeFontSize(size)}
+                        className={`flex items-center justify-center w-[30px] h-[28px] rounded-lg font-bold text-xs transition-all ${
+                          fontSize === size 
+                            ? "bg-[#1A1A2E] text-white" 
+                            : "bg-black/5 border border-[#E0E0E0] text-gray-500 hover:bg-black/10"
+                        }`}
+                      >
+                        A
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => { setShowMenu(false); setShowRelatorio(true); }}
+                  className="flex items-center gap-2.5 w-full px-2 py-2 rounded-xl text-sm font-semibold text-[#1A1A2E] hover:bg-black/5 transition-colors text-left"
+                >
+                  <ClipboardList size={16} className="text-amber-500 shrink-0" />
+                  <span>Relatório de Turno</span>
+                </button>
+
+                <button
+                  onClick={() => { setShowMenu(false); setShowTrash(true); }}
+                  className="flex items-center gap-2.5 w-full px-2 py-2 rounded-xl text-sm font-semibold text-[#1A1A2E] hover:bg-black/5 transition-colors text-left"
+                >
+                  <Trash2 size={16} className="text-rose-500 shrink-0" />
+                  <span>Lixeira {trashedNotes.length > 0 && `(${trashedNotes.length})`}</span>
+                </button>
+
+                <div className="my-1.5 border-t border-[#EBEBEB]" />
+
+                <button
+                  onClick={() => { setShowMenu(false); onRefresh?.(); }}
+                  className="flex items-center gap-2.5 w-full px-2 py-2 rounded-xl text-sm font-semibold text-[#1A1A2E] hover:bg-black/5 transition-colors text-left"
+                >
+                  <RefreshCw size={16} className="text-blue-500 shrink-0" />
+                  <span>Atualizar Dados</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       {draftCount > 0 && (
-        <p className="text-[11px] font-semibold mb-1" style={{ color: "#F9A825" }}>
+        <p className="text-[11px] font-semibold mb-1 text-[#F9A825]">
           ✏️ {draftCount} rascunho{draftCount > 1 ? "s" : ""} pendente{draftCount > 1 ? "s" : ""}
         </p>
       )}
+
+      {/* Barra de Busca com Microfone e Botão Novo */}
       <div className="flex items-center gap-3 mb-2">
         <div
           className="relative flex-1 transition-all duration-200"
@@ -315,33 +303,36 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
             boxShadow: searchFocused || isListening ? "0 0 0 3px rgba(179,157,219,0.15), 0 2px 8px -2px rgba(0,0,0,0.06)" : "0 2px 8px -2px rgba(0,0,0,0.04)",
           }}
         >
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "#BDBDBD" }} />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#BDBDBD]" />
           <input
             placeholder="Buscar notas..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onFocus={() => setSearchFocused(true)}
             onBlur={() => setSearchFocused(false)}
-            className="w-full pl-9 pr-10 py-2.5 bg-transparent border-0 outline-none text-sm font-medium"
-            style={{ color: "#1A1A2E", borderRadius: 16 }}
+            className="w-full pl-9 pr-12 py-2.5 bg-transparent border-0 outline-none text-sm font-medium text-[#1A1A2E]"
+            style={{ borderRadius: 16 }}
           />
-          {voiceSupported && (
-            <button
-              onClick={toggleVoice}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full transition-all duration-200"
-              style={{ color: isListening ? "#E53935" : "#BDBDBD", background: isListening ? "rgba(229,57,53,0.1)" : "transparent" }}
-              title={isListening ? "Parar busca por voz" : "Buscar por voz"}
-            >
-              {isListening ? (
-                <div className="relative">
-                  <MicOff size={16} />
-                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                </div>
-              ) : (
-                <Mic size={16} />
-              )}
-            </button>
-          )}
+
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            {voiceSupported && (
+              <button
+                onClick={toggleVoice}
+                className="p-1.5 rounded-full transition-all duration-200"
+                style={{ color: isListening ? "#E53935" : "#BDBDBD", background: isListening ? "rgba(229,57,53,0.1)" : "transparent" }}
+                title={isListening ? "Parar busca por voz" : "Buscar por voz"}
+              >
+                {isListening ? (
+                  <div className="relative">
+                    <MicOff size={16} />
+                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                  </div>
+                ) : (
+                  <Mic size={16} />
+                )}
+              </button>
+            )}
+          </div>
         </div>
 
         <button
@@ -357,25 +348,25 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
       </div>
 
       <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-semibold" style={{ color: "#BDBDBD", fontSize: 12 }}>
+        <p className="text-xs font-semibold text-[#BDBDBD]">
           {filtered.length} {filtered.length === 1 ? "nota" : "notas"}
         </p>
       </div>
 
       {filtered.length === 0 ? (
         <div className="text-center py-16">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl" style={{ background: "#F0EDE8" }}>
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#F0EDE8]">
             <span className="text-3xl">📝</span>
           </div>
-          <p className="mt-4 text-sm font-semibold" style={{ color: "#BDBDBD" }}>
+          <p className="mt-4 text-sm font-semibold text-[#BDBDBD]">
             {search ? "Nenhuma nota encontrada para essa busca" : "Nenhuma nota encontrada"}
           </p>
-          <p className="text-xs mt-1 font-medium" style={{ color: "#D5D5D5" }}>
+          <p className="text-xs mt-1 font-medium text-[#D5D5D5]">
             {search ? "Tente outro termo" : "Toque em + para criar uma nova nota"}
           </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-2.5" style={{ transform: "none", animation: "none", visibility: (dialogOpen || !!confirmDeleteId) ? "hidden" : "visible", opacity: (dialogOpen || !!confirmDeleteId) ? 0 : 1, transition: "opacity 0.15s ease" }}>
+        <div className="flex flex-col gap-2.5">
           {(() => {
             const pinnedIds = filtered.filter((n) => n.isPinned).map((n) => n.id);
             return filtered.map((note) => {
@@ -402,12 +393,11 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
 
       <NoteEditor
         open={dialogOpen}
-        onOpenChange={(v) => { setDialogOpen(v); if (!v) setSharedData(null); }}
+        onOpenChange={(v) => { setDialogOpen(v); }}
         editingNote={editingNote}
         readOnly={editorReadOnly}
         onSetReadOnly={setEditorReadOnly}
         onSave={handleSave}
-        initialSharedData={sharedData}
         onSchedule={onAddAppointment ? (noteTitle, noteContent, date, time) => {
           onAddAppointment(noteTitle || "Nota sem título", new Date(date + "T00:00:00"), time, noteContent);
         } : undefined}
@@ -443,7 +433,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
               A nota pode ser recuperada em até 30 dias.
             </DialogDescription>
           </DialogHeader>
-          <p className="text-sm font-semibold px-1" style={{ color: "#1A1A2E" }}>
+          <p className="text-sm font-semibold px-1 text-[#1A1A2E]">
             "{confirmDeleteTitle}"
           </p>
           <div className="flex gap-2 mt-1">
