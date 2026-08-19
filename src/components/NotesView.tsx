@@ -86,6 +86,22 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Comandos vindos do menu ••• do topo da página (Index.tsx)
+  useEffect(() => {
+    const onRelatorio = () => setShowRelatorio(true);
+    const onTrash = () => setShowTrash(true);
+    const onFont = (e: Event) => changeFontSize((e as CustomEvent).detail);
+    window.addEventListener("notes-menu:relatorio", onRelatorio);
+    window.addEventListener("notes-menu:trash", onTrash);
+    window.addEventListener("notes-menu:font-size", onFont as EventListener);
+    return () => {
+      window.removeEventListener("notes-menu:relatorio", onRelatorio);
+      window.removeEventListener("notes-menu:trash", onTrash);
+      window.removeEventListener("notes-menu:font-size", onFont as EventListener);
+    };
+  }, []);
+
+
   const fontSizeMap = { sm: 12, md: 14, lg: 18, xl: 22 };
 
   const handleVoiceResult = useCallback((text: string) => {
