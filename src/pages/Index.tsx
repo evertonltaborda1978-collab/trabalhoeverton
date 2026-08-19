@@ -364,6 +364,46 @@ const Index = () => {
                     className="absolute top-full right-0 mt-1 rounded-xl p-2 flex flex-col gap-1 z-20"
                     style={{ background: "#FFF", border: "1px solid #EBEBEB", boxShadow: "0 8px 24px -4px rgba(0,0,0,0.15)", minWidth: 210 }}
                   >
+                    {tab === "notes" && (
+                      <>
+                        <div className="px-3 pt-1 pb-2 border-b" style={{ borderColor: "#EBEBEB" }}>
+                          <p className="text-[10px] font-bold mb-1.5" style={{ color: "#9E9E9E" }}>TAMANHO DA FONTE</p>
+                          <div className="flex items-center gap-1.5">
+                            {(["sm", "md", "lg", "xl"] as const).map((size) => (
+                              <button
+                                key={size}
+                                onClick={() => {
+                                  setNotesFontSize(size);
+                                  window.dispatchEvent(new CustomEvent("notes-menu:font-size", { detail: size }));
+                                }}
+                                className="flex items-center justify-center w-[30px] h-[28px] rounded-lg font-bold text-xs transition-all"
+                                style={
+                                  notesFontSize === size
+                                    ? { background: "#1A1A2E", color: "#FFF" }
+                                    : { background: "rgba(0,0,0,0.05)", border: "1px solid #E0E0E0", color: "#757575" }
+                                }
+                              >
+                                A
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => { setShowBackupMenu(false); window.dispatchEvent(new Event("notes-menu:relatorio")); }}
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+                          style={{ color: "#1A1A2E" }}
+                        >
+                          <ClipboardList size={15} style={{ color: "#F9A825" }} /> Relatório de Turno
+                        </button>
+                        <button
+                          onClick={() => { setShowBackupMenu(false); window.dispatchEvent(new Event("notes-menu:trash")); }}
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+                          style={{ color: "#1A1A2E" }}
+                        >
+                          <Trash2 size={15} style={{ color: "#E53935" }} /> Lixeira {trashedNotes.length > 0 && `(${trashedNotes.length})`}
+                        </button>
+                      </>
+                    )}
                     <button onClick={handleRefresh} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors" style={{ color: "#1A1A2E" }}>
                       <RefreshCw size={15} className={isRefreshing ? "animate-spin" : ""} /> Atualizar dados
                     </button>
@@ -376,6 +416,7 @@ const Index = () => {
                     <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImportBackupFile} />
                   </div>
                 )}
+
               </div>
 
               <button
