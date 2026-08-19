@@ -50,6 +50,9 @@ const Index = () => {
   const [showLabelModal, setShowLabelModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showBackupMenu, setShowBackupMenu] = useState(false);
+  const [notesFontSize, setNotesFontSize] = useState<"sm" | "md" | "lg" | "xl">(
+    () => (localStorage.getItem("notes_font_size") as "sm" | "md" | "lg" | "xl") || "md"
+  );
   const importRef = useRef<HTMLInputElement>(null);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const { updateAvailable, applyUpdate } = useVersionCheck();
