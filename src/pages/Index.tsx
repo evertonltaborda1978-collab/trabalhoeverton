@@ -42,7 +42,7 @@ const DEVICE_LABEL_PROMPT_KEY = "device_label_prompt_dismissed";
 // Versão do app — um número só, sempre igual em todas as telas (inclusive a
 // tela de login). Sobe a cada atualização entregue, não importa qual arquivo
 // mudou. Sempre que subir aqui, sobe também no Auth.tsx (tela de login).
-const APP_VERSION = "v2.7";
+const APP_VERSION = "v2.8";
 
 const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
