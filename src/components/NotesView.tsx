@@ -5,7 +5,7 @@ import { ReminderModal } from "./ReminderModal";
 import { LockNoteModal } from "./LockNoteModal";
 import { TrashView } from "./TrashView";
 import { Note, SyncStatus } from "@/hooks/useNotes";
-import { Search, Mic, MicOff, MoreVertical, Trash2, ClipboardList, RefreshCw } from "lucide-react";
+import { Search, Mic, MicOff, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import {
@@ -85,6 +85,22 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Comandos vindos do menu ••• do topo da página (Index.tsx)
+  useEffect(() => {
+    const onRelatorio = () => setShowRelatorio(true);
+    const onTrash = () => setShowTrash(true);
+    const onFont = (e: Event) => changeFontSize((e as CustomEvent).detail);
+    window.addEventListener("notes-menu:relatorio", onRelatorio);
+    window.addEventListener("notes-menu:trash", onTrash);
+    window.addEventListener("notes-menu:font-size", onFont as EventListener);
+    return () => {
+      window.removeEventListener("notes-menu:relatorio", onRelatorio);
+      window.removeEventListener("notes-menu:trash", onTrash);
+      window.removeEventListener("notes-menu:font-size", onFont as EventListener);
+    };
+  }, []);
+
 
   const fontSizeMap = { sm: 12, md: 14, lg: 18, xl: 22 };
 
@@ -278,66 +294,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
           </svg>
         </button>
 
-        {/* Menu de opções unificado */}
-        <div className="relative shrink-0" ref={menuRef}>
-          <button
-            onClick={() => setShowMenu((v) => !v)}
-            className="flex items-center justify-center rounded-xl bg-white border border-[#EBEBEB] hover:bg-black/5 text-[#1A1A2E] shadow-sm transition-colors"
-            style={{ width: 46, height: 46, borderRadius: 14 }}
-            title="Opções e Atalhos"
-          >
-            <MoreVertical size={18} />
-          </button>
 
-          {showMenu && (
-            <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl p-3 shadow-2xl border border-[#EBEBEB] z-50">
-              <div className="mb-3 pb-2 border-b border-[#EBEBEB]">
-                <p className="text-[10px] font-bold mb-1.5 text-gray-400">TAMANHO DA FONTE</p>
-                <div className="flex items-center gap-1.5">
-                  {(["sm", "md", "lg", "xl"] as const).map((size) => (
-                    <button
-                      key={size}
-                      onClick={() => changeFontSize(size)}
-                      className={`flex items-center justify-center w-[30px] h-[28px] rounded-lg font-bold text-xs transition-all ${
-                        fontSize === size
-                          ? "bg-[#1A1A2E] text-white"
-                          : "bg-black/5 border border-[#E0E0E0] text-gray-500 hover:bg-black/10"
-                      }`}
-                    >
-                      A
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <button
-                onClick={() => { setShowMenu(false); setShowRelatorio(true); }}
-                className="flex items-center gap-2.5 w-full px-2 py-2 rounded-xl text-sm font-semibold text-[#1A1A2E] hover:bg-black/5 transition-colors text-left"
-              >
-                <ClipboardList size={16} className="text-amber-500 shrink-0" />
-                <span>Relatório de Turno</span>
-              </button>
-
-              <button
-                onClick={() => { setShowMenu(false); setShowTrash(true); }}
-                className="flex items-center gap-2.5 w-full px-2 py-2 rounded-xl text-sm font-semibold text-[#1A1A2E] hover:bg-black/5 transition-colors text-left"
-              >
-                <Trash2 size={16} className="text-rose-500 shrink-0" />
-                <span>Lixeira {trashedNotes.length > 0 && `(${trashedNotes.length})`}</span>
-              </button>
-
-              <div className="my-1.5 border-t border-[#EBEBEB]" />
-
-              <button
-                onClick={() => { setShowMenu(false); onRefresh?.(); }}
-                className="flex items-center gap-2.5 w-full px-2 py-2 rounded-xl text-sm font-semibold text-[#1A1A2E] hover:bg-black/5 transition-colors text-left"
-              >
-                <RefreshCw size={16} className="text-blue-500 shrink-0" />
-                <span>Atualizar Dados</span>
-              </button>
-            </div>
-          )}
-        </div>
       </div>
 
 
