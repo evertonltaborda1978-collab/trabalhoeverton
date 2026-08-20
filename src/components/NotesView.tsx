@@ -317,7 +317,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
           </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-1.5">
           {(() => {
             const pinnedIds = filtered.filter((n) => n.isPinned).map((n) => n.id);
             return filtered.map((note) => {

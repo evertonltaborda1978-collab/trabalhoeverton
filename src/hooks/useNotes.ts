@@ -194,6 +194,7 @@ export function useNotes() {
           status: note.status,
           updated_at: note.updatedAt.toISOString(),
           is_pinned: note.isPinned,
+          pin_order: note.isPinned ? note.pinOrder : null,
           sincronizado: true,
         };
         await (supabase.from("notes") as any).upsert(payload, { onConflict: "id" });
@@ -540,19 +541,17 @@ export function useNotes() {
     if (!note) return;
 
     const newPinned = !note.isPinned;
-    const now = new Date();
-
     // Ao fixar, a nota entra no final da lista de fixadas (pinOrder = maior atual + 1)
     const newPinOrder = newPinned
       ? Math.max(-1, ...notesRef.current.filter((n) => n.isPinned && !n.deletedAt).map((n) => n.pinOrder ?? 0)) + 1
-      : note.pinOrder;
+      : null;
 
     // Ignora eventos realtime desta nota enquanto a mudança propaga
     markSelfModified(id, 30000);
 
     // Atualizar estado local e persistência imediatamente, antes de qualquer refresh
     const localUpdatedNotes = notesRef.current.map((n) => (
-      n.id === id ? { ...n, isPinned: newPinned, pinOrder: newPinOrder, updatedAt: now, sincronizado: false } : n
+      n.id === id ? { ...n, isPinned: newPinned, pinOrder: newPinOrder, sincronizado: false } : n
     ));
     notesRef.current = localUpdatedNotes;
     setNotes(localUpdatedNotes);
@@ -565,17 +564,21 @@ export function useNotes() {
 
     try {
       const { data, error } = await (supabase.from("notes") as any)
-        .update({ is_pinned: newPinned, pin_order: newPinOrder, updated_at: now.toISOString(), sincronizado: true })
+        .update({ is_pinned: newPinned, pin_order: newPinOrder, sincronizado: true })
         .eq("id", id)
-        .select("id,is_pinned,updated_at")
+        .select("id,is_pinned,pin_order")
         .single();
 
       if (error) throw error;
       if (!data || data.is_pinned !== newPinned) throw new Error("Pin update was not persisted");
 
       // Atualizar apenas o campo sincronizado, sem refetch
-      const confirmedAt = data.updated_at ? new Date(data.updated_at) : now;
-      const confirmedNotes = notesRef.current.map((n) => n.id === id ? { ...n, isPinned: newPinned, updatedAt: confirmedAt, sincronizado: true } : n);
+      const confirmedNotes = notesRef.current.map((n) => n.id === id ? {
+        ...n,
+        isPinned: newPinned,
+        pinOrder: data.pin_order ?? null,
+        sincronizado: true,
+      } : n);
       notesRef.current = confirmedNotes;
       setNotes(confirmedNotes);
       saveLocal(user.id, confirmedNotes);
@@ -605,12 +608,11 @@ export function useNotes() {
     [reordered[idx], reordered[targetIdx]] = [reordered[targetIdx], reordered[idx]];
     const updates = reordered.map((n, i) => ({ id: n.id, pinOrder: i }));
 
-    const now = new Date();
     updates.forEach((u) => markSelfModified(u.id, 30000));
 
     const localUpdated = notesRef.current.map((n) => {
       const u = updates.find((x) => x.id === n.id);
-      return u ? { ...n, pinOrder: u.pinOrder, updatedAt: now, sincronizado: false } : n;
+      return u ? { ...n, pinOrder: u.pinOrder, sincronizado: false } : n;
     });
     notesRef.current = localUpdated;
     setNotes(localUpdated);
@@ -624,7 +626,7 @@ export function useNotes() {
     try {
       await Promise.all(updates.map((u) =>
         (supabase.from("notes") as any)
-          .update({ pin_order: u.pinOrder, updated_at: now.toISOString(), sincronizado: true })
+          .update({ pin_order: u.pinOrder, sincronizado: true })
           .eq("id", u.id)
       ));
       const confirmed = notesRef.current.map((n) => (
