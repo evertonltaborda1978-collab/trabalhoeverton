@@ -1,0 +1,1 @@
+'teste sw.js funcionando'
