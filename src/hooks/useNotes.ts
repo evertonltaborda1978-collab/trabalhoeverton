@@ -195,6 +195,15 @@ export function useNotes() {
           updated_at: note.updatedAt.toISOString(),
           is_pinned: note.isPinned,
           pin_order: note.isPinned ? note.pinOrder : null,
+          // Campos que faltavam aqui: uma nota excluída, com lembrete definido
+          // ou bloqueada ENQUANTO OFFLINE fica marcada como "sincronizado: false",
+          // mas essa fila de reenvio (disparada ao voltar a internet) só mandava
+          // título/conteúdo/cor — perdendo a exclusão/lembrete/bloqueio.
+          reminder_date: note.reminderDate ?? null,
+          reminder_time: note.reminderTime ?? null,
+          is_locked: note.isLocked,
+          lock_salt: note.lockSalt ?? null,
+          deleted_at: note.deletedAt ? note.deletedAt.toISOString() : null,
           sincronizado: true,
         };
         await (supabase.from("notes") as any).upsert(payload, { onConflict: "id" });
