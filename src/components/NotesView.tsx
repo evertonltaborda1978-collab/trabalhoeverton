@@ -124,6 +124,33 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
       setLockMode("unlock");
       return;
     }
+
+    // Detecta se a nota é um Relatório de Turno / Tombador / Embaladeira
+    const turnoMatch = note.content.match(/<!--relatorio-turno-state:([\s\S]*?)-->/);
+    if (turnoMatch) {
+      try {
+        const state = JSON.parse(turnoMatch[1]);
+        setRelatorioInitialState(state);
+        setShowRelatorio(true);
+        return;
+      } catch (e) {
+        console.error("Erro ao ler estado do Relatório de Turno:", e);
+      }
+    }
+
+    // Detecta se a nota é um Relatório da Rebobinadeira
+    const rebobMatch = note.content.match(/<!--relatorio-rebobinadeira-state:([\s\S]*?)-->/);
+    if (rebobMatch) {
+      try {
+        const state = JSON.parse(rebobMatch[1]);
+        setRebobInitialState(state);
+        setShowRebobinadeira(true);
+        return;
+      } catch (e) {
+        console.error("Erro ao ler estado do Relatório da Rebobinadeira:", e);
+      }
+    }
+
     setEditorReadOnly(true);
     setEditingNote(note);
     setDialogOpen(true);
