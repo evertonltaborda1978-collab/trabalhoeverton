@@ -194,6 +194,7 @@ export function useNotes() {
           status: note.status,
           updated_at: note.updatedAt.toISOString(),
           is_pinned: note.isPinned,
+          pin_order: note.isPinned ? note.pinOrder : null,
           sincronizado: true,
         };
         await (supabase.from("notes") as any).upsert(payload, { onConflict: "id" });
@@ -545,7 +546,7 @@ export function useNotes() {
     // Ao fixar, a nota entra no final da lista de fixadas (pinOrder = maior atual + 1)
     const newPinOrder = newPinned
       ? Math.max(-1, ...notesRef.current.filter((n) => n.isPinned && !n.deletedAt).map((n) => n.pinOrder ?? 0)) + 1
-      : note.pinOrder;
+      : null;
 
     // Ignora eventos realtime desta nota enquanto a mudança propaga
     markSelfModified(id, 30000);
@@ -567,7 +568,7 @@ export function useNotes() {
       const { data, error } = await (supabase.from("notes") as any)
         .update({ is_pinned: newPinned, pin_order: newPinOrder, updated_at: now.toISOString(), sincronizado: true })
         .eq("id", id)
-        .select("id,is_pinned,updated_at")
+        .select("id,is_pinned,pin_order,updated_at")
         .single();
 
       if (error) throw error;
@@ -575,7 +576,13 @@ export function useNotes() {
 
       // Atualizar apenas o campo sincronizado, sem refetch
       const confirmedAt = data.updated_at ? new Date(data.updated_at) : now;
-      const confirmedNotes = notesRef.current.map((n) => n.id === id ? { ...n, isPinned: newPinned, updatedAt: confirmedAt, sincronizado: true } : n);
+      const confirmedNotes = notesRef.current.map((n) => n.id === id ? {
+        ...n,
+        isPinned: newPinned,
+        pinOrder: data.pin_order ?? null,
+        updatedAt: confirmedAt,
+        sincronizado: true,
+      } : n);
       notesRef.current = confirmedNotes;
       setNotes(confirmedNotes);
       saveLocal(user.id, confirmedNotes);
