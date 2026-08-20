@@ -285,6 +285,7 @@ export type Database = {
           is_locked: boolean
           is_pinned: boolean
           lock_salt: string | null
+          pin_order: number | null
           reminder_date: string | null
           reminder_time: string | null
           sincronizado: boolean
@@ -305,6 +306,7 @@ export type Database = {
           is_locked?: boolean
           is_pinned?: boolean
           lock_salt?: string | null
+          pin_order?: number | null
           reminder_date?: string | null
           reminder_time?: string | null
           sincronizado?: boolean
@@ -325,6 +327,7 @@ export type Database = {
           is_locked?: boolean
           is_pinned?: boolean
           lock_salt?: string | null
+          pin_order?: number | null
           reminder_date?: string | null
           reminder_time?: string | null
           sincronizado?: boolean
