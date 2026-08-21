@@ -209,6 +209,13 @@ const Index = () => {
 
 
   const handleResetCache = async () => {
+    if (!navigator.onLine) {
+      toast({
+        title: "Sem internet no momento",
+        description: "Limpar o cache agora apagaria a cópia offline do app sem poder baixar uma nova. Tente de novo quando tiver conexão.",
+      });
+      return;
+    }
     toast({
       title: "Atualizando aplicativo",
       description: "Limpando cache e buscando a versão mais recente...",
