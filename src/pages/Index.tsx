@@ -15,6 +15,7 @@ import { useDeviceTracking } from "@/hooks/useDeviceTracking";
 import { useDeviceCommands } from "@/hooks/useDeviceCommands";
 import { useDeviceLocations, reverseGeocodeFetch } from "@/hooks/useDeviceLocations";
 import { useVersionCheck } from "@/hooks/useVersionCheck";
+import { APP_VERSION, forceUpdateApp } from "@/lib/appVersion";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { syncNativeReminders, type NativeReminder } from "@/lib/native";
@@ -33,7 +34,6 @@ const titles: Record<Tab, string> = {
 };
 
 const DEVICE_LABEL_PROMPT_KEY = "device_label_prompt_dismissed";
-const APP_VERSION = "v2.8";
 
 const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
@@ -55,7 +55,7 @@ const Index = () => {
   );
   const importRef = useRef<HTMLInputElement>(null);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
-  const { updateAvailable, applyUpdate } = useVersionCheck();
+  const { notice: updateNotice } = useVersionCheck();
 
   const { markExecuted } = useDeviceCommands(currentDevice?.id ?? null, async (cmd) => {
     if (cmd.command === "update_now") {
@@ -199,17 +199,9 @@ const Index = () => {
   const handleResetCache = async () => {
     toast({
       title: "Atualizando aplicativo",
-      description: "Limpando cache e buscando versão mais recente...",
+      description: "Limpando cache e buscando a versão mais recente...",
     });
-    try {
-      if ("caches" in window) {
-        const keys = await caches.keys();
-        await Promise.all(keys.map((k) => caches.delete(k)));
-      }
-    } catch {}
-    setTimeout(() => {
-      window.location.href = `${window.location.pathname}?_=${Date.now()}`;
-    }, 800);
+    setTimeout(() => { void forceUpdateApp(); }, 600);
   };
 
   const handleExportBackup = () => {
@@ -298,25 +290,6 @@ const Index = () => {
         }}
       >
         <div className="max-w-lg mx-auto px-4 pt-2 pb-2">
-          {updateAvailable && (
-            <button
-              onClick={applyUpdate}
-              className="w-full flex items-center justify-center gap-1.5 transition-opacity hover:opacity-90"
-              style={{
-                background: "#1A1A2E",
-                color: "#FFFFFF",
-                fontSize: 12,
-                fontWeight: 700,
-                borderRadius: 10,
-                padding: "8px 12px",
-                marginBottom: 8,
-                border: "none",
-              }}
-            >
-              🔄 Nova versão disponível — toque para atualizar
-            </button>
-          )}
-
           {/* Linha 1: Esquerda (Sinal) | Centro (Título + Versão) | Direita (Menu ••• unificado + Sair) */}
           <div className="flex items-center justify-between gap-2">
             {/* Lado Esquerdo: Sinal de Conexão */}
