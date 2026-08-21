@@ -5,33 +5,8 @@ import { Input } from "@/components/ui/input";
 import { MoonPhaseWidget } from "@/components/MoonPhaseWidget";
 import { useToast } from "@/hooks/use-toast";
 import { useBiometricAuth } from "@/hooks/useBiometricAuth";
+import { APP_VERSION, VERSION_HISTORY, forceUpdateApp } from "@/lib/appVersion";
 import { Mail, Lock, Eye, EyeOff, Fingerprint, HelpCircle, X, RotateCcw } from "lucide-react";
-
-// Versão do app — um número só, sempre igual em todas las telas (inclusive o
-// cabeçalho do app, no Index.tsx). Sobe a cada atualização entregue, não
-// importa qual arquivo mudou. É por aqui que você confirma a versão mais nova.
-const APP_VERSION = "v2.9";
-const VERSION_HISTORY: { version: string; changes: string }[] = [
-  { version: "v2.9", changes: "Topo da tela principal reorganizado: sinal à esquerda, título/versão integrados no centro, menu ••• unificado e Sair à direita; barra de busca ocupando a largura total com o botão + ao lado." },
-  { version: "v2.8", changes: "Corrigido bug: fechar uma nota (X) estava navegando pra outra aba (Combustível/Localização) em vez de voltar pra Notas — removido um window.history.back() desnecessário." },
-  { version: "v2.7", changes: "Lua+data movidos pro cabeçalho para dentro da aba Tempo; título volta a aparecer em todas as abas; lixeira de notas movida pro menu '•••' (linha de busca fica só com busca + criar nota)." },
-  { version: "v2.6", changes: "Badge \"Online\" + texto de sinal trocado por um ícone único de barrinhas de sinal (cor e preenchimento já mostram tudo)." },
-  { version: "v2.5", changes: "Na aba Notas, o título \"Minhas Notas\" some — fica só a lua+data centralizada." },
-  { version: "v2.4", changes: "Corrigido menu '•••' que não abria nos cards de notas; unificados Online+sinal e os dois botões de atualizar; reorganizada a linha de busca das Notas (fonte+relatório escondidos, lixeira ao lado do +); rodapé Notas/Mais mais compacto." },
-  { version: "v2.3", changes: "Lua+data movidos pra linha do título; ícone de limpar cache trocado (não parece mais 'excluir tudo')." },
-  { version: "v2.2", changes: "Menu \"•••\" no NoteEditor e nos cards de notas (esconde botões, deixa a tela mais limpa); cabeçalho principal reorganizado com nuvem/backup/atualizações agrupados." },
-  { version: "v2.1", changes: "Corrigido o botão de limpar cache: agora não apaga mais o ID fixo do aparelho nem desconecta o login — só força buscar a versão mais nova." },
-  { version: "v2.0", changes: "Botão de limpar cache/cookies movido pra tela de login (ao lado da versão), pra usar quando não carregar a versão mais nova." },
-  { version: "v1.9", changes: "Novo botão no cabeçalho pra limpar cookies/cache/dados salvos e recarregar o app." },
-  { version: "v1.8", changes: "Voltou pra um número de versão único, sempre igual em todas as telas (inclusive o login)." },
-  { version: "v1.6", changes: "Tentativa de versão por arquivo (revertida — confundia mais do que ajudava)." },
-  { version: "v1.5", changes: "Emergência agora funciona em aparelho remoto, reenviando o pedido a cada 30s. Alarme agora toca um bipe, além de vibrar." },
-  { version: "v1.4", changes: "Correção: arquivo LocationView.tsx estava com conteúdo trocado (do Index.tsx) no GitHub." },
-  { version: "v1.3", changes: "Tela de Localização: removida a lista de dispositivos duplicada na tela de escolha." },
-  { version: "v1.2", changes: "Login sempre exigido ao abrir o app (não reaproveita mais sessão salva)." },
-  { version: "v1.1", changes: "Correções de rolagem e Tabela Manual nas Notas; nova tela de escolha na Localização." },
-  { version: "v1.0", changes: "Versão de controle inicial." },
-];
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -107,19 +82,9 @@ export default function Auth() {
   const handleResetCache = async () => {
     toast({
       title: "Atualizando aplicativo",
-      description: "Limpando cache e buscando versão mais recente...",
+      description: "Limpando cache e buscando a versão mais recente...",
     });
-
-    try {
-      if ("caches" in window) {
-        const keys = await caches.keys();
-        await Promise.all(keys.map((k) => caches.delete(k)));
-      }
-    } catch {}
-
-    setTimeout(() => {
-      window.location.href = `${window.location.pathname}?_=${Date.now()}`;
-    }, 800);
+    setTimeout(() => { void forceUpdateApp(); }, 600);
   };
 
   return (
