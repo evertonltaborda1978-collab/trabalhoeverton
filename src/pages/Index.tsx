@@ -196,6 +196,18 @@ const Index = () => {
     syncNativeReminders(reminders);
   }, [notes, appointments]);
 
+  // Aviso único de atualização, logo após o login (não se repete durante o uso)
+  useEffect(() => {
+    if (!updateNotice) return;
+    toast({
+      title: "✨ Aplicativo atualizado",
+      description: updateNotice.from
+        ? `Você está agora na versão ${updateNotice.to} (antes ${updateNotice.from}).`
+        : `Você está agora na versão ${updateNotice.to}.`,
+    });
+  }, [updateNotice]);
+
+
   const handleResetCache = async () => {
     toast({
       title: "Atualizando aplicativo",
