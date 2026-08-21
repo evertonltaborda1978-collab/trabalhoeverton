@@ -1,6 +1,7 @@
 {
-  "version": "v3.1",
+  "version": "v3.2",
   "history": [
+    { "version": "v3.2", "changes": "Aviso de nova versão agora também aparece na tela de login, sem precisar entrar com email/senha primeiro." },
     { "version": "v3.1", "changes": "Correções de uso offline: exclusão, lembrete e bloqueio de nota feitos sem internet agora sincronizam certinho quando a conexão volta; botão de fechar nota (X/seta) não trava mais offline no app instalado; botão de limpar cache agora avisa e não faz nada se estiver sem internet (evita apagar a cópia offline do app sem poder baixar uma nova); ativado o suporte a Progressive Web App (service worker) para o app abrir e funcionar sem internet." },
     { "version": "v3.0", "changes": "Controle de versão centralizado no arquivo version.json: aviso de atualização aparece uma única vez logo após o login (nada mais fica pulando na tela) e o botão de limpar cache agora remove também o cache offline antigo." },
     { "version": "v2.9", "changes": "Topo da tela principal reorganizado: sinal à esquerda, título/versão integrados no centro, menu ••• unificado e Sair à direita; barra de busca ocupando a largura total com o botão + ao lado." },
