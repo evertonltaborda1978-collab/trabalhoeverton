@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MoonPhaseWidget } from "@/components/MoonPhaseWidget";
 import { useToast } from "@/hooks/use-toast";
 import { useBiometricAuth } from "@/hooks/useBiometricAuth";
+import { useVersionCheck } from "@/hooks/useVersionCheck";
 import { APP_VERSION, VERSION_HISTORY, forceUpdateApp } from "@/lib/appVersion";
 import { Mail, Lock, Eye, EyeOff, Fingerprint, HelpCircle, X, RotateCcw } from "lucide-react";
 
@@ -18,6 +19,18 @@ export default function Auth() {
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const { toast } = useToast();
   const { biometricEnabled, biometricAvailable, enableBiometric, biometricLogin, storedEmail } = useBiometricAuth();
+  const { notice: updateNotice } = useVersionCheck();
+
+  // Aviso de atualização já na tela de login, sem precisar entrar com email/senha
+  useEffect(() => {
+    if (!updateNotice) return;
+    toast({
+      title: "✨ Aplicativo atualizado",
+      description: updateNotice.from
+        ? `Você está agora na versão ${updateNotice.to} (antes ${updateNotice.from}).`
+        : `Você está agora na versão ${updateNotice.to}.`,
+    });
+  }, [updateNotice]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
