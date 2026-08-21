@@ -1809,28 +1809,41 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
   // Close handler with unsaved changes check
   const handleClose = () => {
-    if (isListening) toggleVoice();
-    
+    try {
+      if (isListening) toggleVoice();
+    } catch {
+      // nunca deixa um erro no microfone travar o botão de fechar
+    }
+
     if (!readOnly && editingNote && hasUnsavedChanges()) {
       setShowUnsavedPrompt(true);
       return;
     }
-    
-    // In read-only or new note, just close
+
+    // A tela fecha JÁ, na hora, sempre — independente de internet ou de
+    // qualquer coisa que dê errado ao salvar. O salvamento roda depois,
+    // blindado, e nunca prende o botão (isso resolvia um travamento
+    // reportado apenas no app instalado no celular, só quando offline).
+    onOpenChange(false);
+
     const hasContent = title.trim() || blocksToPlainText(blocks).trim();
     if (hasContent && !readOnly) {
-      const serialized = serializeBlocks(blocks);
-      const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
-      const status = editingNote?.status || "rascunho";
-      onSave(title, serialized, imageUrls, selectedColor, "default", "medium", status);
+      try {
+        const serialized = serializeBlocks(blocks);
+        const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
+        const status = editingNote?.status || "rascunho";
+        onSave(title, serialized, imageUrls, selectedColor, "default", "medium", status);
 
-      if (!navigator.onLine) {
-        toast({ title: "Salvo localmente", description: "Sincronizando quando houver conexão..." });
+        if (!navigator.onLine) {
+          toast({ title: "Salvo localmente", description: "Sincronizando quando houver conexão..." });
+        }
+      } catch {
+        toast({ title: "Não foi possível salvar", description: "Tente abrir a nota de novo para editar." });
       }
     }
+
     clearDraft();
     snapshotRef.current = null;
-    onOpenChange(false);
   };
 
   const plainText = blocksToPlainText(blocks);
