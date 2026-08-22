@@ -1,6 +1,9 @@
 {
-  "version": "v3.2",
+  "version": "v3.5",
   "history": [
+    { "version": "v3.5", "changes": "Corrigido: um alerta de lembrete já dispensado voltava a aparecer ao reabrir o app — agora fica lembrado de verdade. Adicionadas 4 opções de som de alerta (Clássico, Suave, Urgente, Sino), escolhidas e testadas no menu '•••' — a última escolhida vira o padrão permanente." },
+    { "version": "v3.4", "changes": "Corrigido o GPS no app Android (APK): agora usa o plugin nativo do Capacitor, que pede a permissão de localização corretamente (antes não pedia nada e não funcionava). Botão 'Sair' agora avisa e não deixa sair enquanto estiver offline, para não ficar sem conseguir entrar de novo até a internet voltar (as notas continuam seguras)." },
+    { "version": "v3.3", "changes": "Corrigido: o botão/gesto de voltar nativo do Android não tinha nenhuma ligação com a tela de editar nota — agora ele fecha a nota corretamente, igual ao botão de fechar na tela." },
     { "version": "v3.2", "changes": "Aviso de nova versão agora também aparece na tela de login, sem precisar entrar com email/senha primeiro." },
     { "version": "v3.1", "changes": "Correções de uso offline: exclusão, lembrete e bloqueio de nota feitos sem internet agora sincronizam certinho quando a conexão volta; botão de fechar nota (X/seta) não trava mais offline no app instalado; botão de limpar cache agora avisa e não faz nada se estiver sem internet (evita apagar a cópia offline do app sem poder baixar uma nova); ativado o suporte a Progressive Web App (service worker) para o app abrir e funcionar sem internet." },
     { "version": "v3.0", "changes": "Controle de versão centralizado no arquivo version.json: aviso de atualização aparece uma única vez logo após o login (nada mais fica pulando na tela) e o botão de limpar cache agora remove também o cache offline antigo." },
