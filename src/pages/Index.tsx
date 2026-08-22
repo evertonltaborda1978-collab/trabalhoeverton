@@ -19,7 +19,8 @@ import { APP_VERSION, forceUpdateApp } from "@/lib/appVersion";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { syncNativeReminders, type NativeReminder } from "@/lib/native";
-import { LogOut, RefreshCw, RotateCcw, Cloud, CloudOff, Download, Upload, SignalHigh, SignalMedium, SignalLow, SignalZero, MoreHorizontal, ClipboardList, Trash2 } from "lucide-react";
+import { LogOut, RefreshCw, RotateCcw, Cloud, CloudOff, Download, Upload, SignalHigh, SignalMedium, SignalLow, SignalZero, MoreHorizontal, ClipboardList, Trash2, Bell } from "lucide-react";
+import { ALERT_SOUND_OPTIONS, getAlertSoundChoice, setAlertSoundChoice, playAlertSoundPreview, type AlertSoundId } from "@/lib/alertSound";
 
 type Tab = "notes" | "calendar" | "weather" | "location" | "devices" | "fuel" | "medication";
 
@@ -50,6 +51,8 @@ const Index = () => {
   const [showLabelModal, setShowLabelModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showBackupMenu, setShowBackupMenu] = useState(false);
+  const [showSoundMenu, setShowSoundMenu] = useState(false);
+  const [alertSound, setAlertSound] = useState<AlertSoundId>(() => getAlertSoundChoice());
   const [notesFontSize, setNotesFontSize] = useState<"sm" | "md" | "lg" | "xl">(
     () => (localStorage.getItem("notes_font_size") as "sm" | "md" | "lg" | "xl") || "md"
   );
@@ -410,6 +413,39 @@ const Index = () => {
                           <Trash2 size={15} style={{ color: "#E53935" }} /> Lixeira {trashedNotes.length > 0 && `(${trashedNotes.length})`}
                         </button>
                       </>
+                    )}
+                    <button
+                      onClick={() => setShowSoundMenu((v) => !v)}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+                      style={{ color: "#1A1A2E" }}
+                    >
+                      <Bell size={15} style={{ color: "#F9A825" }} /> Som do alerta
+                    </button>
+                    {showSoundMenu && (
+                      <div className="px-2 pb-1 flex flex-col gap-1">
+                        {ALERT_SOUND_OPTIONS.map((opt) => (
+                          <button
+                            key={opt.id}
+                            onClick={() => {
+                              setAlertSound(opt.id);
+                              setAlertSoundChoice(opt.id);
+                              playAlertSoundPreview(opt.id);
+                            }}
+                            className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors"
+                            style={
+                              alertSound === opt.id
+                                ? { background: "#1A1A2E", color: "#FFF" }
+                                : { background: "rgba(0,0,0,0.04)", color: "#1A1A2E" }
+                            }
+                          >
+                            {opt.label}
+                            {alertSound === opt.id && <span>✓</span>}
+                          </button>
+                        ))}
+                        <p className="text-[10px] text-center pt-1" style={{ color: "#9E9E9E" }}>
+                          Toca ao escolher — fica salvo automaticamente
+                        </p>
+                      </div>
                     )}
                     <button onClick={handleRefresh} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors" style={{ color: "#1A1A2E" }}>
                       <RefreshCw size={15} className={isRefreshing ? "animate-spin" : ""} /> Atualizar dados
