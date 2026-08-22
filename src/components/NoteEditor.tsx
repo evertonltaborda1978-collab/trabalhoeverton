@@ -1846,6 +1846,27 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     snapshotRef.current = null;
   };
 
+  // Liga o NoteEditor ao botão/gesto de voltar nativo do Android — sem isso,
+  // voltar no celular não fechava a nota (não tinha ligação nenhuma com ela).
+  // Usa uma ref pra sempre chamar a versão mais recente do handleClose, sem
+  // ficar re-registrando (e empilhando histórico) a cada re-render.
+  const handleCloseRef = useRef(handleClose);
+  useEffect(() => {
+    handleCloseRef.current = handleClose;
+  });
+  useEffect(() => {
+    if (!open) return;
+    const w = window as any;
+    if (typeof w.__registerModal === "function") {
+      w.__registerModal("note-editor", () => handleCloseRef.current());
+    }
+    return () => {
+      if (typeof w.__unregisterModal === "function") {
+        w.__unregisterModal();
+      }
+    };
+  }, [open]);
+
   const plainText = blocksToPlainText(blocks);
   const wordCount = plainText.trim().split(/\s+/).filter(Boolean).length;
   const charCount = plainText.length;
