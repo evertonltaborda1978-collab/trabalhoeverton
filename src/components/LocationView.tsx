@@ -13,6 +13,7 @@ import { GeofenceSection } from "./local/GeofenceSection";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
+import { geo } from "@/lib/geolocation";
 
 const INTERVAL_NORMAL = 600;
 const INTERVAL_EMERGENCY = 30;
@@ -55,7 +56,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
   // Modal de ajuda ("?") explicando a diferença entre as opções da tela de escolha
   const [infoModal, setInfoModal] = useState<{ title: string; text: string } | null>(null);
 
-  const watchIdRef = useRef<number | null>(null);
+  const watchIdRef = useRef<ReturnType<typeof geo.watchPosition> | null>(null);
   const intervalRef = useRef<number | null>(null);
   const [lostMode, setLostMode] = useState(false);
   const [showLostDevicePicker, setShowLostDevicePicker] = useState(false);
@@ -80,7 +81,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
 
   const fetchPosition = useCallback((accurate = true) => {
     setIsUpdating(true);
-    navigator.geolocation.getCurrentPosition(
+    geo.getCurrentPosition(
       async (pos) => {
         const newPos: Position = {
           lat: pos.coords.latitude,
@@ -107,14 +108,14 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
   }, [currentDevice, recordLocation]);
 
   const captureNow = useCallback((accurate = true) => {
-    if (!navigator.geolocation) return;
+    if (!geo.isSupported()) return;
     setCapturing(true);
     setCaptureProgress(0);
     setCaptureAccuracy(null);
     let best: Position | null = null;
     const started = Date.now();
 
-    const wid = navigator.geolocation.watchPosition(
+    const wid = geo.watchPosition(
       (pos) => {
         const p: Position = {
           lat: pos.coords.latitude,
@@ -159,7 +160,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
     }, 500);
 
     const cleanup = () => {
-      navigator.geolocation.clearWatch(wid);
+      geo.clearWatch(wid);
       window.clearInterval(tick);
       setCapturing(false);
     };
@@ -190,7 +191,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
   }, [captureNow]);
 
   const startTracking = useCallback(() => {
-    if (!navigator.geolocation) {
+    if (!geo.isSupported()) {
       setError("Geolocalização não suportada");
       return;
     }
@@ -200,7 +201,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
   }, [fetchPosition]);
 
   const stopTracking = useCallback(() => {
-    if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+    if (watchIdRef.current !== null) geo.clearWatch(watchIdRef.current);
     watchIdRef.current = null;
     if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
     intervalRef.current = null;
@@ -215,7 +216,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
     intervalRef.current = window.setInterval(() => fetchPosition(emergencyMode), ms);
 
     if (emergencyMode && watchIdRef.current === null) {
-      watchIdRef.current = navigator.geolocation.watchPosition(
+      watchIdRef.current = geo.watchPosition(
         (pos) => {
           const np: Position = {
             lat: pos.coords.latitude,
@@ -231,7 +232,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
       );
     } else if (!emergencyMode && watchIdRef.current !== null) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
+      geo.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
     return () => {
@@ -240,7 +241,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
   }, [tracking, emergencyMode, fetchPosition, currentDevice, recordLocation]);
 
   useEffect(() => () => {
-    if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+    if (watchIdRef.current !== null) geo.clearWatch(watchIdRef.current);
     if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
   }, []);
 
