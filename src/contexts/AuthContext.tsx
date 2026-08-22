@@ -72,7 +72,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = async () => {
-    await (supabase.auth as any).signOut();
+    // Sai da tela JÁ, na hora — nunca fica esperando o servidor confirmar.
+    // Antes disso, o botão "Sair" ficava com a tela igual, parado, quando
+    // estava offline, porque só avançava para a tela de login depois que o
+    // Supabase confirmasse (o que nunca acontece sem internet).
+    setSession(null);
+    try {
+      await (supabase.auth as any).signOut();
+    } catch {
+      // sem internet ou erro do servidor: tudo bem, a sessão local já foi
+      // encerrada acima; da próxima vez que a internet voltar, o app volta
+      // a exigir login normalmente.
+    }
   };
 
   return (
