@@ -829,10 +829,10 @@ export function useNotes() {
       if (current && current.id === id && current.type === "reminder") {
         try {
           const key = "reminder_fired_ids";
-          const fired = JSON.parse(sessionStorage.getItem(key) || "[]") as string[];
+          const fired = JSON.parse(localStorage.getItem(key) || "[]") as string[];
           if (!fired.includes(id)) {
             fired.push(id);
-            sessionStorage.setItem(key, JSON.stringify(fired));
+            localStorage.setItem(key, JSON.stringify(fired));
           }
         } catch {}
       }
@@ -846,19 +846,23 @@ export function useNotes() {
   }, []);
 
   useEffect(() => {
+    // Antes usava sessionStorage aqui — isso apagava a lista de alertas já
+    // vistos toda vez que o app era fechado de verdade, fazendo um lembrete
+    // já dispensado voltar a aparecer ao reabrir. Trocado para localStorage,
+    // que persiste entre aberturas do app.
     const firedKey = "reminder_fired_ids";
     const upcomingFiredKey = "reminder_upcoming_fired_ids";
     const UPCOMING_WINDOW_MS = 15 * 60 * 1000; // avisa até 15 min antes do horário
 
     const getFired = (key: string): string[] => {
-      try { return JSON.parse(sessionStorage.getItem(key) || "[]"); } catch { return []; }
+      try { return JSON.parse(localStorage.getItem(key) || "[]"); } catch { return []; }
     };
     const markFired = (key: string, id: string) => {
       try {
         const fired = getFired(key);
         if (!fired.includes(id)) {
           fired.push(id);
-          sessionStorage.setItem(key, JSON.stringify(fired));
+          localStorage.setItem(key, JSON.stringify(fired));
         }
       } catch {}
     };
