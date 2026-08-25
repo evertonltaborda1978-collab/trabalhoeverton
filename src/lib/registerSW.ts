@@ -8,7 +8,10 @@
  * Kill switch: abrir o app com ?sw=off remove o suporte offline.
  */
 
-const SW_URL = "/sw.js";
+// BASE_URL é "/" no build normal (Capacitor/local) e "/trabalhoeverton/"
+// no build do GitHub Pages — assim o service worker é sempre registrado
+// no caminho certo, onde quer que o app esteja publicado.
+const SW_URL = `${import.meta.env.BASE_URL}sw.js`;
 
 async function unregisterAppServiceWorkers() {
   if (!("serviceWorker" in navigator)) return;
@@ -57,7 +60,7 @@ export function registerOfflineSupport() {
   }
 
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register(SW_URL, { scope: "/" }).catch(() => {
+    navigator.serviceWorker.register(SW_URL, { scope: import.meta.env.BASE_URL }).catch(() => {
       // sem suporte offline neste navegador — app segue funcionando online
     });
   });

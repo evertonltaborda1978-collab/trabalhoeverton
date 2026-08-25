@@ -37,7 +37,7 @@ export function useVersionCheck() {
       //    Se existir, apenas atualiza em segundo plano (sem incomodar);
       //    o aviso aparece no próximo login, já com a versão nova carregada.
       try {
-        const res = await fetch(`/version.json?_=${Date.now()}`, { cache: "no-store" });
+        const res = await fetch(`${import.meta.env.BASE_URL}version.json?_=${Date.now()}`, { cache: "no-store" });
         if (!res.ok) return;
         const data = (await res.json()) as { version?: string };
         if (data?.version && data.version !== APP_VERSION && "serviceWorker" in navigator) {

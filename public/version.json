@@ -1,6 +1,7 @@
 {
-  "version": "v3.6",
+  "version": "v3.7",
   "history": [
+    { "version": "v3.7", "changes": "Preparado para publicar fora do Lovable, direto pelo GitHub Pages: caminhos de ícones, atalho PWA e atualização automática ajustados para funcionar na nova endereço; nenhuma mudança visível no dia a dia do app." },
     { "version": "v3.6", "changes": "Corrigidos os alertas de Compromissos (Agenda): editar um compromisso que já tinha avisado antes agora volta a alertar no novo horário (antes ficava mudo pra sempre); e um alerta já dispensado não volta mais a aparecer ao reabrir o app." },
     { "version": "v3.5", "changes": "Corrigido: um alerta de lembrete já dispensado voltava a aparecer ao reabrir o app — agora fica lembrado de verdade. Adicionadas 4 opções de som de alerta (Clássico, Suave, Urgente, Sino), escolhidas e testadas no menu '•••' — a última escolhida vira o padrão permanente." },
     { "version": "v3.4", "changes": "Corrigido o GPS no app Android (APK): agora usa o plugin nativo do Capacitor, que pede a permissão de localização corretamente (antes não pedia nada e não funcionava). Botão 'Sair' agora avisa e não deixa sair enquanto estiver offline, para não ficar sem conseguir entrar de novo até a internet voltar (as notas continuam seguras)." },

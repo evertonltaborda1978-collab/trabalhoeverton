@@ -5,7 +5,13 @@ import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode }) => {
+  // Build normal (dev local / Capacitor / Lovable) usa raiz "/".
+  // Build "ghpages" usa a subpasta do repositório no GitHub Pages.
+  const base = mode === "ghpages" ? "/trabalhoeverton/" : "/";
+
+  return {
+  base,
   server: {
     host: "::",
     port: 8080,
@@ -17,6 +23,7 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === "development" && componentTagger(),
     VitePWA({
+      base,
       strategies: "generateSW",
       registerType: "autoUpdate",
       injectRegister: null,
@@ -26,7 +33,7 @@ export default defineConfig(({ mode }) => ({
       manifest: false,
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
-        navigateFallback: "/index.html",
+        navigateFallback: `${base}index.html`,
         navigateFallbackDenylist: [/^\/~oauth/],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
@@ -75,4 +82,5 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-}));
+  };
+});
