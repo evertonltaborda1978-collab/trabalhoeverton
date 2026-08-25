@@ -78,6 +78,17 @@ export function useAppointments() {
       setAppointments((prev) =>
         prev.map((a) => (a.id === id ? { ...a, title, date, time, description } : a))
       );
+      // Limpa a marcação de "já avisado" — sem isso, editar um compromisso
+      // que já tinha disparado alerta antes (mesmo em outro horário) nunca
+      // mais avisava de novo, porque o ID continuava marcado como "visto".
+      snoozedRef.current.delete(id);
+      const key = "appointments_fired_ids";
+      try {
+        const fired = JSON.parse(localStorage.getItem(key) || "[]") as string[];
+        localStorage.setItem(key, JSON.stringify(fired.filter((firedId) => firedId !== id)));
+      } catch {
+        localStorage.removeItem(key);
+      }
     },
     []
   );
@@ -91,10 +102,10 @@ export function useAppointments() {
     snoozedRef.current.delete(id);
     const key = "appointments_fired_ids";
     try {
-      const fired = JSON.parse(sessionStorage.getItem(key) || "[]") as string[];
-      sessionStorage.setItem(key, JSON.stringify(fired.filter((firedId) => firedId !== id)));
+      const fired = JSON.parse(localStorage.getItem(key) || "[]") as string[];
+      localStorage.setItem(key, JSON.stringify(fired.filter((firedId) => firedId !== id)));
     } catch {
-      sessionStorage.removeItem(key);
+      localStorage.removeItem(key);
     }
   }, []);
 
@@ -133,10 +144,10 @@ export function useAppointments() {
     setActiveAlert(null);
     const key = "appointments_fired_ids";
     try {
-      const fired = JSON.parse(sessionStorage.getItem(key) || "[]") as string[];
+      const fired = JSON.parse(localStorage.getItem(key) || "[]") as string[];
       if (!fired.includes(id)) {
         fired.push(id);
-        sessionStorage.setItem(key, JSON.stringify(fired));
+        localStorage.setItem(key, JSON.stringify(fired));
       }
     } catch {}
   }, []);
@@ -152,7 +163,7 @@ export function useAppointments() {
 
     const getFired = (): string[] => {
       try {
-        return JSON.parse(sessionStorage.getItem(key) || "[]");
+        return JSON.parse(localStorage.getItem(key) || "[]");
       } catch {
         return [];
       }
