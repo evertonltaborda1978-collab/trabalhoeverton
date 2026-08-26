@@ -269,9 +269,16 @@ const Index = () => {
       onModalCloseRef.current = null;
       setActiveModal(null);
     };
+    // Usado pelo listener global do botão de voltar do Android (App.tsx):
+    // diz se ainda tem "pra onde voltar" dentro do app (uma tela cheia
+    // aberta, ou histórico de abas) — só assim ele sabe se deve navegar
+    // pra trás ou já pedir confirmação pra sair do app.
+    (window as any).__canAppGoBack = () =>
+      !!activeModalRef.current || tabHistoryRef.current.length > 0;
     return () => {
       delete (window as any).__registerModal;
       delete (window as any).__unregisterModal;
+      delete (window as any).__canAppGoBack;
     };
   }, []);
 
