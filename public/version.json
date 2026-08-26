@@ -1,6 +1,7 @@
 {
-  "version": "v3.8",
+  "version": "v3.9",
   "history": [
+    { "version": "v3.9", "changes": "Corrigido no app Android: cabeçalho não fica mais escondido atrás da câmera/barra de status em nenhuma tela (Notas, Relatório de Turno, Relatório de Rebobinadeira); texto não fica mais maior que o necessário; botão/gesto de voltar nativo agora fecha corretamente as telas de Relatório de Turno e Rebobinadeira (a de Notas já funcionava)." },
     { "version": "v3.8", "changes": "Fotos anexadas às notas agora ficam um pouco mais leves (mesma nitidez ao ver no celular), economizando espaço no banco de dados — importante para quem anexa bastante foto/print." },
     { "version": "v3.7", "changes": "Preparado para publicar fora do Lovable, direto pelo GitHub Pages: caminhos de ícones, atalho PWA e atualização automática ajustados para funcionar na nova endereço; nenhuma mudança visível no dia a dia do app." },
     { "version": "v3.6", "changes": "Corrigidos os alertas de Compromissos (Agenda): editar um compromisso que já tinha avisado antes agora volta a alertar no novo horário (antes ficava mudo pra sempre); e um alerta já dispensado não volta mais a aparecer ao reabrir o app." },
