@@ -4,6 +4,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Impede que o WebView do Android aumente o texto sozinho (efeito de
+   "text boosting"), que é o que costuma fazer a fonte ficar maior no
+   app do que no navegador, mesmo com o mesmo tamanho escolhido. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 @layer base {
   :root {
     --background: 30 18% 95%;
