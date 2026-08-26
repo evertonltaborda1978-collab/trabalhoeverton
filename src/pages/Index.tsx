@@ -321,6 +321,7 @@ const Index = () => {
         style={{
           background: "rgba(247,245,242,0.98)",
           borderBottom: "1px solid rgba(0,0,0,0.04)",
+          paddingTop: "env(safe-area-inset-top)",
         }}
       >
         <div className="max-w-lg mx-auto px-4 pt-2 pb-2">
