@@ -156,6 +156,8 @@ export default function Auth() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="pl-10"
+              autoComplete="username"
+              name="email"
               required
             />
           </div>
@@ -168,6 +170,8 @@ export default function Auth() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="pl-10 pr-10"
+                autoComplete={isLogin ? "current-password" : "new-password"}
+                name="password"
                 required
                 minLength={6}
               />

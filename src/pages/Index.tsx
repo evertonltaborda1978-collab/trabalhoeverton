@@ -21,6 +21,7 @@ import { toast } from "@/hooks/use-toast";
 import { syncNativeReminders, type NativeReminder } from "@/lib/native";
 import { LogOut, RefreshCw, RotateCcw, Cloud, CloudOff, Download, Upload, SignalHigh, SignalMedium, SignalLow, SignalZero, MoreHorizontal, ClipboardList, Trash2, Bell } from "lucide-react";
 import { ALERT_SOUND_OPTIONS, getAlertSoundChoice, setAlertSoundChoice, playAlertSoundPreview, type AlertSoundId } from "@/lib/alertSound";
+import { useAppTextSize, APP_TEXT_SIZE_LABELS } from "@/hooks/useAppTextSize";
 
 type Tab = "notes" | "calendar" | "weather" | "location" | "devices" | "fuel" | "medication";
 
@@ -57,6 +58,7 @@ const Index = () => {
     () => (localStorage.getItem("notes_font_size") as "sm" | "md" | "lg" | "xl") || "md"
   );
   const importRef = useRef<HTMLInputElement>(null);
+  const { size: appTextSize, setSize: setAppTextSize } = useAppTextSize();
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const { notice: updateNotice } = useVersionCheck();
 
@@ -269,9 +271,16 @@ const Index = () => {
       onModalCloseRef.current = null;
       setActiveModal(null);
     };
+    // Usado pelo listener global do botão de voltar do Android (App.tsx):
+    // diz se ainda tem "pra onde voltar" dentro do app (uma tela cheia
+    // aberta, ou histórico de abas) — só assim ele sabe se deve navegar
+    // pra trás ou já pedir confirmação pra sair do app.
+    (window as any).__canAppGoBack = () =>
+      !!activeModalRef.current || tabHistoryRef.current.length > 0;
     return () => {
       delete (window as any).__registerModal;
       delete (window as any).__unregisterModal;
+      delete (window as any).__canAppGoBack;
     };
   }, []);
 
@@ -321,6 +330,7 @@ const Index = () => {
         style={{
           background: "rgba(247,245,242,0.98)",
           borderBottom: "1px solid rgba(0,0,0,0.04)",
+          paddingTop: "env(safe-area-inset-top)",
         }}
       >
         <div className="max-w-lg mx-auto px-4 pt-2 pb-2">
@@ -414,6 +424,26 @@ const Index = () => {
                         </button>
                       </>
                     )}
+                    <div className="px-3 pt-1 pb-2 border-b" style={{ borderColor: "#EBEBEB" }}>
+                      <p className="text-[10px] font-bold mb-1.5" style={{ color: "#9E9E9E" }}>TAMANHO DO TEXTO (APP INTEIRO)</p>
+                      <div className="flex items-center gap-1.5">
+                        {APP_TEXT_SIZE_LABELS.map(({ id, label }) => (
+                          <button
+                            key={id}
+                            onClick={() => setAppTextSize(id)}
+                            className="flex-1 flex items-center justify-center h-[30px] rounded-lg font-bold text-xs transition-all"
+                            style={
+                              appTextSize === id
+                                ? { background: "#1A1A2E", color: "#FFF" }
+                                : { background: "rgba(0,0,0,0.05)", border: "1px solid #E0E0E0", color: "#757575" }
+                            }
+                            title={label}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <button
                       onClick={() => setShowSoundMenu((v) => !v)}
                       className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
