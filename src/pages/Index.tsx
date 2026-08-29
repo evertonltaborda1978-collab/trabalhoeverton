@@ -1,14 +1,19 @@
 import { useState, useEffect, useRef } from "react";
+import { lazy, Suspense } from "react";
 import { BottomNav } from "@/components/BottomNav";
 import { NotesView } from "@/components/NotesView";
-import { CalendarView } from "@/components/CalendarView";
-import { LocationView } from "@/components/LocationView";
-import { WeatherView } from "@/components/WeatherView";
-import { DevicesView } from "@/components/DevicesView";
-import { FuelCalculatorView } from "@/components/FuelCalculatorView";
-import { MedicationView } from "@/components/MedicationView";
 import { SnoozeAlert } from "@/components/SnoozeAlert";
 import { DeviceLabelModal } from "@/components/local/DeviceLabelModal";
+
+// Carregadas só quando a aba é aberta pela primeira vez (em vez de tudo de
+// uma vez ao abrir o app) — deixa o app inicial mais leve e rápido,
+// especialmente importante no APK Android.
+const CalendarView = lazy(() => import("@/components/CalendarView").then((m) => ({ default: m.CalendarView })));
+const LocationView = lazy(() => import("@/components/LocationView").then((m) => ({ default: m.LocationView })));
+const WeatherView = lazy(() => import("@/components/WeatherView").then((m) => ({ default: m.WeatherView })));
+const DevicesView = lazy(() => import("@/components/DevicesView").then((m) => ({ default: m.DevicesView })));
+const FuelCalculatorView = lazy(() => import("@/components/FuelCalculatorView").then((m) => ({ default: m.FuelCalculatorView })));
+const MedicationView = lazy(() => import("@/components/MedicationView").then((m) => ({ default: m.MedicationView })));
 import { useNotes } from "@/hooks/useNotes";
 import { useAppointments } from "@/hooks/useAppointments";
 import { useDeviceTracking } from "@/hooks/useDeviceTracking";
@@ -36,6 +41,16 @@ const titles: Record<Tab, string> = {
 };
 
 const DEVICE_LABEL_PROMPT_KEY = "device_label_prompt_dismissed";
+
+// Aparece rapidinho ao trocar de aba, enquanto o código dessa aba carrega
+// (normalmente é tão rápido que nem dá tempo de aparecer de verdade).
+function TabLoading() {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "60px 20px", color: "#9E9E9E", fontSize: 14 }}>
+      Carregando...
+    </div>
+  );
+}
 
 const Index = () => {
   const [tab, setTab] = useState<Tab>("notes");
@@ -540,22 +555,24 @@ const Index = () => {
           />
         )}
         {tab === "calendar" && (
-          <CalendarView
-            appointments={appointments}
-            onAdd={addAppointment}
-            onUpdate={(id, title, date, time, desc) => updateAppointment(id, title, date, time, desc)}
-            onDelete={handleDeleteAppointment}
-            trashedAppointments={trashedAppointments}
-            onRestoreAppointment={restoreAppointment}
-            onPermanentDeleteAppointment={permanentDeleteAppointment}
-            onEmptyAppointmentTrash={emptyAppointmentTrash}
-          />
+          <Suspense fallback={<TabLoading />}>
+            <CalendarView
+              appointments={appointments}
+              onAdd={addAppointment}
+              onUpdate={(id, title, date, time, desc) => updateAppointment(id, title, date, time, desc)}
+              onDelete={handleDeleteAppointment}
+              trashedAppointments={trashedAppointments}
+              onRestoreAppointment={restoreAppointment}
+              onPermanentDeleteAppointment={permanentDeleteAppointment}
+              onEmptyAppointmentTrash={emptyAppointmentTrash}
+            />
+          </Suspense>
         )}
-        {tab === "weather" && <WeatherView />}
-        {tab === "fuel" && <FuelCalculatorView />}
-        {tab === "medication" && <MedicationView />}
-        {tab === "location" && <LocationView onBack={() => changeTab("notes")} />}
-        {tab === "devices" && <DevicesView />}
+        {tab === "weather" && <Suspense fallback={<TabLoading />}><WeatherView /></Suspense>}
+        {tab === "fuel" && <Suspense fallback={<TabLoading />}><FuelCalculatorView /></Suspense>}
+        {tab === "medication" && <Suspense fallback={<TabLoading />}><MedicationView /></Suspense>}
+        {tab === "location" && <Suspense fallback={<TabLoading />}><LocationView onBack={() => changeTab("notes")} /></Suspense>}
+        {tab === "devices" && <Suspense fallback={<TabLoading />}><DevicesView /></Suspense>}
       </main>
 
       {/* Bottom Navigation */}
