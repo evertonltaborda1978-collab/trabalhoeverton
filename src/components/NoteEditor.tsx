@@ -1212,8 +1212,9 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     toast({ title: "✂️ Texto dividido em dois blocos", description: "Agora cada parte pode ter sua própria formatação." });
   };
 
-  // Compress image before inserting (max 1200px, quality 0.7)
-  const compressImage = (file: File, maxSize = 1200, quality = 0.7): Promise<string> => {
+  // Compress image before inserting (max 1000px, quality 0.75 — bom
+  // equilíbrio entre espaço no banco e legibilidade de documentos/recibos)
+  const compressImage = (file: File, maxSize = 1000, quality = 0.75): Promise<string> => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (ev) => {

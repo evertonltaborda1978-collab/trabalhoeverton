@@ -340,6 +340,24 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   const [rcCollapsed, setRcCollapsed] = useState(true);
   const [obsCollapsed, setObsCollapsed] = useState(true);
 
+  // Liga essa tela ao botão/gesto de voltar nativo do Android — mesmo
+  // mecanismo já usado pela tela de editar nota (window.__registerModal).
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+  useEffect(() => {
+    const w = window as any;
+    if (typeof w.__registerModal === "function") {
+      w.__registerModal("relatorio-rebobinadeira", () => onCloseRef.current());
+    }
+    return () => {
+      if (typeof w.__unregisterModal === "function") {
+        w.__unregisterModal();
+      }
+    };
+  }, []);
+
   // ── Parâmetros da rebobinadeira ──
   const [idMaquina, setIdMaquina] = useState(saved?.idMaquina ?? "");
   const [parametros, setParametros] = useState<Parametro[]>(saved?.parametros ?? loadParamsBase());
@@ -903,7 +921,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   return (
     <div className="fixed inset-0 z-[120] flex flex-col" style={{ background: theme.bg }}>
       {/* Header */}
-      <div style={{ background: theme.headerBg, borderBottom: `1px solid ${theme.cardBorder}`, padding: "12px 16px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", rowGap: 8 }}>
+      <div style={{ background: theme.headerBg, borderBottom: `1px solid ${theme.cardBorder}`, padding: "12px 16px", paddingTop: "calc(12px + env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", rowGap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
           <span style={{ fontSize: 18, flexShrink: 0 }}>🧻</span>
           <span style={{ fontWeight: 800, fontSize: 15, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Rebobinadeira</span>

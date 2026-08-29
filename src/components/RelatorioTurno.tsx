@@ -398,6 +398,24 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   const [novoLabel, setNovoLabel] = useState("");
   const [obsTomb, setObsTomb] = useState(saved?.obsTomb ?? "");
   const [paradasTomb, setParadasTomb] = useState<Parada[]>(saved?.paradasTomb ?? []);
+
+  // Liga essa tela ao botão/gesto de voltar nativo do Android — mesmo
+  // mecanismo já usado pela tela de editar nota (window.__registerModal).
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+  useEffect(() => {
+    const w = window as any;
+    if (typeof w.__registerModal === "function") {
+      w.__registerModal("relatorio-turno", () => onCloseRef.current());
+    }
+    return () => {
+      if (typeof w.__unregisterModal === "function") {
+        w.__unregisterModal();
+      }
+    };
+  }, []);
   const [db, setDb] = useState<TombadorDB>(loadDB);
 
   // Modais
@@ -947,7 +965,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   return (
     <div className="fixed inset-0 z-[110] flex flex-col" style={{ background: theme.bg }}>
       {/* Header fixo */}
-      <div style={{ background: theme.headerBg, borderBottom: `1px solid ${theme.cardBorder}`, padding: "12px 16px 10px", display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ background: theme.headerBg, borderBottom: `1px solid ${theme.cardBorder}`, padding: "12px 16px 10px", paddingTop: "calc(12px + env(safe-area-inset-top))", display: "flex", flexDirection: "column", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", rowGap: 8 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
             <FileText size={18} style={{ color: "#1A1A2E", flexShrink: 0 }} />
