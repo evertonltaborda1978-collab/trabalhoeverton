@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { SnoozeAlertData } from "@/components/SnoozeAlert";
+import type { AlertSoundId } from "@/lib/alertSound";
 
 export interface Appointment {
   id: string;
@@ -9,6 +10,7 @@ export interface Appointment {
   date: Date;
   time: string;
   description: string;
+  alertSound: AlertSoundId;
   deletedAt?: Date | null;
 }
 
@@ -33,6 +35,7 @@ export function useAppointments() {
           date: new Date(a.date + "T00:00:00"),
           time: a.time,
           description: a.description,
+          alertSound: (a.alert_sound || "classico") as AlertSoundId,
           deletedAt: a.deleted_at ? new Date(a.deleted_at) : null,
         }))
       );
@@ -44,12 +47,12 @@ export function useAppointments() {
   }, [fetchAppointments]);
 
   const addAppointment = useCallback(
-    async (title: string, date: Date, time: string, description: string) => {
+    async (title: string, date: Date, time: string, description: string, alertSound: AlertSoundId) => {
       if (!user) return;
       const dateStr = date.toISOString().split("T")[0];
       const { data } = await supabase
         .from("appointments")
-        .insert({ user_id: user.id, title, date: dateStr, time, description })
+        .insert({ user_id: user.id, title, date: dateStr, time, description, alert_sound: alertSound })
         .select()
         .single();
 
@@ -60,6 +63,7 @@ export function useAppointments() {
           date: new Date(data.date + "T00:00:00"),
           time: data.time,
           description: data.description,
+          alertSound: (data.alert_sound || "classico") as AlertSoundId,
         };
         setAppointments((prev) => [...prev, apt]);
         return apt;
@@ -69,14 +73,14 @@ export function useAppointments() {
   );
 
   const updateAppointment = useCallback(
-    async (id: string, title: string, date: Date, time: string, description: string) => {
+    async (id: string, title: string, date: Date, time: string, description: string, alertSound: AlertSoundId) => {
       const dateStr = date.toISOString().split("T")[0];
       await supabase
         .from("appointments")
-        .update({ title, date: dateStr, time, description })
+        .update({ title, date: dateStr, time, description, alert_sound: alertSound })
         .eq("id", id);
       setAppointments((prev) =>
-        prev.map((a) => (a.id === id ? { ...a, title, date, time, description } : a))
+        prev.map((a) => (a.id === id ? { ...a, title, date, time, description, alertSound } : a))
       );
       // Limpa a marcação de "já avisado" — sem isso, editar um compromisso
       // que já tinha disparado alerta antes (mesmo em outro horário) nunca
@@ -193,6 +197,7 @@ export function useAppointments() {
             title: apt.title,
             time: apt.time,
             type: "appointment",
+            soundId: apt.alertSound,
           });
         }
       });

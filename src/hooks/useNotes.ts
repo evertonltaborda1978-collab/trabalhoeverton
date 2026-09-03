@@ -3,6 +3,7 @@ import { SnoozeAlertData } from "@/components/SnoozeAlert";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { encryptNote, decryptNote, isEncrypted, LockPayload } from "@/lib/noteCrypto";
+import type { AlertSoundId } from "@/lib/alertSound";
 
 export interface Note {
   id: string;
@@ -18,6 +19,7 @@ export interface Note {
   sincronizado: boolean;
   reminderDate?: string | null;
   reminderTime?: string | null;
+  reminderSound?: AlertSoundId;
   isLocked: boolean;
   lockSalt?: string | null;
   deletedAt?: Date | null;
@@ -135,6 +137,7 @@ function mapRow(n: any): Note {
     sincronizado: true,
     reminderDate: n.reminder_date || null,
     reminderTime: n.reminder_time || null,
+    reminderSound: (n.reminder_sound || "classico") as AlertSoundId,
     isLocked: n.is_locked || false,
     lockSalt: n.lock_salt || null,
     deletedAt: n.deleted_at ? new Date(n.deleted_at) : null,
@@ -201,6 +204,7 @@ export function useNotes() {
           // título/conteúdo/cor — perdendo a exclusão/lembrete/bloqueio.
           reminder_date: note.reminderDate ?? null,
           reminder_time: note.reminderTime ?? null,
+          reminder_sound: note.reminderSound ?? "classico",
           is_locked: note.isLocked,
           lock_salt: note.lockSalt ?? null,
           deleted_at: note.deletedAt ? note.deletedAt.toISOString() : null,
@@ -535,11 +539,11 @@ export function useNotes() {
   );
 
   // Set/remove reminder
-  const setNoteReminder = useCallback(async (id: string, reminderDate: string | null, reminderTime: string | null) => {
+  const setNoteReminder = useCallback(async (id: string, reminderDate: string | null, reminderTime: string | null, reminderSound: AlertSoundId = "classico") => {
     markSelfModified(id);
-    setNotes((prev) => prev.map((n) => n.id === id ? { ...n, reminderDate, reminderTime, updatedAt: new Date(), sincronizado: false } : n));
+    setNotes((prev) => prev.map((n) => n.id === id ? { ...n, reminderDate, reminderTime, reminderSound, updatedAt: new Date(), sincronizado: false } : n));
     try {
-      await (supabase.from("notes") as any).update({ reminder_date: reminderDate, reminder_time: reminderTime, updated_at: new Date().toISOString(), sincronizado: true }).eq("id", id);
+      await (supabase.from("notes") as any).update({ reminder_date: reminderDate, reminder_time: reminderTime, reminder_sound: reminderSound, updated_at: new Date().toISOString(), sincronizado: true }).eq("id", id);
       setNotes((prev) => prev.map((n) => n.id === id ? { ...n, sincronizado: true } : n));
     } catch { setSyncStatus("offline"); }
   }, [markSelfModified]);
@@ -890,6 +894,7 @@ export function useNotes() {
             title: note.title || "Nota sem título",
             time: note.reminderTime,
             type: "reminder",
+            soundId: note.reminderSound,
           });
           return;
         }
@@ -902,6 +907,7 @@ export function useNotes() {
             title: note.title || "Nota sem título",
             time: note.reminderTime,
             type: "reminder_upcoming",
+            soundId: note.reminderSound,
           });
           return;
         }

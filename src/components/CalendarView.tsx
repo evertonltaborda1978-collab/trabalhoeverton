@@ -18,13 +18,14 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { TrashView } from "./TrashView";
 import { cn } from "@/lib/utils";
+import { ALERT_SOUND_OPTIONS, playAlertSoundPreview, type AlertSoundId } from "@/lib/alertSound";
 
 type ViewMode = "day" | "week" | "month";
 
 interface CalendarViewProps {
   appointments: Appointment[];
-  onAdd: (title: string, date: Date, time: string, description: string) => void;
-  onUpdate: (id: string, title: string, date: Date, time: string, description: string) => void;
+  onAdd: (title: string, date: Date, time: string, description: string, alertSound: AlertSoundId) => void;
+  onUpdate: (id: string, title: string, date: Date, time: string, description: string, alertSound: AlertSoundId) => void;
   onDelete: (id: string) => void;
   trashedAppointments?: Appointment[];
   onRestoreAppointment?: (id: string) => void;
@@ -40,6 +41,7 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
   const [title, setTitle] = useState("");
   const [time, setTime] = useState("09:00");
   const [description, setDescription] = useState("");
+  const [alertSound, setAlertSound] = useState<AlertSoundId | null>(null);
   const [showTrash, setShowTrash] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteTitle, setConfirmDeleteTitle] = useState("");
@@ -83,11 +85,15 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
 
   const handleSave = async () => {
     if (!title.trim()) return;
+    if (!alertSound) {
+      toast({ title: "Escolha um som de alerta", description: "Toque numa das opções antes de salvar.", variant: "destructive" });
+      return;
+    }
     if (editingId) {
-      onUpdate(editingId, title, selected, time, description);
+      onUpdate(editingId, title, selected, time, description, alertSound);
       toast({ title: "✅ Compromisso atualizado!" });
     } else {
-      onAdd(title, selected, time, description);
+      onAdd(title, selected, time, description, alertSound);
       if (connected) {
         const dateStr = format(selected, "yyyy-MM-dd");
         const ok = await pushEvent(title, dateStr, time, description);
@@ -106,6 +112,7 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
     setTitle("");
     setTime("09:00");
     setDescription("");
+    setAlertSound(null);
     setDialogOpen(true);
   };
 
@@ -115,6 +122,7 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
     setTime(apt.time);
     setDescription(apt.description);
     setSelected(apt.date);
+    setAlertSound(apt.alertSound);
     setDialogOpen(true);
   };
 
@@ -124,6 +132,7 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
     setTitle("");
     setTime("09:00");
     setDescription("");
+    setAlertSound(null);
   };
 
   const handleDeleteWithConfirm = (id: string) => {
@@ -498,6 +507,26 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
             </div>
             <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
             <Textarea placeholder="Descrição (opcional)" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="resize-none" />
+            <div>
+              <p className="text-[11px] font-bold mb-1.5" style={{ color: "#9E9E9E" }}>SOM DO ALERTA (toque para ouvir e escolher)</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {ALERT_SOUND_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => { setAlertSound(opt.id); playAlertSoundPreview(opt.id); }}
+                    className="text-left px-2.5 py-2 rounded-lg text-xs font-semibold transition-all"
+                    style={
+                      alertSound === opt.id
+                        ? { background: "#1A1A2E", color: "#FFF" }
+                        : { background: "rgba(0,0,0,0.05)", border: "1px solid #E0E0E0", color: "#555" }
+                    }
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             {connected && !editingId && (
               <p className="text-[11px] font-medium flex items-center gap-1" style={{ color: "#4CAF50" }}>
                 ✓ Será sincronizado com Google Agenda

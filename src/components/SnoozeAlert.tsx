@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { X, Clock, BellRing } from "lucide-react";
-import { triggerAlert } from "@/lib/alertSound";
+import { triggerAlert, type AlertSoundId } from "@/lib/alertSound";
 
 export interface SnoozeAlertData {
   id: string;
   title: string;
   time: string;
-  type: "appointment" | "reminder" | "reminder_upcoming";
+  type: "appointment" | "reminder" | "reminder_upcoming" | "medication";
+  soundId?: AlertSoundId;
 }
 
 interface SnoozeAlertProps {
@@ -21,7 +22,7 @@ export function SnoozeAlert({ alert, onDismiss, onSnooze }: SnoozeAlertProps) {
   useEffect(() => {
     if (alert) {
       setVisible(true);
-      triggerAlert();
+      triggerAlert(alert.soundId);
     } else {
       setVisible(false);
     }
@@ -31,6 +32,7 @@ export function SnoozeAlert({ alert, onDismiss, onSnooze }: SnoozeAlertProps) {
 
   const isAppointment = alert.type === "appointment";
   const isUpcoming = alert.type === "reminder_upcoming";
+  const isMedication = alert.type === "medication";
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.6)" }}>
@@ -49,6 +51,8 @@ export function SnoozeAlert({ alert, onDismiss, onSnooze }: SnoozeAlertProps) {
               ? "linear-gradient(135deg, #FF6B35, #E53935)"
               : isUpcoming
               ? "linear-gradient(135deg, #42A5F5, #1E88E5)"
+              : isMedication
+              ? "linear-gradient(135deg, #43A047, #2E7D32)"
               : "linear-gradient(135deg, #F9A825, #FF8F00)",
           }}
         >
@@ -58,7 +62,7 @@ export function SnoozeAlert({ alert, onDismiss, onSnooze }: SnoozeAlertProps) {
             </div>
             <div>
               <p className="text-xs font-semibold" style={{ color: "rgba(255,255,255,0.8)" }}>
-                {isAppointment ? "Compromisso" : isUpcoming ? "Lembrete em breve" : "Lembrete"}
+                {isAppointment ? "Compromisso" : isUpcoming ? "Lembrete em breve" : isMedication ? "Hora do remédio" : "Lembrete"}
               </p>
               <p className="text-base font-bold text-white">{alert.title}</p>
             </div>

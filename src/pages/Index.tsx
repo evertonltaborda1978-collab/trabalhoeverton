@@ -24,9 +24,10 @@ import { APP_VERSION, forceUpdateApp } from "@/lib/appVersion";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { syncNativeReminders, type NativeReminder } from "@/lib/native";
-import { LogOut, RefreshCw, RotateCcw, Cloud, CloudOff, Download, Upload, SignalHigh, SignalMedium, SignalLow, SignalZero, MoreHorizontal, ClipboardList, Trash2, Bell } from "lucide-react";
-import { ALERT_SOUND_OPTIONS, getAlertSoundChoice, setAlertSoundChoice, playAlertSoundPreview, type AlertSoundId } from "@/lib/alertSound";
+import { LogOut, RefreshCw, RotateCcw, Cloud, CloudOff, Download, Upload, SignalHigh, SignalMedium, SignalLow, SignalZero, MoreHorizontal, ClipboardList, Trash2 } from "lucide-react";
+import type { AlertSoundId } from "@/lib/alertSound";
 import { useAppTextSize, APP_TEXT_SIZE_LABELS } from "@/hooks/useAppTextSize";
+import { useMedicationAlerts } from "@/hooks/useMedicationAlerts";
 
 type Tab = "notes" | "calendar" | "weather" | "location" | "devices" | "fuel" | "medication";
 
@@ -61,14 +62,13 @@ const Index = () => {
   const onModalCloseRef = useRef<(() => void) | null>(null);
   const { notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, reorderPinnedNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes, refreshNotes } = useNotes();
   const { appointments, trashedAppointments, addAppointment, updateAppointment, deleteAppointment, restoreAppointment, permanentDeleteAppointment, emptyAppointmentTrash, activeAlert, dismissAlert, snoozeAlert, fetchAppointments } = useAppointments();
+  const { medicationAlert, dismissMedicationAlert, snoozeMedicationAlert } = useMedicationAlerts();
   const { signOut } = useAuth();
   const { currentDevice, fetchDevices } = useDeviceTracking();
   const { recordLocation } = useDeviceLocations();
   const [showLabelModal, setShowLabelModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showBackupMenu, setShowBackupMenu] = useState(false);
-  const [showSoundMenu, setShowSoundMenu] = useState(false);
-  const [alertSound, setAlertSound] = useState<AlertSoundId>(() => getAlertSoundChoice());
   const [notesFontSize, setNotesFontSize] = useState<"sm" | "md" | "lg" | "xl">(
     () => (localStorage.getItem("notes_font_size") as "sm" | "md" | "lg" | "xl") || "md"
   );
@@ -459,39 +459,6 @@ const Index = () => {
                         ))}
                       </div>
                     </div>
-                    <button
-                      onClick={() => setShowSoundMenu((v) => !v)}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
-                      style={{ color: "#1A1A2E" }}
-                    >
-                      <Bell size={15} style={{ color: "#F9A825" }} /> Som do alerta
-                    </button>
-                    {showSoundMenu && (
-                      <div className="px-2 pb-1 flex flex-col gap-1">
-                        {ALERT_SOUND_OPTIONS.map((opt) => (
-                          <button
-                            key={opt.id}
-                            onClick={() => {
-                              setAlertSound(opt.id);
-                              setAlertSoundChoice(opt.id);
-                              playAlertSoundPreview(opt.id);
-                            }}
-                            className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors"
-                            style={
-                              alertSound === opt.id
-                                ? { background: "#1A1A2E", color: "#FFF" }
-                                : { background: "rgba(0,0,0,0.04)", color: "#1A1A2E" }
-                            }
-                          >
-                            {opt.label}
-                            {alertSound === opt.id && <span>✓</span>}
-                          </button>
-                        ))}
-                        <p className="text-[10px] text-center pt-1" style={{ color: "#9E9E9E" }}>
-                          Toca ao escolher — fica salvo automaticamente
-                        </p>
-                      </div>
-                    )}
                     <button onClick={handleRefresh} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors" style={{ color: "#1A1A2E" }}>
                       <RefreshCw size={15} className={isRefreshing ? "animate-spin" : ""} /> Atualizar dados
                     </button>
@@ -559,7 +526,7 @@ const Index = () => {
             <CalendarView
               appointments={appointments}
               onAdd={addAppointment}
-              onUpdate={(id, title, date, time, desc) => updateAppointment(id, title, date, time, desc)}
+              onUpdate={(id, title, date, time, desc, alertSound) => updateAppointment(id, title, date, time, desc, alertSound)}
               onDelete={handleDeleteAppointment}
               trashedAppointments={trashedAppointments}
               onRestoreAppointment={restoreAppointment}
@@ -577,7 +544,11 @@ const Index = () => {
 
       {/* Bottom Navigation */}
       <BottomNav active={tab} onChange={changeTab} />
-      <SnoozeAlert alert={activeAlert || reminderAlert} onDismiss={(id) => { dismissAlert(id); dismissReminderAlert(id); }} onSnooze={(id, min) => { snoozeAlert(id, min); snoozeReminderAlert(id, min); }} />
+      <SnoozeAlert
+        alert={activeAlert || reminderAlert || medicationAlert}
+        onDismiss={(id) => { dismissAlert(id); dismissReminderAlert(id); dismissMedicationAlert(id); }}
+        onSnooze={(id, min) => { snoozeAlert(id, min); snoozeReminderAlert(id, min); snoozeMedicationAlert(id, min); }}
+      />
       {showLabelModal && currentDevice && (
         <DeviceLabelModal
           deviceId={currentDevice.id}

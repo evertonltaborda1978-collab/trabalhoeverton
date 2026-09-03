@@ -4,6 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Bell, Trash2 } from "lucide-react";
 import { format } from "date-fns";
+import { ALERT_SOUND_OPTIONS, playAlertSoundPreview, type AlertSoundId } from "@/lib/alertSound";
+import { toast } from "@/hooks/use-toast";
 
 interface ReminderModalProps {
   open: boolean;
@@ -11,26 +13,33 @@ interface ReminderModalProps {
   noteTitle: string;
   existingDate?: string | null;
   existingTime?: string | null;
-  onSave: (date: string, time: string) => void;
+  existingSound?: AlertSoundId;
+  onSave: (date: string, time: string, sound: AlertSoundId) => void;
   onRemove: () => void;
 }
 
-export function ReminderModal({ open, onOpenChange, noteTitle, existingDate, existingTime, onSave, onRemove }: ReminderModalProps) {
+export function ReminderModal({ open, onOpenChange, noteTitle, existingDate, existingTime, existingSound, onSave, onRemove }: ReminderModalProps) {
   const hasReminder = !!existingDate;
   const today = format(new Date(), "yyyy-MM-dd");
 
   const [date, setDate] = useState(existingDate || today);
   const [time, setTime] = useState(existingTime || "09:00");
+  const [sound, setSound] = useState<AlertSoundId | null>(existingSound || null);
 
   useEffect(() => {
     if (!open) return;
     setDate(existingDate || today);
     setTime(existingTime || "09:00");
-  }, [open, existingDate, existingTime, today]);
+    setSound(existingSound || null);
+  }, [open, existingDate, existingTime, existingSound, today]);
 
   const handleSave = () => {
     if (!date) return;
-    onSave(date, time);
+    if (!sound) {
+      toast({ title: "Escolha um som de alerta", description: "Toque numa das opções antes de salvar.", variant: "destructive" });
+      return;
+    }
+    onSave(date, time, sound);
     onOpenChange(false);
   };
 
@@ -72,6 +81,27 @@ export function ReminderModal({ open, onOpenChange, noteTitle, existingDate, exi
               value={time}
               onChange={(e) => setTime(e.target.value)}
             />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-500 mb-1.5 block">Som do alerta (toque para ouvir e escolher)</label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {ALERT_SOUND_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => { setSound(opt.id); playAlertSoundPreview(opt.id); }}
+                  className="text-left px-2.5 py-2 rounded-lg text-xs font-semibold transition-all"
+                  style={
+                    sound === opt.id
+                      ? { background: "#1A1A2E", color: "#FFF" }
+                      : { background: "rgba(0,0,0,0.05)", border: "1px solid #E0E0E0", color: "#555" }
+                  }
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {hasReminder && existingDate && existingTime && (

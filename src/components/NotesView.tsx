@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { RelatorioTurno } from "./RelatorioTurno";
 import { RelatorioRebobinadeira } from "./RelatorioRebobinadeira";
+import type { AlertSoundId } from "@/lib/alertSound";
 
 export { getFontClass, getSizeClass } from "./NoteEditor";
 
@@ -26,13 +27,13 @@ interface NotesViewProps {
   onAdd: (title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string, status?: "rascunho" | "publicada") => void;
   onDelete: (id: string) => void;
   onUpdate: (id: string, title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string, status?: "rascunho" | "publicada") => void;
-  onSetReminder: (id: string, date: string | null, time: string | null) => void;
+  onSetReminder: (id: string, date: string | null, time: string | null, sound?: AlertSoundId) => void;
   onTogglePin: (id: string) => void;
   onReorderPin?: (id: string, direction: -1 | 1) => void;
   onLockNote: (id: string, pin: string) => Promise<boolean>;
   onUnlockNote: (id: string, pin: string) => Promise<boolean>;
   onVerifyPin: (id: string, pin: string) => Promise<unknown | null>;
-  onAddAppointment?: (title: string, date: Date, time: string, description: string) => void;
+  onAddAppointment?: (title: string, date: Date, time: string, description: string, alertSound: AlertSoundId) => void;
   onRefresh?: () => void;
   syncStatus: SyncStatus;
   draftCount: number;
@@ -171,11 +172,11 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
     toast({ title: note.isPinned ? "📌 Nota desafixada" : "📌 Nota fixada" });
   };
 
-  const handleReminderSave = (date: string, time: string) => {
+  const handleReminderSave = (date: string, time: string, sound: AlertSoundId) => {
     if (!reminderNote) return;
-    onSetReminder(reminderNote.id, date, time);
+    onSetReminder(reminderNote.id, date, time, sound);
     if (onAddAppointment) {
-      onAddAppointment(reminderNote.title || "Lembrete", new Date(date + "T00:00:00"), time, `Lembrete da nota: ${reminderNote.title}`);
+      onAddAppointment(reminderNote.title || "Lembrete", new Date(date + "T00:00:00"), time, `Lembrete da nota: ${reminderNote.title}`, sound);
     }
     toast({ title: "🔔 Lembrete agendado!", description: `${date} às ${time}` });
   };
@@ -376,8 +377,8 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
         readOnly={editorReadOnly}
         onSetReadOnly={setEditorReadOnly}
         onSave={handleSave}
-        onSchedule={onAddAppointment ? (noteTitle, noteContent, date, time) => {
-          onAddAppointment(noteTitle || "Nota sem título", new Date(date + "T00:00:00"), time, noteContent);
+        onSchedule={onAddAppointment ? (noteTitle, noteContent, date, time, sound) => {
+          onAddAppointment(noteTitle || "Nota sem título", new Date(date + "T00:00:00"), time, noteContent, sound);
         } : undefined}
       />
 
@@ -387,6 +388,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
         noteTitle={reminderNote?.title || ""}
         existingDate={reminderNote?.reminderDate}
         existingTime={reminderNote?.reminderTime}
+        existingSound={reminderNote?.reminderSound}
         onSave={handleReminderSave}
         onRemove={handleReminderRemove}
       />

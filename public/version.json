@@ -1,7 +1,8 @@
 {
-  "version": "v4.3",
+  "version": "v4.4",
   "history": [
-    { "version": "v4.3", "changes": "Corrigido o visualizador de foto ampliada (lupa) dentro das notas: ao dar zoom, agora dá pra ver e arrastar a imagem inteira (antes só aparecia o centro e não dava pra mover pelas bordas); botão de fechar (X) mais confiável, sem falhar às vezes ao tocar." },
+    { "version": "v4.4", "changes": "Sons de alerta personalizados: agora Agenda, lembretes de Notas e Remédios pedem para escolher um som na hora de criar (8 opções, com prévia ao tocar), em vez de um único som global para tudo. Remédios ganharam alarme de verdade pela primeira vez — toca e vibra no horário certo, com o som escolhido. Menu ••• simplificado (removido o seletor de som antigo, que não é mais necessário)." },
+    { "version": "v4.3", "changes": "Biometria agora dispara sozinha assim que a tela de login abre, sem precisar tocar em nenhum botão — se cancelar, ainda dá pra entrar digitando email/senha normalmente." },
     { "version": "v4.2", "changes": "App inicial mais leve no Android: abas menos usadas (Agenda, Clima, Dispositivos, Combustível, Remédios, Localização) agora carregam só quando você abre elas, em vez de tudo de uma vez ao iniciar — ajuda contra a tela branca demorada ao abrir o app." },
     { "version": "v4.1", "changes": "Novo controle de tamanho de texto para o app inteiro (menu ••• > Tamanho do texto), funcionando em todas as abas — Remédios, Localização, Agenda, etc. — não só nas Notas." },
     { "version": "v4.0", "changes": "Biometria de verdade (impressão digital) para entrar no app mais rápido, guardada de forma segura no cofre do próprio Android (Keystore) — nunca em texto legível pelo app." },

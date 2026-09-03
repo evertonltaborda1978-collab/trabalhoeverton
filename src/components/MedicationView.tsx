@@ -5,31 +5,11 @@ import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
+import { ALERT_SOUND_OPTIONS, playAlertSoundPreview, type AlertSoundId } from "@/lib/alertSound";
+import { getCurrentPhaseIndex, getDaysElapsed, type MedPhase, type Medication } from "@/lib/medicationTypes";
+export type { Medication } from "@/lib/medicationTypes";
 
 // ── Types ─────────────────────────────────────────────
-interface MedPhase {
-  dose: number;
-  doseUnit: string;
-  days: number;
-  timesPerDay: number;
-  startTime: string;
-  schedules: string[];
-}
-
-interface Medication {
-  id: string;
-  profileId: string;
-  name: string;
-  type: "pill" | "liquid" | "injection" | "topical" | "powder";
-  phases: MedPhase[];
-  currentPhase: number;
-  startDate: string;
-  stock: number;
-  lowStockAlert: number;
-  color: string;
-  takenDates: string[];
-}
-
 interface FamilyProfile {
   id: string;
   name: string;
@@ -60,21 +40,6 @@ function generateSchedules(timesPerDay: number, startTime: string): string[] {
 
 function getTotalDays(phases: MedPhase[]): number {
   return phases.reduce((sum, p) => sum + p.days, 0);
-}
-
-function getDaysElapsed(startDate: string): number {
-  const start = new Date(startDate);
-  const now = new Date();
-  return Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-function getCurrentPhaseIndex(phases: MedPhase[], startDate: string): number {
-  let elapsed = getDaysElapsed(startDate);
-  for (let i = 0; i < phases.length; i++) {
-    if (elapsed < phases[i].days) return i;
-    elapsed -= phases[i].days;
-  }
-  return phases.length - 1;
 }
 
 function getNextSchedule(phases: MedPhase[], currentPhase: number): string {
@@ -118,6 +83,7 @@ export function MedicationView() {
   const [formPhases, setFormPhases] = useState<MedPhase[]>([
     { dose: 1, doseUnit: "comprimido", days: 30, timesPerDay: 1, startTime: "08:00", schedules: ["08:00"] },
   ]);
+  const [formSound, setFormSound] = useState<AlertSoundId | null>(null);
 
   const STORAGE_KEY = `medications_${user?.id}`;
 
@@ -163,6 +129,7 @@ export function MedicationView() {
 
   const handleSave = () => {
     if (!formName.trim()) { toast({ title: "Informe o nome do medicamento" }); return; }
+    if (!formSound) { toast({ title: "Escolha um som de alerta", description: "Toque numa das opções antes de salvar.", variant: "destructive" }); return; }
     const newMed: Medication = {
       id: crypto.randomUUID(),
       profileId: activeProfile,
@@ -175,6 +142,7 @@ export function MedicationView() {
       lowStockAlert: formLowStock,
       color: formColor,
       takenDates: [],
+      alertSound: formSound,
     };
     save([...medications, newMed]);
     setShowForm(false);
@@ -187,6 +155,7 @@ export function MedicationView() {
     setFormStock(30); setFormLowStock(5);
     setFormStartDate(new Date().toISOString().slice(0, 10));
     setFormPhases([{ dose: 1, doseUnit: "comprimido", days: 30, timesPerDay: 1, startTime: "08:00", schedules: ["08:00"] }]);
+    setFormSound(null);
   };
 
   const takeMed = (id: string) => {
@@ -385,6 +354,27 @@ export function MedicationView() {
               <button onClick={() => setFormLowStock(formLowStock + 1)}
                 style={{ width: 32, height: 32, borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", fontSize: 18 }}>+</button>
             </div>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 6 }}>Som do alerta (toque para ouvir e escolher)</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {ALERT_SOUND_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => { setFormSound(opt.id); playAlertSoundPreview(opt.id); }}
+                style={{
+                  textAlign: "left", padding: "8px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  background: formSound === opt.id ? "#1A1A2E" : "rgba(0,0,0,0.05)",
+                  color: formSound === opt.id ? "#FFF" : "#555",
+                  border: formSound === opt.id ? "none" : "1px solid #E0E0E0",
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
         </div>
 

@@ -53,6 +53,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "@/hooks/use-toast";
+import { ALERT_SOUND_OPTIONS, playAlertSoundPreview, type AlertSoundId } from "@/lib/alertSound";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 
 // ── Types ──────────────────────────────────────────────
@@ -395,7 +396,7 @@ interface NoteEditorProps {
     fontSize: string,
     status: "rascunho" | "publicada",
   ) => void;
-  onSchedule?: (title: string, content: string, date: string, time: string) => void;
+  onSchedule?: (title: string, content: string, date: string, time: string, sound: AlertSoundId) => void;
 }
 
 // ── ImageAnnotator: editor de desenho tipo Paint (caneta, seta, linha, ──
@@ -798,6 +799,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("09:00");
+  const [scheduleSound, setScheduleSound] = useState<AlertSoundId | null>(null);
   const [showUnsavedPrompt, setShowUnsavedPrompt] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showFab, setShowFab] = useState(false);
@@ -2839,7 +2841,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                         { icon: <ListChecks size={18} />, label: "Lista", action: () => { addChecklist(); setShowFab(false); } },
                         { icon: <Table2 size={18} />, label: "Tabela Manual", action: () => { addTable(); setShowFab(false); } },
                         ...(voiceSupported ? [{ icon: isListening ? <MicOff size={18} /> : <Mic size={18} />, label: isListening ? "Parar voz" : "Voz", action: () => { toggleVoice(); setShowFab(false); } }] : []),
-                        ...(onSchedule ? [{ icon: <CalendarPlus size={18} />, label: "Agendar", action: () => { setScheduleDate(new Date().toISOString().slice(0, 10)); setScheduleTime("09:00"); setShowScheduleDialog(true); setShowFab(false); } }] : []),
+                        ...(onSchedule ? [{ icon: <CalendarPlus size={18} />, label: "Agendar", action: () => { setScheduleDate(new Date().toISOString().slice(0, 10)); setScheduleTime("09:00"); setScheduleSound(null); setShowScheduleDialog(true); setShowFab(false); } }] : []),
                         { icon: <Undo2 size={18} />, label: "Desfazer", action: () => { undo(); setShowFab(false); }, disabled: !canUndo },
                         { icon: <Redo2 size={18} />, label: "Refazer", action: () => { redo(); setShowFab(false); }, disabled: !canRedo },
                       ].map((item, i) => (
@@ -3117,6 +3119,25 @@ ${blocksToPlainText(blocks)}`.trim() });
                 className="w-full mb-4 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-800 outline-none focus:border-yellow-400"
               />
 
+              <label className="block text-sm font-medium text-gray-600 mb-1.5">Som do alerta (toque para ouvir e escolher)</label>
+              <div className="grid grid-cols-2 gap-1.5 mb-4">
+                {ALERT_SOUND_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => { setScheduleSound(opt.id); playAlertSoundPreview(opt.id); }}
+                    className="text-left px-2.5 py-2 rounded-lg text-xs font-semibold transition-all"
+                    style={
+                      scheduleSound === opt.id
+                        ? { background: "#1A1A2E", color: "#FFF" }
+                        : { background: "rgba(0,0,0,0.05)", border: "1px solid #E0E0E0", color: "#555" }
+                    }
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowScheduleDialog(false)}
@@ -3130,7 +3151,11 @@ ${blocksToPlainText(blocks)}`.trim() });
                       toast({ title: "Escolha uma data", description: "Selecione a data do compromisso." });
                       return;
                     }
-                    onSchedule?.(title || "Nota sem título", blocksToPlainText(blocks), scheduleDate, scheduleTime);
+                    if (!scheduleSound) {
+                      toast({ title: "Escolha um som de alerta", description: "Toque numa das opções antes de agendar." });
+                      return;
+                    }
+                    onSchedule?.(title || "Nota sem título", blocksToPlainText(blocks), scheduleDate, scheduleTime, scheduleSound);
                     setShowScheduleDialog(false);
                     toast({ title: "📅 Agendado!", description: "Compromisso criado na Agenda." });
                   }}
@@ -3277,37 +3302,15 @@ ${blocksToPlainText(blocks)}`.trim() });
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", flexShrink: 0 }}>
               <span style={{ color: "#FFF", fontWeight: 700, fontSize: 14 }}>🔍 Ver ampliado</span>
-              <button
-                onClick={(e) => { e.stopPropagation(); setViewingImage(null); }}
-                style={{ color: "#FFF", background: "none", border: "none", padding: 10, margin: -10, display: "flex", alignItems: "center", justifyContent: "center" }}
-              >
+              <button onClick={() => setViewingImage(null)} style={{ color: "#FFF", background: "none", border: "none" }}>
                 <X size={22} />
               </button>
             </div>
-            <div
-              style={{
-                flex: 1,
-                overflow: "auto",
-                display: "flex",
-                alignItems: viewZoom <= 1 ? "center" : "flex-start",
-                justifyContent: viewZoom <= 1 ? "center" : "flex-start",
-                touchAction: "pan-x pan-y",
-                WebkitOverflowScrolling: "touch",
-                overscrollBehavior: "contain",
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
+            <div style={{ flex: 1, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={(e) => e.stopPropagation()}>
               <img
                 src={viewingImage}
                 alt=""
-                style={{
-                  width: `${viewZoom * 100}%`,
-                  maxWidth: viewZoom <= 1 ? "100%" : "none",
-                  height: "auto",
-                  display: "block",
-                  margin: viewZoom <= 1 ? "auto" : 0,
-                  transition: "width 0.15s ease",
-                }}
+                style={{ width: `${viewZoom * 100}%`, maxWidth: viewZoom <= 1 ? "100%" : "none", height: "auto", transition: "width 0.15s ease" }}
               />
             </div>
             <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "center", padding: "10px 16px calc(10px + env(safe-area-inset-bottom))", flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
