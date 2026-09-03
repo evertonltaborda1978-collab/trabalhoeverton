@@ -1,6 +1,7 @@
 {
-  "version": "v4.2",
+  "version": "v4.3",
   "history": [
+    { "version": "v4.3", "changes": "Corrigido o visualizador de foto ampliada (lupa) dentro das notas: ao dar zoom, agora dá pra ver e arrastar a imagem inteira (antes só aparecia o centro e não dava pra mover pelas bordas); botão de fechar (X) mais confiável, sem falhar às vezes ao tocar." },
     { "version": "v4.2", "changes": "App inicial mais leve no Android: abas menos usadas (Agenda, Clima, Dispositivos, Combustível, Remédios, Localização) agora carregam só quando você abre elas, em vez de tudo de uma vez ao iniciar — ajuda contra a tela branca demorada ao abrir o app." },
     { "version": "v4.1", "changes": "Novo controle de tamanho de texto para o app inteiro (menu ••• > Tamanho do texto), funcionando em todas as abas — Remédios, Localização, Agenda, etc. — não só nas Notas." },
     { "version": "v4.0", "changes": "Biometria de verdade (impressão digital) para entrar no app mais rápido, guardada de forma segura no cofre do próprio Android (Keystore) — nunca em texto legível pelo app." },

@@ -3277,15 +3277,37 @@ ${blocksToPlainText(blocks)}`.trim() });
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", flexShrink: 0 }}>
               <span style={{ color: "#FFF", fontWeight: 700, fontSize: 14 }}>🔍 Ver ampliado</span>
-              <button onClick={() => setViewingImage(null)} style={{ color: "#FFF", background: "none", border: "none" }}>
+              <button
+                onClick={(e) => { e.stopPropagation(); setViewingImage(null); }}
+                style={{ color: "#FFF", background: "none", border: "none", padding: 10, margin: -10, display: "flex", alignItems: "center", justifyContent: "center" }}
+              >
                 <X size={22} />
               </button>
             </div>
-            <div style={{ flex: 1, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={(e) => e.stopPropagation()}>
+            <div
+              style={{
+                flex: 1,
+                overflow: "auto",
+                display: "flex",
+                alignItems: viewZoom <= 1 ? "center" : "flex-start",
+                justifyContent: viewZoom <= 1 ? "center" : "flex-start",
+                touchAction: "pan-x pan-y",
+                WebkitOverflowScrolling: "touch",
+                overscrollBehavior: "contain",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
               <img
                 src={viewingImage}
                 alt=""
-                style={{ width: `${viewZoom * 100}%`, maxWidth: viewZoom <= 1 ? "100%" : "none", height: "auto", transition: "width 0.15s ease" }}
+                style={{
+                  width: `${viewZoom * 100}%`,
+                  maxWidth: viewZoom <= 1 ? "100%" : "none",
+                  height: "auto",
+                  display: "block",
+                  margin: viewZoom <= 1 ? "auto" : 0,
+                  transition: "width 0.15s ease",
+                }}
               />
             </div>
             <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "center", padding: "10px 16px calc(10px + env(safe-area-inset-bottom))", flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
