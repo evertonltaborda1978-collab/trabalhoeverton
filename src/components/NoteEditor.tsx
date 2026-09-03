@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useLayoutEffect, Component, ReactNode } from "react";
+import { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo, Component, ReactNode } from "react";
 import { Note } from "@/hooks/useNotes";
 import { takeNativePhoto, isNative } from "@/lib/native";
 import {
@@ -30,6 +30,10 @@ import {
   Eraser,
   ZoomIn,
   ZoomOut,
+  RotateCw,
+  Download,
+  ChevronLeft,
+  ChevronRight,
   Palette,
   Bold as BoldIcon,
   AlignLeft,
@@ -788,6 +792,295 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const [pendingDeleteItem, setPendingDeleteItem] = useState<{ type: "table" | "checklist"; blockIdx: number; itemId: string; label: string } | null>(null);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
   const [viewZoom, setViewZoom] = useState(1);
+  const [viewTx, setViewTx] = useState(0);
+  const [viewTy, setViewTy] = useState(0);
+  const [viewRotation, setViewRotation] = useState(0);
+  const [viewIndex, setViewIndex] = useState(0);
+  const [viewDragging, setViewDragging] = useState(false);
+  const [viewCloseOpacity, setViewCloseOpacity] = useState(1);
+  const viewerContainerRef = useRef<HTMLDivElement>(null);
+  const viewerImgRef = useRef<HTMLImageElement>(null);
+  const baseImgSizeRef = useRef({ w: 0, h: 0 });
+  const VIEW_MIN_ZOOM = 1;
+  const VIEW_MAX_ZOOM = 5;
+  const VIEW_DOUBLE_TAP_ZOOM = 2.5;
+  const viewGestureRef = useRef<{
+    pointers: Map<number, { x: number; y: number }>;
+    mode: "idle" | "pan" | "pinch" | "drag";
+    dragAxis: "h" | "v" | null;
+    startX: number; startY: number;
+    startTx: number; startTy: number;
+    startScale: number;
+    startDist: number;
+    startMidX: number; startMidY: number;
+    centerX: number; centerY: number;
+    moved: boolean;
+    lastTapTime: number;
+    lastTapX: number; lastTapY: number;
+  }>({
+    pointers: new Map(),
+    mode: "idle",
+    dragAxis: null,
+    startX: 0, startY: 0, startTx: 0, startTy: 0,
+    startScale: 1, startDist: 0, startMidX: 0, startMidY: 0,
+    centerX: 0, centerY: 0, moved: false,
+    lastTapTime: 0, lastTapX: 0, lastTapY: 0,
+  });
+
+  const noteImages = useMemo(
+    () => blocks.filter((b) => b.type === "image" && b.url).map((b) => b.url as string),
+    [blocks]
+  );
+
+  useEffect(() => {
+    if (viewingImage) {
+      const idx = noteImages.indexOf(viewingImage);
+      if (idx >= 0) setViewIndex(idx);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewingImage]);
+
+  const distBetween = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
+  const midBetween = (a: { x: number; y: number }, b: { x: number; y: number }) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+
+  const clampViewPan = (scale: number, tx: number, ty: number) => {
+    const cRect = viewerContainerRef.current?.getBoundingClientRect();
+    if (!cRect) return { x: tx, y: ty };
+    const rotated90 = viewRotation === 90 || viewRotation === 270;
+    const baseW = rotated90 ? baseImgSizeRef.current.h : baseImgSizeRef.current.w;
+    const baseH = rotated90 ? baseImgSizeRef.current.w : baseImgSizeRef.current.h;
+    const scaledW = baseW * scale;
+    const scaledH = baseH * scale;
+    const maxX = Math.max(0, (scaledW - cRect.width) / 2);
+    const maxY = Math.max(0, (scaledH - cRect.height) / 2);
+    return { x: Math.max(-maxX, Math.min(maxX, tx)), y: Math.max(-maxY, Math.min(maxY, ty)) };
+  };
+
+  const handleViewerImgLoad = () => {
+    if (viewerImgRef.current) {
+      const r = viewerImgRef.current.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) baseImgSizeRef.current = { w: r.width, h: r.height };
+    }
+  };
+
+  const zoomBy = (delta: number) => {
+    const newScale = Math.max(VIEW_MIN_ZOOM, Math.min(VIEW_MAX_ZOOM, +(viewZoom + delta).toFixed(2)));
+    const p0x = viewZoom > 0 ? -viewTx / viewZoom : 0;
+    const p0y = viewZoom > 0 ? -viewTy / viewZoom : 0;
+    const clamped = clampViewPan(newScale, -newScale * p0x, -newScale * p0y);
+    setViewZoom(newScale);
+    setViewTx(clamped.x);
+    setViewTy(clamped.y);
+  };
+
+  const goToImage = (images: string[], newIndex: number) => {
+    if (images.length === 0) return;
+    const clampedIdx = Math.max(0, Math.min(images.length - 1, newIndex));
+    setViewIndex(clampedIdx);
+    setViewingImage(images[clampedIdx]);
+    setViewZoom(1);
+    setViewTx(0);
+    setViewTy(0);
+    setViewRotation(0);
+  };
+
+  const handleViewerPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const g = viewGestureRef.current;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+    g.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    g.moved = false;
+    const rect = e.currentTarget.getBoundingClientRect();
+    g.centerX = rect.left + rect.width / 2;
+    g.centerY = rect.top + rect.height / 2;
+
+    if (g.pointers.size === 1) {
+      g.mode = viewZoom > 1.01 ? "pan" : "drag";
+      g.dragAxis = null;
+      g.startX = e.clientX;
+      g.startY = e.clientY;
+      g.startTx = viewTx;
+      g.startTy = viewTy;
+    } else if (g.pointers.size === 2) {
+      const pts = Array.from(g.pointers.values());
+      g.mode = "pinch";
+      g.startDist = distBetween(pts[0], pts[1]) || 1;
+      g.startScale = viewZoom;
+      const m = midBetween(pts[0], pts[1]);
+      g.startMidX = m.x;
+      g.startMidY = m.y;
+      g.startTx = viewTx;
+      g.startTy = viewTy;
+    }
+    setViewDragging(true);
+  };
+
+  const handleViewerPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const g = viewGestureRef.current;
+    if (!g.pointers.has(e.pointerId)) return;
+    g.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (g.mode === "pinch" && g.pointers.size === 2) {
+      const pts = Array.from(g.pointers.values());
+      const newDist = distBetween(pts[0], pts[1]);
+      const m = midBetween(pts[0], pts[1]);
+      const ratio = newDist / g.startDist;
+      const newScale = Math.max(VIEW_MIN_ZOOM, Math.min(VIEW_MAX_ZOOM, g.startScale * ratio));
+      const p0x = (g.startMidX - g.centerX - g.startTx) / g.startScale;
+      const p0y = (g.startMidY - g.centerY - g.startTy) / g.startScale;
+      const newTx = (m.x - g.centerX) - newScale * p0x;
+      const newTy = (m.y - g.centerY) - newScale * p0y;
+      const clamped = clampViewPan(newScale, newTx, newTy);
+      setViewZoom(newScale);
+      setViewTx(clamped.x);
+      setViewTy(clamped.y);
+      g.moved = true;
+    } else if (g.mode === "pan") {
+      const dx = e.clientX - g.startX;
+      const dy = e.clientY - g.startY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) g.moved = true;
+      const clamped = clampViewPan(viewZoom, g.startTx + dx, g.startTy + dy);
+      setViewTx(clamped.x);
+      setViewTy(clamped.y);
+    } else if (g.mode === "drag") {
+      const dx = e.clientX - g.startX;
+      const dy = e.clientY - g.startY;
+      if (!g.moved && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+        g.moved = true;
+        g.dragAxis = Math.abs(dy) > Math.abs(dx) ? "v" : "h";
+      }
+      if (g.moved) {
+        if (g.dragAxis === "v") {
+          const clampedDy = Math.max(0, dy);
+          setViewTy(clampedDy);
+          setViewCloseOpacity(Math.max(0.25, 1 - clampedDy / 300));
+        } else if (g.dragAxis === "h") {
+          setViewTx(dx);
+        }
+      }
+    }
+  };
+
+  const finishViewerDrag = (e: React.PointerEvent<HTMLDivElement>, images: string[]) => {
+    const g = viewGestureRef.current;
+    setViewDragging(false);
+    if (g.mode === "drag" && g.moved) {
+      if (g.dragAxis === "v") {
+        if (viewTy > 110) {
+          setViewingImage(null);
+        } else {
+          setViewTy(0);
+          setViewCloseOpacity(1);
+        }
+      } else if (g.dragAxis === "h") {
+        if (viewTx < -70 && viewIndex < images.length - 1) {
+          goToImage(images, viewIndex + 1);
+        } else if (viewTx > 70 && viewIndex > 0) {
+          goToImage(images, viewIndex - 1);
+        } else {
+          setViewTx(0);
+        }
+      }
+    } else if ((g.mode === "pan" || g.mode === "drag") && !g.moved) {
+      const now = Date.now();
+      const dtx = e.clientX - g.lastTapX;
+      const dty = e.clientY - g.lastTapY;
+      const isDouble = now - g.lastTapTime < 320 && Math.hypot(dtx, dty) < 40;
+      if (isDouble) {
+        if (viewZoom > 1.01) {
+          setViewZoom(1);
+          setViewTx(0);
+          setViewTy(0);
+        } else {
+          const rect = viewerContainerRef.current?.getBoundingClientRect();
+          if (rect) {
+            const cx = rect.left + rect.width / 2;
+            const cy = rect.top + rect.height / 2;
+            const px = e.clientX - cx;
+            const py = e.clientY - cy;
+            const clamped = clampViewPan(VIEW_DOUBLE_TAP_ZOOM, -px * (VIEW_DOUBLE_TAP_ZOOM - 1), -py * (VIEW_DOUBLE_TAP_ZOOM - 1));
+            setViewZoom(VIEW_DOUBLE_TAP_ZOOM);
+            setViewTx(clamped.x);
+            setViewTy(clamped.y);
+          }
+        }
+        g.lastTapTime = 0;
+      } else {
+        g.lastTapTime = now;
+        g.lastTapX = e.clientX;
+        g.lastTapY = e.clientY;
+      }
+    }
+    g.mode = "idle";
+    g.dragAxis = null;
+  };
+
+  const handleViewerPointerUp = (e: React.PointerEvent<HTMLDivElement>, images: string[]) => {
+    const g = viewGestureRef.current;
+    g.pointers.delete(e.pointerId);
+    if (g.pointers.size === 1) {
+      const remaining = Array.from(g.pointers.values())[0];
+      g.mode = viewZoom > 1.01 ? "pan" : "drag";
+      g.dragAxis = null;
+      g.startX = remaining.x;
+      g.startY = remaining.y;
+      g.startTx = viewTx;
+      g.startTy = viewTy;
+      return;
+    }
+    if (g.pointers.size > 0) return;
+    finishViewerDrag(e, images);
+  };
+
+  const handleViewerWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const delta = e.deltaY < 0 ? 0.2 : -0.2;
+    const newScale = Math.max(VIEW_MIN_ZOOM, Math.min(VIEW_MAX_ZOOM, +(viewZoom + delta).toFixed(2)));
+    const px = e.clientX - cx;
+    const py = e.clientY - cy;
+    const p0x = (px - viewTx) / viewZoom;
+    const p0y = (py - viewTy) / viewZoom;
+    const newTx = px - newScale * p0x;
+    const newTy = py - newScale * p0y;
+    const clamped = clampViewPan(newScale, newTx, newTy);
+    setViewZoom(newScale);
+    setViewTx(clamped.x);
+    setViewTy(clamped.y);
+  };
+
+  const handleViewerRotate = () => {
+    setViewRotation((r) => (r + 90) % 360);
+    setViewZoom(1);
+    setViewTx(0);
+    setViewTy(0);
+  };
+
+  const handleViewerShareOrDownload = async () => {
+    if (!viewingImage) return;
+    try {
+      const resp = await fetch(viewingImage);
+      const blob = await resp.blob();
+      const ext = (blob.type.split("/")[1] || "jpg").replace("jpeg", "jpg");
+      const file = new File([blob], `foto-nota.${ext}`, { type: blob.type });
+      const nav = navigator as Navigator & { canShare?: (data?: ShareData) => boolean; share?: (data: ShareData) => Promise<void> };
+      if (nav.share && nav.canShare && nav.canShare({ files: [file] })) {
+        await nav.share({ files: [file] });
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      window.open(viewingImage, "_blank");
+    }
+  };
   const [activeBlockIdx, setActiveBlockIdx] = useState<number | null>(null);
   const [selectedColor, setSelectedColor] = useState(NOTE_COLORS[0].value);
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -2698,7 +2991,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                         <img
                           src={block.url}
                           alt=""
-                          onClick={() => { setViewingImage(block.url!); setViewZoom(1); }}
+                          onClick={() => { setViewingImage(block.url!); setViewZoom(1); setViewTx(0); setViewTy(0); setViewRotation(0); }}
                           style={{
                             width: "100%",
                             height: "auto",
@@ -2713,7 +3006,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                         />
                         <div style={{ position: "absolute", top: 8, right: 8, display: "flex", gap: 6, zIndex: 5 }}>
                           <button
-                            onClick={() => { setViewingImage(block.url!); setViewZoom(1); }}
+                            onClick={() => { setViewingImage(block.url!); setViewZoom(1); setViewTx(0); setViewTy(0); setViewRotation(0); }}
                             className="rounded-full text-white transition-all hover:bg-black/80 active:scale-95"
                             style={{ background: "rgba(0,0,0,0.7)", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 6px rgba(0,0,0,0.2)" }}
                             aria-label="Ver com lupa"
@@ -3297,50 +3590,107 @@ ${blocksToPlainText(blocks)}`.trim() });
         {/* Visualizador com lupa (ver a imagem ampliada, sem editar) */}
         {viewingImage && (
           <div
-            className="absolute inset-0 z-[85] flex flex-col bg-black"
+            className="absolute inset-0 z-[85] flex flex-col"
+            style={{ background: `rgba(0,0,0,${viewCloseOpacity})` }}
             onClick={() => setViewingImage(null)}
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", flexShrink: 0 }}>
-              <span style={{ color: "#FFF", fontWeight: 700, fontSize: 14 }}>🔍 Ver ampliado</span>
-              <button
-                onClick={(e) => { e.stopPropagation(); setViewingImage(null); }}
-                style={{ color: "#FFF", background: "none", border: "none", padding: 10, margin: -10, display: "flex", alignItems: "center", justifyContent: "center" }}
-              >
-                <X size={22} />
-              </button>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "12px 16px 4px", flexShrink: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                <span style={{ color: "#FFF", fontWeight: 700, fontSize: 14 }}>🔍 Ver ampliado</span>
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleViewerShareOrDownload(); }}
+                    style={{ color: "#FFF", background: "none", border: "none", padding: 10, display: "flex", alignItems: "center", justifyContent: "center" }}
+                    title="Baixar / Compartilhar"
+                  >
+                    <Download size={20} />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleViewerRotate(); }}
+                    style={{ color: "#FFF", background: "none", border: "none", padding: 10, display: "flex", alignItems: "center", justifyContent: "center" }}
+                    title="Girar"
+                  >
+                    <RotateCw size={20} />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setViewingImage(null); }}
+                    style={{ color: "#FFF", background: "none", border: "none", padding: 10, display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <X size={22} />
+                  </button>
+                </div>
+              </div>
+              {noteImages.length > 1 && (
+                <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 12, marginTop: 2 }}>{viewIndex + 1}/{noteImages.length}</span>
+              )}
             </div>
+
             <div
+              ref={viewerContainerRef}
               style={{
                 flex: 1,
-                overflow: "auto",
+                position: "relative",
+                overflow: "hidden",
                 display: "flex",
-                alignItems: viewZoom <= 1 ? "center" : "flex-start",
-                justifyContent: viewZoom <= 1 ? "center" : "flex-start",
-                touchAction: "pan-x pan-y",
-                WebkitOverflowScrolling: "touch",
-                overscrollBehavior: "contain",
+                alignItems: "center",
+                justifyContent: "center",
+                touchAction: "none",
               }}
               onClick={(e) => e.stopPropagation()}
+              onPointerDown={handleViewerPointerDown}
+              onPointerMove={handleViewerPointerMove}
+              onPointerUp={(e) => handleViewerPointerUp(e, noteImages)}
+              onPointerCancel={(e) => handleViewerPointerUp(e, noteImages)}
+              onWheel={handleViewerWheel}
             >
               <img
+                ref={viewerImgRef}
                 src={viewingImage}
                 alt=""
+                onLoad={handleViewerImgLoad}
+                draggable={false}
                 style={{
-                  width: `${viewZoom * 100}%`,
-                  maxWidth: viewZoom <= 1 ? "100%" : "none",
+                  maxWidth: "100%",
+                  maxHeight: "100%",
+                  width: "auto",
                   height: "auto",
                   display: "block",
-                  margin: viewZoom <= 1 ? "auto" : 0,
-                  transition: "width 0.15s ease",
+                  objectFit: "contain",
+                  transformOrigin: "50% 50%",
+                  transform: `translate(${viewTx}px, ${viewTy}px) rotate(${viewRotation}deg) scale(${viewZoom})`,
+                  transition: viewDragging ? "none" : "transform 0.25s ease",
+                  userSelect: "none",
                 }}
               />
+
+              {noteImages.length > 1 && viewZoom <= 1.01 && (
+                <>
+                  {viewIndex > 0 && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); goToImage(noteImages, viewIndex - 1); }}
+                      style={{ position: "absolute", top: "50%", left: 10, transform: "translateY(-50%)", width: 34, height: 34, borderRadius: "50%", background: "rgba(0,0,0,0.45)", border: "none", color: "#FFF", display: "flex", alignItems: "center", justifyContent: "center" }}
+                    >
+                      <ChevronLeft size={20} />
+                    </button>
+                  )}
+                  {viewIndex < noteImages.length - 1 && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); goToImage(noteImages, viewIndex + 1); }}
+                      style={{ position: "absolute", top: "50%", right: 10, transform: "translateY(-50%)", width: 34, height: 34, borderRadius: "50%", background: "rgba(0,0,0,0.45)", border: "none", color: "#FFF", display: "flex", alignItems: "center", justifyContent: "center" }}
+                    >
+                      <ChevronRight size={20} />
+                    </button>
+                  )}
+                </>
+              )}
             </div>
-            <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "center", padding: "10px 16px calc(10px + env(safe-area-inset-bottom))", flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
-              <button onClick={() => setViewZoom((z) => Math.max(0.5, +(z - 0.5).toFixed(2)))} style={{ padding: 8, borderRadius: 8, background: "#2E2E2E", color: "#FFF", border: "none" }}>
+
+            <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "center", padding: "10px 16px calc(10px + env(safe-area-inset-bottom))", flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+              <button onClick={() => zoomBy(-0.5)} style={{ padding: 8, borderRadius: 8, background: "#2E2E2E", color: "#FFF", border: "none" }}>
                 <ZoomOut size={18} />
               </button>
               <span style={{ color: "#FFF", fontSize: 13, minWidth: 44, textAlign: "center" }}>{Math.round(viewZoom * 100)}%</span>
-              <button onClick={() => setViewZoom((z) => Math.min(5, +(z + 0.5).toFixed(2)))} style={{ padding: 8, borderRadius: 8, background: "#2E2E2E", color: "#FFF", border: "none" }}>
+              <button onClick={() => zoomBy(0.5)} style={{ padding: 8, borderRadius: 8, background: "#2E2E2E", color: "#FFF", border: "none" }}>
                 <ZoomIn size={18} />
               </button>
             </div>
