@@ -61,11 +61,29 @@ export const geo = {
         onError?.(makeError(1, "Permissão de localização negada."));
         return;
       }
-      const pos = await Geolocation.getCurrentPosition({
-        enableHighAccuracy: options?.enableHighAccuracy ?? true,
-        timeout: options?.timeout ?? 15000,
-      });
-      onSuccess(pos as unknown as GeolocationPosition);
+      const wantHighAccuracy = options?.enableHighAccuracy ?? true;
+      const timeout = options?.timeout ?? 15000;
+
+      try {
+        // Primeira tentativa: como pedido (GPS puro, se enableHighAccuracy).
+        // Se for alta precisão, dá menos tempo pro GPS puro responder, pra
+        // sobrar tempo pra tentativa de reserva por Wi-Fi/rede logo abaixo.
+        const pos = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: wantHighAccuracy,
+          timeout: wantHighAccuracy ? Math.min(timeout, 9000) : timeout,
+        });
+        onSuccess(pos as unknown as GeolocationPosition);
+      } catch (highAccuracyErr) {
+        if (!wantHighAccuracy) throw highAccuracyErr;
+        // O GPS puro (satélite) não respondeu a tempo — muito comum dentro de
+        // prédio/fábrica. Tenta de novo usando Wi-Fi/rede, que é bem mais
+        // rápido e funciona indoor (é o que o navegador já faz sozinho).
+        const pos = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: false,
+          timeout,
+        });
+        onSuccess(pos as unknown as GeolocationPosition);
+      }
     } catch {
       onError?.(makeError(2, "Não foi possível obter sua localização."));
     }
@@ -81,18 +99,25 @@ export const geo = {
     }
 
     const handle: { id: string | null; cancelled: boolean } = { id: null, cancelled: false };
-    (async () => {
-      const allowed = await ensurePermission();
-      if (!allowed) {
-        onError?.(makeError(1, "Permissão de localização negada."));
-        return;
-      }
+    const wantHighAccuracy = options?.enableHighAccuracy ?? true;
+    let fellBackToNetwork = false;
+
+    const startWatch = async (highAccuracy: boolean) => {
       if (handle.cancelled) return;
       try {
         const id = await Geolocation.watchPosition(
-          { enableHighAccuracy: options?.enableHighAccuracy ?? true, timeout: options?.timeout ?? 15000 },
+          { enableHighAccuracy: highAccuracy, timeout: options?.timeout ?? 15000 },
           (pos, err) => {
             if (err) {
+              if (highAccuracy && !fellBackToNetwork) {
+                // GPS puro não respondeu — troca sozinho pra Wi-Fi/rede, sem
+                // precisar que o usuário toque em nada de novo.
+                fellBackToNetwork = true;
+                if (handle.id) { Geolocation.clearWatch({ id: handle.id }).catch(() => {}); }
+                handle.id = null;
+                startWatch(false);
+                return;
+              }
               onError?.(makeError(2, "Não foi possível obter sua localização."));
               return;
             }
@@ -105,8 +130,23 @@ export const geo = {
         }
         handle.id = id;
       } catch {
+        if (highAccuracy && !fellBackToNetwork) {
+          fellBackToNetwork = true;
+          startWatch(false);
+          return;
+        }
         onError?.(makeError(2, "Não foi possível obter sua localização."));
       }
+    };
+
+    (async () => {
+      const allowed = await ensurePermission();
+      if (!allowed) {
+        onError?.(makeError(1, "Permissão de localização negada."));
+        return;
+      }
+      if (handle.cancelled) return;
+      await startWatch(wantHighAccuracy);
     })();
     return handle;
   },
