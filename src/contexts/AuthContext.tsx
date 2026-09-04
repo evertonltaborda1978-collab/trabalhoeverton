@@ -44,8 +44,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // a conexão volta, o comportamento normal de exigir login é retomado no
     // próximo abrir do app.
     if (navigator.onLine) {
+      // scope: "local" limpa só a sessão salva neste aparelho, sem esperar
+      // resposta do servidor Supabase — antes, o signOut() padrão fazia uma
+      // chamada pela rede e o app ficava travado na tela em branco esperando
+      // essa resposta, o que explicava boa parte da demora pra abrir.
       (supabase.auth as any)
-        .signOut()
+        .signOut({ scope: "local" })
         .catch(() => {})
         .finally(() => {
           if (!isMounted) return;
