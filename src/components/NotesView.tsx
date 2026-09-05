@@ -102,6 +102,36 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
     };
   }, []);
 
+  // Conteúdo compartilhado de outro app (WhatsApp, Galeria, navegador, etc.)
+  // — vem gravado no sessionStorage pelo ShareReceiver.tsx (compartilhamento
+  // pelo navegador/PWA) ou direto pelo MainActivity.java (app instalado no
+  // Android). Assim que aparecer, cria uma nota nova automaticamente com
+  // esse título/texto/foto.
+  useEffect(() => {
+    const consumeSharedNote = () => {
+      const raw = sessionStorage.getItem("shared_note_data");
+      if (!raw) return;
+      sessionStorage.removeItem("shared_note_data");
+      try {
+        const data = JSON.parse(raw) as { title?: string; content?: string; image?: string | null };
+        const title = data.title || "";
+        const content = data.content || "";
+        const images = data.image ? [data.image] : [];
+        if (!title && !content && images.length === 0) return;
+        onAdd(title, content, images);
+        toast({ title: "📥 Nota criada a partir do compartilhamento" });
+      } catch (e) {
+        console.error("Erro ao ler conteúdo compartilhado:", e);
+      }
+    };
+
+    // Já pode ter chegado antes desta tela montar (abertura a frio do app)
+    consumeSharedNote();
+    // E pode chegar enquanto o app já está aberto (app em segundo plano)
+    window.addEventListener("shared-note-ready", consumeSharedNote);
+    return () => window.removeEventListener("shared-note-ready", consumeSharedNote);
+  }, [onAdd]);
+
 
   const fontSizeMap = { sm: 12, md: 14, lg: 18, xl: 22 };
 

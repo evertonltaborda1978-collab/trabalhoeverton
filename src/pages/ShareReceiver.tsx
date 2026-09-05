@@ -2,9 +2,16 @@ import { useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 /**
- * This page receives shared content from other apps via the Web Share Target API.
- * It stores the shared data in sessionStorage and redirects to the main page,
- * where NotesView will pick it up and open a new note editor pre-filled.
+ * This page receives shared content from other apps via the Web Share Target API
+ * (navegador/PWA). It stores the shared data in sessionStorage and redirects to
+ * the main page, where NotesView will pick it up and open a new note editor
+ * pre-filled — texto, e agora também foto (quando o compartilhamento inclui
+ * uma imagem, o campo "image" vem preenchido com um data URL base64).
+ *
+ * O compartilhamento vindo do app Android (WhatsApp, Galeria, etc.) usa um
+ * caminho diferente (MainActivity.java escreve direto no mesmo sessionStorage
+ * e dispara o evento "shared-note-ready"), mas cai na mesma chave e no mesmo
+ * formato — então o NotesView só precisa entender esse formato uma vez.
  */
 export default function ShareReceiver() {
   const navigate = useNavigate();
@@ -21,7 +28,7 @@ export default function ShareReceiver() {
     if (title || content) {
       sessionStorage.setItem(
         "shared_note_data",
-        JSON.stringify({ title, content })
+        JSON.stringify({ title, content, image: null })
       );
     }
 
