@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 type Session = any;
@@ -23,18 +23,13 @@ export const useAuth = () => useContext(AuthContext);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  // Fica "true" depois que a pessoa toca em "Sair" (só na sessão atual do
-  // app, some ao reabrir). Enquanto for true, ignora qualquer atualização
-  // automática de sessão (ex: renovação de token em segundo plano) pra não
-  // "desfazer" o Sair sozinho.
-  const softLoggedOutRef = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
 
     const { data: { subscription } } = (supabase.auth as any).onAuthStateChange(
       (_event, session) => {
-        if (!isMounted || softLoggedOutRef.current) return;
+        if (!isMounted) return;
         setSession(session);
         setLoading(false);
       }
@@ -81,18 +76,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = async () => {
-    // "Sair" aqui é um logout LOCAL: esconde a tela e volta pro login, mas
-    // NÃO apaga a sessão salva no aparelho. Isso é de propósito — assim, se
-    // não tiver internet na próxima vez que abrir o app, ainda dá pra entrar
-    // de novo usando essa sessão guardada, em vez de ficar travado esperando
-    // conexão só porque saiu antes.
-    //
-    // Com internet, a segurança de sempre continua igual: o app sempre volta
-    // a exigir login de verdade (é o bloco "navigator.onLine" acima, que
-    // roda de novo do zero na próxima abertura do app) — então isso não abre
-    // brecha nenhuma enquanto tiver conexão.
-    softLoggedOutRef.current = true;
+    // Sai da tela JÁ, na hora — nunca fica esperando o servidor confirmar.
+    // Antes disso, o botão "Sair" ficava com a tela igual, parado, quando
+    // estava offline, porque só avançava para a tela de login depois que o
+    // Supabase confirmasse (o que nunca acontece sem internet).
     setSession(null);
+    try {
+      await (supabase.auth as any).signOut();
+    } catch {
+      // sem internet ou erro do servidor: tudo bem, a sessão local já foi
+      // encerrada acima; da próxima vez que a internet voltar, o app volta
+      // a exigir login normalmente.
+    }
   };
 
   return (

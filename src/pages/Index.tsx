@@ -243,10 +243,15 @@ const Index = () => {
     setTimeout(() => { void forceUpdateApp(); }, 600);
   };
 
-  // "Sair" agora é sempre seguro: guarda a sessão localmente pra ainda dar
-  // pra entrar de novo offline depois (ver AuthContext.tsx), então não
-  // precisa mais confirmar nada antes.
+  // Sair estando offline: a sessão local é encerrada e, sem internet, não dá
+  // pra fazer login de novo até a conexão voltar. Confirma antes, pra não
+  // deixar a pessoa presa fora do app sem querer — as notas continuam salvas.
+  const [showOfflineLogoutConfirm, setShowOfflineLogoutConfirm] = useState(false);
   const handleSignOutClick = () => {
+    if (!isOnline) {
+      setShowOfflineLogoutConfirm(true);
+      return;
+    }
     signOut();
   };
 
@@ -574,6 +579,32 @@ const Index = () => {
           defaultName={currentDevice.device_name}
           onDone={() => { closeLabelModal(); fetchDevices(); }}
         />
+      )}
+
+      {showOfflineLogoutConfirm && (
+        <div
+          className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.4)" }}
+          onClick={() => setShowOfflineLogoutConfirm(false)}
+        >
+          <div className="w-full max-w-sm rounded-2xl p-5 bg-background" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold text-sm text-foreground mb-2">Não é possível sair offline</h3>
+            <p className="text-xs text-muted-foreground leading-relaxed mb-4">
+              Suas notas estão seguras e não serão perdidas. Mas, sem internet, se você sair agora não
+              vai conseguir entrar de novo (nem usar o app) até a conexão voltar, porque o login precisa
+              de rede. Por isso o app não deixa sair enquanto estiver offline.
+            </p>
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowOfflineLogoutConfirm(false)}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white"
+                style={{ background: "#1A1A2E" }}
+              >
+                Entendi
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
