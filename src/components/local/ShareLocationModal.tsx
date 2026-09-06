@@ -69,8 +69,27 @@ export function ShareLocationModal({ lat, lng, address, deviceId, onClose }: Pro
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-3" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: "#FFF" }} onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center"
+      style={{
+        background: "rgba(0,0,0,0.5)",
+        paddingLeft: 12,
+        paddingRight: 12,
+        paddingTop: "calc(12px + env(safe-area-inset-top))",
+        paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
+      }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl overflow-y-auto"
+        style={{
+          background: "#FFF",
+          maxHeight: "calc(90vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))",
+          padding: 20,
+          paddingBottom: "calc(20px + env(safe-area-inset-bottom))",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-start justify-between mb-4">
           <div>
             <h3 className="font-bold text-lg" style={{ color: "#1A1A2E" }}>Compartilhar localização</h3>
