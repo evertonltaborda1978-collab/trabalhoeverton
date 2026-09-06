@@ -272,6 +272,14 @@ export function useNotes() {
       try { localStorage.removeItem(getLocalKey("anon")); } catch {}
     }
 
+    // Mostra o que já está salvo no aparelho JÁ, sem esperar a internet —
+    // é isso que faz o app abrir na hora, com as notas todas visíveis. A
+    // internet só entra depois, silenciosamente, pra conferir/atualizar.
+    if (localNotes.length > 0) {
+      setNotes(localNotes);
+      setLoading(false);
+    }
+
     try {
       const { data, error } = await supabase
         .from("notes")
@@ -713,6 +721,11 @@ export function useNotes() {
   }, [notes]);
 
   const draftCount = notes.filter((n) => n.status === "rascunho" && !n.deletedAt).length;
+  // Notas que só existem no aparelho por enquanto — se os dados do app forem
+  // apagados (ou o app desinstalado) antes da internet voltar e sincronizar,
+  // essas são as que se perderiam. Conta tudo (inclusive lixeira), porque uma
+  // exclusão pendente de sincronizar também é uma mudança não salva ainda.
+  const unsyncedCount = notes.filter((n) => !n.sincronizado).length;
   const activeNotes = notes
     .filter((n) => !n.deletedAt)
     .sort((a, b) => {
@@ -918,5 +931,5 @@ export function useNotes() {
     return () => clearInterval(interval);
   }, [notes, reminderAlert]);
 
-  return { notes: activeNotes, trashedNotes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, reorderPinnedNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, loading, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, refreshNotes: fetchNotes };
+  return { notes: activeNotes, trashedNotes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, reorderPinnedNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, loading, syncStatus, unsyncedCount, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, refreshNotes: fetchNotes };
 }

@@ -150,7 +150,7 @@ function renderTextWithLinks(text: string, textColor: string, fontSize: number) 
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
           style={{
-            color: "#2D9E7F",
+            color: "#E53935",
             textDecoration: "underline",
             fontSize: `${fontSize}px`,
             wordBreak: "break-all",
@@ -162,6 +162,33 @@ function renderTextWithLinks(text: string, textColor: string, fontSize: number) 
     }
     return <span key={i} style={{ color: textColor, fontSize: `${fontSize}px` }}>{part}</span>;
   });
+}
+
+// Transforma links "soltos" (http://...) dentro de um HTML de texto rico em
+// <a> vermelho e sublinhado, automaticamente — sem precisar formatar na mão.
+// Processa só o texto FORA de tags já existentes (nunca mexe dentro de uma
+// <a> que já exista, pra não linkificar duas vezes).
+function linkifyHtml(html: string): string {
+  if (!html || !html.includes("http")) return html;
+  const urlRegex = /(https?:\/\/[^\s<]+)/g;
+  const parts = html.split(/(<[^>]+>)/g);
+  let insideAnchor = false;
+  return parts
+    .map((part) => {
+      if (part.startsWith("<")) {
+        if (/^<a[\s>]/i.test(part)) insideAnchor = true;
+        if (/^<\/a>/i.test(part)) insideAnchor = false;
+        return part;
+      }
+      if (insideAnchor || !part) return part;
+      return part.replace(urlRegex, (url) => {
+        const trailingMatch = url.match(/[.,;:!?)\]]+$/);
+        const trailing = trailingMatch ? trailingMatch[0] : "";
+        const clean = trailing ? url.slice(0, -trailing.length) : url;
+        return `<a href="${clean}" target="_blank" rel="noopener noreferrer" style="color:#E53935;text-decoration:underline;">${clean}</a>${trailing}`;
+      });
+    })
+    .join("");
 }
 
 // Sanitize pasted text on mobile — strip HTML, invisible chars, incompatible line breaks
@@ -212,7 +239,7 @@ function sanitizeRichHtml(html: string): string {
     .replace(/ on\w+="[^"]*"/gi, "")
     .replace(/ on\w+='[^']*'/gi, "")
     .replace(/javascript:/gi, "")
-    .replace(/<(?!\/?(span|br|div|b|strong|i|em|u)\b)[^>]+>/gi, "");
+    .replace(/<(?!\/?(span|br|div|b|strong|i|em|u|a)\b)[^>]+>/gi, "");
 }
 
 function escapeHtml(text: string): string {
@@ -504,8 +531,28 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
   const [strokeWidth, setStrokeWidth] = useState(5);
   const [objects, setObjects] = useState<DrawObject[]>([]);
   const [zoom, setZoom] = useState(1);
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
   const [canvasSize, setCanvasSize] = useState({ w: 300, h: 300 });
   const [ready, setReady] = useState(false);
+  const [isGesturing, setIsGesturing] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const baseCanvasSizeRef = useRef({ w: 0, h: 0 });
+  const MIN_ZOOM = 0.5;
+  const MAX_ZOOM = 4;
+  const gestureRef = useRef<{
+    pointers: Map<number, { x: number; y: number }>;
+    mode: "idle" | "draw" | "pinch";
+    startDist: number;
+    startZoom: number;
+    startMidX: number; startMidY: number;
+    startPanX: number; startPanY: number;
+    centerX: number; centerY: number;
+  }>({
+    pointers: new Map(),
+    mode: "idle",
+    startDist: 0, startZoom: 1, startMidX: 0, startMidY: 0, startPanX: 0, startPanY: 0, centerX: 0, centerY: 0,
+  });
   const [textPrompt, setTextPrompt] = useState<{ x: number; y: number } | null>(null);
   const [textInput, setTextInput] = useState("");
 
@@ -549,6 +596,43 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
   }, [objects, canvasSize]);
 
   useEffect(() => { if (ready) redraw(); }, [ready, redraw]);
+
+  // Mede o tamanho exibido do canvas em tela (com zoom 100%) assim que ele
+  // aparece — usado pra calcular até onde dá pra mover a foto com a pinça
+  // sem deixar espaço vazio na tela.
+  useEffect(() => {
+    if (!ready) return;
+    const id = requestAnimationFrame(() => {
+      const r = canvasRef.current?.getBoundingClientRect();
+      if (r && r.width > 0 && r.height > 0) baseCanvasSizeRef.current = { w: r.width, h: r.height };
+    });
+    return () => cancelAnimationFrame(id);
+  }, [ready]);
+
+  function clampPan(z: number, x: number, y: number) {
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    if (!rect) return { x, y };
+    const scaledW = baseCanvasSizeRef.current.w * z;
+    const scaledH = baseCanvasSizeRef.current.h * z;
+    const maxX = Math.max(0, (scaledW - rect.width) / 2);
+    const maxY = Math.max(0, (scaledH - rect.height) / 2);
+    return { x: Math.max(-maxX, Math.min(maxX, x)), y: Math.max(-maxY, Math.min(maxY, y)) };
+  }
+
+  function dist(a: { x: number; y: number }, b: { x: number; y: number }) {
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+  function mid(a: { x: number; y: number }, b: { x: number; y: number }) {
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
+
+  function zoomBy(delta: number) {
+    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, +(zoom + delta).toFixed(2)));
+    const clamped = clampPan(newZoom, panX * (newZoom / zoom), panY * (newZoom / zoom));
+    setZoom(newZoom);
+    setPanX(clamped.x);
+    setPanY(clamped.y);
+  }
 
   function getPoint(e: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current!;
@@ -602,6 +686,90 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
     drawingRef.current.current = null;
   }
 
+  // Distingue 1 dedo (desenha, do jeito que já sempre funcionou) de 2 dedos
+  // (pinça: dá zoom com foco exato entre os dedos, e arrastando os dois
+  // juntos move a foto pra desenhar em qualquer parte dela, mesmo ampliada).
+  function handleWrapperPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    const g = gestureRef.current;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+    g.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (g.pointers.size === 2) {
+      // Um segundo dedo tocou no meio de um traço — descarta o traço em
+      // andamento (foi sem querer) e passa a tratar como pinça.
+      if (drawingRef.current.active) {
+        drawingRef.current.active = false;
+        drawingRef.current.current = null;
+        redraw();
+      }
+      const pts = Array.from(g.pointers.values());
+      g.mode = "pinch";
+      g.startDist = dist(pts[0], pts[1]) || 1;
+      g.startZoom = zoom;
+      const m = mid(pts[0], pts[1]);
+      g.startMidX = m.x;
+      g.startMidY = m.y;
+      g.startPanX = panX;
+      g.startPanY = panY;
+      const rect = e.currentTarget.getBoundingClientRect();
+      g.centerX = rect.left + rect.width / 2;
+      g.centerY = rect.top + rect.height / 2;
+      setIsGesturing(true);
+      return;
+    }
+
+    if (g.pointers.size === 1) {
+      g.mode = "draw";
+      handlePointerDown(e as unknown as React.PointerEvent<HTMLCanvasElement>);
+    }
+  }
+
+  function handleWrapperPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const g = gestureRef.current;
+    if (!g.pointers.has(e.pointerId)) return;
+    g.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (g.mode === "pinch" && g.pointers.size === 2) {
+      const pts = Array.from(g.pointers.values());
+      const newDist = dist(pts[0], pts[1]);
+      const m = mid(pts[0], pts[1]);
+      const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, g.startZoom * (newDist / g.startDist)));
+      const p0x = (g.startMidX - g.centerX - g.startPanX) / g.startZoom;
+      const p0y = (g.startMidY - g.centerY - g.startPanY) / g.startZoom;
+      const newPanX = (m.x - g.centerX) - newZoom * p0x;
+      const newPanY = (m.y - g.centerY) - newZoom * p0y;
+      const clamped = clampPan(newZoom, newPanX, newPanY);
+      setZoom(newZoom);
+      setPanX(clamped.x);
+      setPanY(clamped.y);
+      return;
+    }
+
+    if (g.mode === "draw" && g.pointers.size === 1) {
+      handlePointerMove(e as unknown as React.PointerEvent<HTMLCanvasElement>);
+    }
+  }
+
+  function handleWrapperPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    const g = gestureRef.current;
+    g.pointers.delete(e.pointerId);
+
+    if (g.mode === "pinch") {
+      if (g.pointers.size === 0) {
+        g.mode = "idle";
+        setIsGesturing(false);
+      }
+      // Levanta 1 dedo e ainda sobra outro: não volta a desenhar sozinho
+      // com ele, pra não deixar um traço sem querer logo após a pinça.
+      return;
+    }
+
+    if (g.pointers.size === 0) {
+      handlePointerUp();
+      g.mode = "idle";
+    }
+  }
+
   function confirmText() {
     if (textPrompt && textInput.trim()) {
       setObjects((prev) => [...prev, { type: "text", x: textPrompt.x, y: textPrompt.y, text: textInput.trim(), color, size: 18 + strokeWidth * 3 }]);
@@ -636,14 +804,21 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
   return (
     <div className="absolute inset-0 z-[85] flex flex-col bg-black" style={{ touchAction: "none" }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", flexShrink: 0 }}>
-        <button onClick={onCancel} style={{ color: "#FFF", fontSize: 14, fontWeight: 600, background: "none", border: "none" }}>Cancelar</button>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 12px", paddingTop: "calc(12px + env(safe-area-inset-top))", flexShrink: 0 }}>
+        <button onClick={onCancel} style={{ color: "#FFF", fontSize: 14, fontWeight: 600, background: "none", border: "none", padding: "10px 12px", margin: "-10px -4px" }}>Cancelar</button>
         <span style={{ color: "#FFF", fontWeight: 700, fontSize: 14 }}>✏️ Editar imagem</span>
-        <button onClick={handleSave} style={{ color: "#2D9E7F", fontSize: 14, fontWeight: 700, background: "none", border: "none" }}>Salvar</button>
+        <button onClick={handleSave} style={{ color: "#2D9E7F", fontSize: 14, fontWeight: 700, background: "none", border: "none", padding: "10px 12px", margin: "-10px -4px" }}>Salvar</button>
       </div>
 
       {/* Canvas area */}
-      <div style={{ flex: 1, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center", padding: 8 }}>
+      <div
+        ref={wrapperRef}
+        style={{ flex: 1, overflow: "hidden", position: "relative", display: "flex", alignItems: "center", justifyContent: "center", padding: 8, touchAction: "none" }}
+        onPointerDown={handleWrapperPointerDown}
+        onPointerMove={handleWrapperPointerMove}
+        onPointerUp={handleWrapperPointerUp}
+        onPointerCancel={handleWrapperPointerUp}
+      >
         {loadError ? (
           <div style={{ textAlign: "center", padding: 20, color: "#FFF" }}>
             <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>😕 Não consegui carregar essa imagem pra editar.</p>
@@ -652,16 +827,28 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
         ) : ready ? (
           <canvas
             ref={canvasRef}
-            style={{ width: canvasSize.w * zoom, maxWidth: zoom <= 1 ? "100%" : "none", height: "auto", touchAction: "none", background: "#fff", borderRadius: 4 }}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerLeave={handlePointerUp}
+            style={{
+              maxWidth: "100%",
+              maxHeight: "100%",
+              width: "auto",
+              height: "auto",
+              touchAction: "none",
+              background: "#fff",
+              borderRadius: 4,
+              transformOrigin: "50% 50%",
+              transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
+              transition: isGesturing ? "none" : "transform 0.15s ease",
+            }}
           />
         ) : (
           <Loader2 size={32} className="animate-spin text-white" />
         )}
       </div>
+      {zoom > 1.01 && (
+        <p style={{ textAlign: "center", color: "rgba(255,255,255,0.55)", fontSize: 11, margin: "2px 0 0" }}>
+          Use 2 dedos pra mover a foto e ajustar o zoom
+        </p>
+      )}
 
       {/* Aviso se não conseguir salvar (bloqueio de segurança do navegador) */}
       {saveError && (
@@ -697,8 +884,8 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
 
       {/* Bottom toolbar */}
       <div style={{ padding: "10px 10px calc(10px + env(safe-area-inset-bottom))", background: "#161616", display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
-        {/* Tools */}
-        <div style={{ display: "flex", gap: 6, overflowX: "auto" }} className="no-scrollbar">
+        {/* Tools — quebra linha em telas estreitas, em vez de esconder cortado */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
           {TOOLS.map((t) => (
             <button
               key={t.id}
@@ -718,8 +905,8 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
           </button>
         </div>
 
-        {/* Colors + width */}
-        <div style={{ display: "flex", gap: 6, alignItems: "center", overflowX: "auto" }} className="no-scrollbar">
+        {/* Colors + width — também quebra linha em vez de esconder cor cortada */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
           {DRAW_COLORS.map((c) => (
             <button
               key={c}
@@ -740,11 +927,11 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
 
         {/* Zoom (lupa) — linha própria, sempre visível por inteiro */}
         <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "center" }}>
-          <button onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))} title="Diminuir zoom (lupa)" style={{ padding: "6px 10px", borderRadius: 8, background: "#2E2E2E", color: "#FFF", border: "none", flexShrink: 0, display: "flex", alignItems: "center", gap: 4 }}>
+          <button onClick={() => zoomBy(-0.25)} title="Diminuir zoom (lupa)" style={{ padding: "6px 10px", borderRadius: 8, background: "#2E2E2E", color: "#FFF", border: "none", flexShrink: 0, display: "flex", alignItems: "center", gap: 4 }}>
             <ZoomOut size={16} />
           </button>
           <span style={{ color: "#FFF", fontSize: 12, minWidth: 40, textAlign: "center" }}>{Math.round(zoom * 100)}%</span>
-          <button onClick={() => setZoom((z) => Math.min(4, +(z + 0.25).toFixed(2)))} title="Aumentar zoom (lupa)" style={{ padding: "6px 10px", borderRadius: 8, background: "#2E2E2E", color: "#FFF", border: "none", flexShrink: 0, display: "flex", alignItems: "center", gap: 4 }}>
+          <button onClick={() => zoomBy(0.25)} title="Aumentar zoom (lupa)" style={{ padding: "6px 10px", borderRadius: 8, background: "#2E2E2E", color: "#FFF", border: "none", flexShrink: 0, display: "flex", alignItems: "center", gap: 4 }}>
             <ZoomIn size={16} />
           </button>
         </div>
@@ -1125,6 +1312,11 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const activeFieldRef = useRef<"title" | "content">("content");
   const titleInputRef = useRef<HTMLInputElement>(null);
   const richTextRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  // Rastreia se o teclado do Android (Gboard e outros) está no meio de
+  // "compor" uma palavra (antes de confirmar) — nesse meio tempo, nunca se
+  // deve reescrever o innerHTML do campo, senão o texto pode aparecer
+  // duplicado (bug conhecido de contentEditable + teclados Android).
+  const isComposingRef = useRef<Record<number, boolean>>({});
   const pendingFocusRef = useRef<"title" | "content" | null>(null);
   const pendingCursorRef = useRef<number | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -2587,7 +2779,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                         }}
                       >
                         {block.contentHtml ? (
-                          <span dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(block.contentHtml) }} />
+                          <span dangerouslySetInnerHTML={{ __html: linkifyHtml(sanitizeRichHtml(block.contentHtml)) }} />
                         ) : block.content ? (
                           renderTextWithLinks(block.content, block.style?.color || textColor, editorFontSize)
                         ) : (
@@ -2602,6 +2794,20 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                       contentEditable
                       suppressContentEditableWarning
                       onInput={() => updateTextBlockRich(idx)}
+                      onCompositionStart={() => { isComposingRef.current[idx] = true; }}
+                      onCompositionEnd={() => {
+                        isComposingRef.current[idx] = false;
+                        updateTextBlockRich(idx);
+                      }}
+                      onBlur={() => {
+                        const el = richTextRefs.current[idx];
+                        if (!el) return;
+                        const linked = linkifyHtml(el.innerHTML);
+                        if (linked !== el.innerHTML) {
+                          el.innerHTML = linked;
+                          updateTextBlockRich(idx);
+                        }
+                      }}
                       onFocus={() => {
                         focusedBlockRef.current = idx;
                         activeFieldRef.current = "content";
@@ -2656,7 +2862,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                         // Só re-semeia se estiver fora de sincronia (edição externa: desfazer,
                         // dividir bloco, carregar nota) — nunca enquanto a pessoa está digitando,
                         // pra não fazer o cursor pular de lugar.
-                        if (el.innerHTML !== desiredHtml && document.activeElement !== el) {
+                        if (el.innerHTML !== desiredHtml && document.activeElement !== el && !isComposingRef.current[idx]) {
                           el.innerHTML = desiredHtml;
                         }
                         // Focus immediately when mounted if this is the pending focus block

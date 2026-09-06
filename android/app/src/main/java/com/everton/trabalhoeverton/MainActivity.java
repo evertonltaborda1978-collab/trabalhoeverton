@@ -1,6 +1,8 @@
 package com.everton.trabalhoeverton;
 
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Base64;
@@ -81,27 +83,60 @@ public class MainActivity extends BridgeActivity {
     }
 
     // Lê os bytes de uma foto compartilhada (content://...) e transforma em
-    // "data:image/...;base64,..." — formato que o app já sabe exibir/salvar
-    // como foto de nota, sem precisar guardar arquivo nenhum no aparelho.
+    // "data:image/jpeg;base64,...". Duas melhorias importantes aqui:
+    // 1) Não desiste mais só porque o tipo de arquivo relatado pelo app de
+    //    origem (WhatsApp, Galeria, etc.) não vem exatamente como
+    //    "image/...": tenta decodificar de qualquer jeito, e só desiste se
+    //    a decodificação falhar de verdade.
+    // 2) Decodifica a foto JÁ REDUZIDA (em vez de carregar em tamanho
+    //    original na memória pra só depois reduzir) — evita falhar em fotos
+    //    grandes de câmera por falta de memória.
     private String uriToBase64DataUrl(Uri uri) {
         try {
-            String mimeType = getContentResolver().getType(uri);
-            if (mimeType == null || !mimeType.startsWith("image/")) return null;
+            int maxDimension = 1600;
 
+            // 1ª passada: só lê as dimensões da foto, sem carregar os pixels
+            BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            InputStream boundsInput = getContentResolver().openInputStream(uri);
+            if (boundsInput == null) return null;
+            BitmapFactory.decodeStream(boundsInput, null, bounds);
+            boundsInput.close();
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null;
+
+            // Calcula de quanto reduzir já na hora de decodificar
+            int sample = 1;
+            while ((bounds.outWidth / sample) > maxDimension * 2 || (bounds.outHeight / sample) > maxDimension * 2) {
+                sample *= 2;
+            }
+
+            BitmapFactory.Options decodeOpts = new BitmapFactory.Options();
+            decodeOpts.inSampleSize = sample;
             InputStream input = getContentResolver().openInputStream(uri);
             if (input == null) return null;
-
-            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-            byte[] chunk = new byte[8192];
-            int bytesRead;
-            while ((bytesRead = input.read(chunk)) != -1) {
-                buffer.write(chunk, 0, bytesRead);
-            }
+            Bitmap original = BitmapFactory.decodeStream(input, null, decodeOpts);
             input.close();
+            if (original == null) return null;
 
-            String base64 = Base64.encodeToString(buffer.toByteArray(), Base64.NO_WRAP);
-            return "data:" + mimeType + ";base64," + base64;
-        } catch (Exception e) {
+            Bitmap resized = original;
+            if (original.getWidth() > maxDimension || original.getHeight() > maxDimension) {
+                float scale = Math.min(
+                    (float) maxDimension / original.getWidth(),
+                    (float) maxDimension / original.getHeight()
+                );
+                int newW = Math.round(original.getWidth() * scale);
+                int newH = Math.round(original.getHeight() * scale);
+                resized = Bitmap.createScaledBitmap(original, newW, newH, true);
+            }
+
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            resized.compress(Bitmap.CompressFormat.JPEG, 82, out);
+            String base64 = Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP);
+            return "data:image/jpeg;base64," + base64;
+        } catch (Throwable e) {
+            // Throwable (não só Exception) porque decodificar imagem pode
+            // gerar OutOfMemoryError em fotos muito grandes — não pode
+            // deixar isso derrubar o app, só desistir dessa foto.
             return null;
         }
     }

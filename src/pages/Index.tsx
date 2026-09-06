@@ -60,7 +60,7 @@ const Index = () => {
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const activeModalRef = useRef<string | null>(null);
   const onModalCloseRef = useRef<(() => void) | null>(null);
-  const { notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, reorderPinnedNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes, refreshNotes } = useNotes();
+  const { notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, reorderPinnedNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, syncStatus, unsyncedCount, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes, refreshNotes } = useNotes();
   const { appointments, trashedAppointments, addAppointment, updateAppointment, deleteAppointment, restoreAppointment, permanentDeleteAppointment, emptyAppointmentTrash, activeAlert, dismissAlert, snoozeAlert, fetchAppointments } = useAppointments();
   const { medicationAlert, dismissMedicationAlert, snoozeMedicationAlert } = useMedicationAlerts();
   const { signOut } = useAuth();
@@ -351,13 +351,37 @@ const Index = () => {
         <div className="max-w-lg mx-auto px-4 pt-2 pb-2">
           {/* Linha 1: Esquerda (Sinal) | Centro (Título + Versão) | Direita (Menu ••• unificado + Sair) */}
           <div className="flex items-center justify-between gap-2">
-            {/* Lado Esquerdo: Sinal de Conexão */}
+            {/* Lado Esquerdo: Sinal de Conexão + aviso de notas ainda não sincronizadas */}
             <div
-              className="flex items-center justify-center rounded-full shrink-0"
+              className="relative flex items-center justify-center rounded-full shrink-0"
               style={{ width: 32, height: 32, background: "#FFFFFF", border: "1px solid #EBEBEB" }}
-              title={signalInfo.label}
+              title={
+                unsyncedCount > 0
+                  ? `${signalInfo.label} — ${unsyncedCount} nota${unsyncedCount > 1 ? "s" : ""} salva${unsyncedCount > 1 ? "s" : ""} só neste aparelho, aguardando internet pra sincronizar. Evite limpar dados/desinstalar o app até isso sincronizar.`
+                  : signalInfo.label
+              }
             >
               <signalInfo.Icon size={16} style={{ color: signalInfo.color }} />
+              {unsyncedCount > 0 && (
+                <span
+                  className="absolute flex items-center justify-center"
+                  style={{
+                    top: -4,
+                    right: -4,
+                    minWidth: 16,
+                    height: 16,
+                    borderRadius: 8,
+                    padding: "0 3px",
+                    background: "#F9A825",
+                    color: "#FFF",
+                    fontSize: 9,
+                    fontWeight: 800,
+                    border: "1.5px solid #FFFFFF",
+                  }}
+                >
+                  {unsyncedCount > 99 ? "99+" : unsyncedCount}
+                </span>
+              )}
             </div>
 
             {/* Centro: Título e Versão integrados */}

@@ -9,6 +9,19 @@ import { useVersionCheck } from "@/hooks/useVersionCheck";
 import { APP_VERSION, VERSION_HISTORY, forceUpdateApp } from "@/lib/appVersion";
 import { Mail, Lock, Eye, EyeOff, Fingerprint, HelpCircle, X, RotateCcw } from "lucide-react";
 
+// Alguns erros vêm crus e técnicos direto do navegador (ex: "Failed to
+// fetch", quando não tem internet de verdade pra completar o login no
+// servidor) — aqui trocamos por uma mensagem que a pessoa entende.
+function friendlyAuthError(message: string | undefined): string {
+  if (!message) return "Não foi possível completar. Tente novamente.";
+  const raw = message.toLowerCase();
+  if (raw.includes("failed to fetch") || raw.includes("networkerror") || raw.includes("load failed")) {
+    return "Sem internet no momento. Conecte-se e tente entrar de novo.";
+  }
+  if (message === "Invalid login credentials") return "Email ou senha incorretos";
+  return message;
+}
+
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
@@ -73,9 +86,7 @@ export default function Auth() {
     } catch (error: any) {
       toast({
         title: "Erro",
-        description: error.message === "Invalid login credentials"
-          ? "Email ou senha incorretos"
-          : error.message,
+        description: friendlyAuthError(error.message),
         variant: "destructive",
       });
     } finally {
@@ -87,7 +98,7 @@ export default function Auth() {
     setLoading(true);
     const result = await biometricLogin();
     if (!result.success) {
-      toast({ title: "Erro", description: result.error, variant: "destructive" });
+      toast({ title: "Erro", description: friendlyAuthError(result.error), variant: "destructive" });
     }
     setLoading(false);
   };
