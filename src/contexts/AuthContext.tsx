@@ -31,6 +31,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
+    // Fica "true" só durante a decisão inicial (os primeiros instantes ao
+    // abrir o app). Enquanto for true, ignora qualquer restauração PASSIVA
+    // de sessão (ex: o próprio Supabase recuperando um token salvo) — só um
+    // login de verdade (evento "SIGNED_IN") é aceito nesse meio tempo. Sem
+    // isso, com internet, a tela de Notas "piscava" por uma fração de
+    // segundo (a sessão salva sendo restaurada) antes de voltar pro login
+    // (a política de sempre exigir login online sendo aplicada).
+    let settling = true;
 
     const { data: { subscription } } = (supabase.auth as any).onAuthStateChange(
       (_event, session) => {
@@ -41,6 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // aceito e destrava essa proteção. Sem isso, depois de sair uma vez,
         // nenhum novo login funcionava até reiniciar o app inteiro.
         if (softLoggedOutRef.current && _event !== "SIGNED_IN") return;
+        if (settling && _event !== "SIGNED_IN") return;
         softLoggedOutRef.current = false;
         setSession(session);
         setLoading(false);
@@ -64,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .signOut({ scope: "local" })
         .catch(() => {})
         .finally(() => {
+          settling = false;
           if (!isMounted) return;
           setLoading(false);
         });
@@ -76,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
         .catch(() => {})
         .finally(() => {
+          settling = false;
           if (!isMounted) return;
           setLoading(false);
         });
