@@ -299,6 +299,15 @@ function htmlToPlainText(html: string): string {
 }
 
 function serializeBlocks(blocks: ContentBlock[]): string {
+  // Garante que links fiquem vermelhos/sublinhados ao salvar, mesmo se o
+  // "sair do campo" (blur) não tiver disparado certinho em algum teclado
+  // Android — rede de segurança extra além do onBlur de cada campo.
+  const withLinks = blocks.map((b) =>
+    b.contentHtml ? { ...b, contentHtml: linkifyHtml(b.contentHtml) } : b
+  );
+  return serializeBlocksRaw(withLinks);
+}
+function serializeBlocksRaw(blocks: ContentBlock[]): string {
   return JSON.stringify(blocks);
 }
 
@@ -1317,6 +1326,13 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   // deve reescrever o innerHTML do campo, senão o texto pode aparecer
   // duplicado (bug conhecido de contentEditable + teclados Android).
   const isComposingRef = useRef<Record<number, boolean>>({});
+  // Rastreamento próprio de foco (via eventos onFocus/onBlur do React), como
+  // reforço extra ao document.activeElement — em alguns teclados Android
+  // (principalmente com autocorreção/previsão de texto ativa), o
+  // activeElement pode ficar temporariamente inconsistente durante a
+  // digitação, o que pode causar duplicação de texto se o campo for
+  // reescrito nesse instante.
+  const isFocusedRef = useRef<Record<number, boolean>>({});
   const pendingFocusRef = useRef<"title" | "content" | null>(null);
   const pendingCursorRef = useRef<number | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -2474,6 +2490,18 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                 />
               )}
 
+              {/* Desfazer — sempre visível, usa o mesmo sistema do menu flutuante */}
+              <button
+                onClick={undo}
+                disabled={!canUndo}
+                className="p-2 rounded-lg hover:bg-black/10 transition-colors shrink-0 flex items-center justify-center disabled:opacity-30"
+                title="Desfazer"
+                aria-label="Desfazer"
+                style={{ color: textColor, minWidth: 36, minHeight: 36 }}
+              >
+                <Undo2 size={18} />
+              </button>
+
               {/* Copiar — sempre visível */}
               <button
                 onClick={handleCopy}
@@ -2800,6 +2828,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                         updateTextBlockRich(idx);
                       }}
                       onBlur={() => {
+                        isFocusedRef.current[idx] = false;
                         const el = richTextRefs.current[idx];
                         if (!el) return;
                         const linked = linkifyHtml(el.innerHTML);
@@ -2809,6 +2838,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                         }
                       }}
                       onFocus={() => {
+                        isFocusedRef.current[idx] = true;
                         focusedBlockRef.current = idx;
                         activeFieldRef.current = "content";
                         setActiveBlockIdx(idx);
@@ -2862,7 +2892,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                         // Só re-semeia se estiver fora de sincronia (edição externa: desfazer,
                         // dividir bloco, carregar nota) — nunca enquanto a pessoa está digitando,
                         // pra não fazer o cursor pular de lugar.
-                        if (el.innerHTML !== desiredHtml && document.activeElement !== el && !isComposingRef.current[idx]) {
+                        if (el.innerHTML !== desiredHtml && document.activeElement !== el && !isFocusedRef.current[idx] && !isComposingRef.current[idx]) {
                           el.innerHTML = desiredHtml;
                         }
                         // Focus immediately when mounted if this is the pending focus block

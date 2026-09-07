@@ -48,6 +48,7 @@ interface NotesViewProps {
 
 export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onTogglePin, onReorderPin, onLockNote, onUnlockNote, onVerifyPin, onAddAppointment, onRefresh, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, trashedNotes, onRestoreNote, onPermanentDeleteNote, onEmptyTrash }: NotesViewProps) {
   const [search, setSearch] = useState("");
+  const [showOnlyDrafts, setShowOnlyDrafts] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [searchFocused, setSearchFocused] = useState(false);
@@ -140,11 +141,17 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
   }, []);
   const { isListening, isSupported: voiceSupported, toggle: toggleVoice } = useSpeechRecognition(handleVoiceResult);
 
-  const filtered = notes.filter(
-    (n) =>
-      n.title.toLowerCase().includes(search.toLowerCase()) ||
-      n.content.toLowerCase().includes(search.toLowerCase())
-  );
+  useEffect(() => {
+    if (draftCount === 0 && showOnlyDrafts) setShowOnlyDrafts(false);
+  }, [draftCount, showOnlyDrafts]);
+
+  const filtered = notes
+    .filter((n) => !showOnlyDrafts || n.status === "rascunho")
+    .filter(
+      (n) =>
+        n.title.toLowerCase().includes(search.toLowerCase()) ||
+        n.content.toLowerCase().includes(search.toLowerCase())
+    );
 
   const openNew = () => { setEditingNote(null); setEditorReadOnly(false); setDialogOpen(true); };
 
@@ -293,9 +300,20 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
 
 
       {draftCount > 0 && (
-        <p className="text-[11px] font-semibold mb-1 text-[#F9A825]">
+        <button
+          onClick={() => setShowOnlyDrafts((v) => !v)}
+          className="text-[11px] font-semibold mb-1 flex items-center gap-1.5"
+          style={{ color: "#F9A825" }}
+        >
+          <span
+            className="animate-pulse shrink-0"
+            style={{ width: 9, height: 9, borderRadius: "50%", background: "#F9A825" }}
+          />
           ✏️ {draftCount} rascunho{draftCount > 1 ? "s" : ""} pendente{draftCount > 1 ? "s" : ""}
-        </p>
+          <span style={{ textDecoration: "underline", marginLeft: 2 }}>
+            {showOnlyDrafts ? "— ver todas" : "— ver rascunhos"}
+          </span>
+        </button>
       )}
 
       {/* Barra de Busca com Microfone e Botão Novo */}

@@ -4,8 +4,10 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Base64;
+import android.widget.Toast;
 import com.getcapacitor.BridgeActivity;
 import org.json.JSONObject;
 import java.io.ByteArrayOutputStream;
@@ -48,10 +50,23 @@ public class MainActivity extends BridgeActivity {
         String subject = intent.getStringExtra(Intent.EXTRA_SUBJECT);
         String imageDataUrl = null;
 
-        Uri imageUri = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+        Uri imageUri = getStreamExtra(intent);
         if (imageUri != null) {
             imageDataUrl = uriToBase64DataUrl(imageUri);
         }
+
+        // Aviso temporário de diagnóstico — mostra na tela o que foi
+        // detectado, pra sabermos exatamente onde a foto está travando se
+        // ainda não vier. Pode remover depois que confirmarmos que funciona.
+        final boolean hadImageUri = imageUri != null;
+        final boolean imageDecoded = imageDataUrl != null;
+        runOnUiThread(() -> Toast.makeText(
+            this,
+            "Compartilhado — texto: " + (text != null && !text.isEmpty())
+                + " | veio URI de imagem: " + hadImageUri
+                + " | imagem convertida: " + imageDecoded,
+            Toast.LENGTH_LONG
+        ).show());
 
         // Nada útil pra compartilhar (não era texto nem imagem reconhecida)
         if ((text == null || text.trim().isEmpty()) && imageDataUrl == null) return;
@@ -80,6 +95,17 @@ public class MainActivity extends BridgeActivity {
                 getBridge().getWebView().evaluateJavascript(js, null);
             }
         });
+    }
+
+    // Lê o EXTRA_STREAM (a foto/arquivo compartilhado) do jeito certo pra
+    // cada versão do Android — a partir do Android 13 (API 33), o método
+    // antigo de ler isso foi descontinuado e pode se comportar diferente.
+    @SuppressWarnings("deprecation")
+    private Uri getStreamExtra(Intent intent) {
+        if (Build.VERSION.SDK_INT >= 33) {
+            return intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri.class);
+        }
+        return intent.getParcelableExtra(Intent.EXTRA_STREAM);
     }
 
     // Lê os bytes de uma foto compartilhada (content://...) e transforma em

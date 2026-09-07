@@ -501,6 +501,29 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
     setPickerMode(true);
   }, [lostMode, emergencyMode, tracking]);
 
+  // Liga o botão/gesto de voltar nativo do Android ao "1 passo pra trás"
+  // (mesmo efeito da seta redonda), enquanto estiver em qualquer tela dentro
+  // de Localização que não seja a de escolha de aparelho. Na tela de escolha
+  // (pickerMode), não registra nada — aí o voltar nativo cai no comportamento
+  // padrão de sair pra Notas. Usa uma ref pra sempre chamar a versão mais
+  // recente sem ficar re-registrando a cada re-render.
+  const handleBackToPickerRef = useRef(handleBackToPicker);
+  useEffect(() => {
+    handleBackToPickerRef.current = handleBackToPicker;
+  });
+  useEffect(() => {
+    const w = window as any;
+    if (pickerMode) return;
+    if (typeof w.__registerModal === "function") {
+      w.__registerModal("location-detail", () => handleBackToPickerRef.current());
+    }
+    return () => {
+      if (typeof w.__unregisterModal === "function") {
+        w.__unregisterModal();
+      }
+    };
+  }, [pickerMode]);
+
   // Para o rastreio AO VIVO (Emergência/Perdi meu aparelho/atualização contínua)
   // sem sair da tela — mantém a última posição/endereço encontrados visíveis,
   // só para de atualizar.
@@ -547,16 +570,8 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
 
       {!pickerMode && (
       <>
-      <div className="flex items-center justify-between">
-        <button
-          onClick={handleBackToPicker}
-          className="flex items-center justify-center rounded-full transition-all active:scale-95"
-          style={{ width: 32, height: 32, background: "rgba(45,158,127,0.1)", color: "#2D9E7F" }}
-          title="Voltar"
-        >
-          <ArrowLeft size={18} />
-        </button>
-        {isLiveTracking && (
+      {isLiveTracking && (
+        <div className="flex items-center justify-end">
           <button
             onClick={handleStopLocating}
             className="flex items-center gap-1.5 text-sm font-semibold transition-all active:scale-95 px-2.5 py-1 rounded-lg"
@@ -565,8 +580,8 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
           >
             <span style={{ fontSize: 13 }}>⏹</span> Parar
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Map */}
       <div
@@ -1025,8 +1040,18 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
       {showAlertModal && <AlertModal deviceName={showAlertModal.name} onClose={() => setShowAlertModal(null)} />}
 
       {infoModal && (
-        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.4)" }} onClick={() => setInfoModal(null)}>
-          <div className="w-full max-w-sm rounded-2xl p-5" style={{ background: "#FFF" }} onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center"
+          style={{
+            background: "rgba(0,0,0,0.4)",
+            paddingLeft: 16,
+            paddingRight: 16,
+            paddingTop: "calc(16px + env(safe-area-inset-top))",
+            paddingBottom: "calc(16px + env(safe-area-inset-bottom))",
+          }}
+          onClick={() => setInfoModal(null)}
+        >
+          <div className="w-full max-w-sm rounded-2xl overflow-y-auto" style={{ background: "#FFF", padding: 20, paddingBottom: "calc(20px + env(safe-area-inset-bottom))", maxHeight: "calc(90vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))" }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-3 mb-2">
               <h3 className="font-bold text-[15px]" style={{ color: "#1A1A2E" }}>{infoModal.title}</h3>
               <button onClick={() => setInfoModal(null)} className="shrink-0 p-1 rounded-full hover:bg-black/5">
@@ -1041,10 +1066,16 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
 
       {weakSignalConfirm && (
         <div
-          className="fixed inset-0 z-[130] flex items-end sm:items-center justify-center p-3"
-          style={{ background: "rgba(0,0,0,0.5)" }}
+          className="fixed inset-0 z-[130] flex items-end sm:items-center justify-center"
+          style={{
+            background: "rgba(0,0,0,0.5)",
+            paddingLeft: 12,
+            paddingRight: 12,
+            paddingTop: "calc(12px + env(safe-area-inset-top))",
+            paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
+          }}
         >
-          <div className="w-full max-w-md rounded-2xl p-5" style={{ background: "#FFF" }}>
+          <div className="w-full max-w-md rounded-2xl overflow-y-auto" style={{ background: "#FFF", padding: 20, paddingBottom: "calc(20px + env(safe-area-inset-bottom))", maxHeight: "calc(90vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))" }}>
             <div className="flex items-center gap-3 mb-3">
               <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: "#FFF3E0" }}>
                 <span style={{ fontSize: 20 }}>📡</span>
@@ -1091,13 +1122,19 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
 
       {showLostDevicePicker && (
         <div
-          className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-3"
-          style={{ background: "rgba(0,0,0,0.5)" }}
+          className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center"
+          style={{
+            background: "rgba(0,0,0,0.5)",
+            paddingLeft: 12,
+            paddingRight: 12,
+            paddingTop: "calc(12px + env(safe-area-inset-top))",
+            paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
+          }}
           onClick={() => setShowLostDevicePicker(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl p-5"
-            style={{ background: "#FFF" }}
+            className="w-full max-w-md rounded-2xl overflow-y-auto"
+            style={{ background: "#FFF", padding: 20, paddingBottom: "calc(20px + env(safe-area-inset-bottom))", maxHeight: "calc(90vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-1">
