@@ -183,6 +183,7 @@ export function useNotes() {
     syncingRef.current = true;
     setSyncStatus("syncing");
 
+    let allOk = true;
     for (const note of unsynced) {
       try {
         const payload = {
@@ -210,16 +211,22 @@ export function useNotes() {
           deleted_at: note.deletedAt ? note.deletedAt.toISOString() : null,
           sincronizado: true,
         };
-        await (supabase.from("notes") as any).upsert(payload, { onConflict: "id" });
+        const { error } = await (supabase.from("notes") as any).upsert(payload, { onConflict: "id" });
+        if (error) throw error;
+        // Marca essa nota específica como sincronizada já — sem esperar as
+        // outras da fila terminarem.
+        setNotes((prev) => prev.map((n) => (n.id === note.id ? { ...n, sincronizado: true } : n)));
       } catch {
-        setSyncStatus("offline");
-        syncingRef.current = false;
-        return;
+        // Essa nota específica não sincronizou (ex: foto grande demais pro
+        // limite do banco de uma vez) — mas NÃO pode travar a fila inteira:
+        // as outras notas pendentes continuam tentando normalmente. Antes,
+        // uma falha aqui interrompia tudo, deixando até notas sem problema
+        // nenhum presas sem sincronizar até a pessoa forçar salvando de novo.
+        allOk = false;
       }
     }
 
-    setNotes((prev) => prev.map((n) => ({ ...n, sincronizado: true })));
-    setSyncStatus("synced");
+    setSyncStatus(allOk ? "synced" : "offline");
     syncingRef.current = false;
   }, [user]);
 
