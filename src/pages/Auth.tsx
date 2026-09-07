@@ -31,7 +31,7 @@ export default function Auth() {
   const [forgotPassword, setForgotPassword] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const { toast } = useToast();
-  const { biometricEnabled, biometricAvailable, enableBiometric, biometricLogin, storedEmail } = useBiometricAuth();
+  const { biometricEnabled, biometricAvailable, enableBiometric, disableBiometric, biometricLogin, storedEmail } = useBiometricAuth();
   const { notice: updateNotice } = useVersionCheck();
 
   // Aviso de atualização já na tela de login, sem precisar entrar com email/senha
@@ -149,6 +149,19 @@ export default function Auth() {
                 {loading ? "Autenticando..." : `Entrar como ${storedEmail}`}
               </span>
             </Button>
+            <p className="text-center text-[11px] text-muted-foreground">
+              Digital não funcionando?{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  disableBiometric();
+                  toast({ title: "Biometria desativada", description: "Entre com email e senha — ela será oferecida de novo depois." });
+                }}
+                className="underline hover:text-foreground"
+              >
+                Desativar
+              </button>
+            </p>
             <div className="flex items-center gap-2">
               <div className="flex-1 h-px bg-border" />
               <span className="text-xs text-muted-foreground">ou use email</span>
