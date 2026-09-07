@@ -7,13 +7,16 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Base64;
-import android.widget.Toast;
 import com.getcapacitor.BridgeActivity;
 import org.json.JSONObject;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 
 public class MainActivity extends BridgeActivity {
+    // Guarda o motivo exato se a conversão da foto falhar — usado só pro
+    // diagnóstico temporário que aparece dentro da nota criada.
+    private String lastImageError;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -49,24 +52,21 @@ public class MainActivity extends BridgeActivity {
         String text = intent.getStringExtra(Intent.EXTRA_TEXT);
         String subject = intent.getStringExtra(Intent.EXTRA_SUBJECT);
         String imageDataUrl = null;
+        lastImageError = null;
 
         Uri imageUri = getStreamExtra(intent);
         if (imageUri != null) {
             imageDataUrl = uriToBase64DataUrl(imageUri);
         }
 
-        // Aviso temporário de diagnóstico — mostra na tela o que foi
-        // detectado, pra sabermos exatamente onde a foto está travando se
-        // ainda não vier. Pode remover depois que confirmarmos que funciona.
-        final boolean hadImageUri = imageUri != null;
-        final boolean imageDecoded = imageDataUrl != null;
-        runOnUiThread(() -> Toast.makeText(
-            this,
-            "Compartilhado — texto: " + (text != null && !text.isEmpty())
-                + " | veio URI de imagem: " + hadImageUri
-                + " | imagem convertida: " + imageDecoded,
-            Toast.LENGTH_LONG
-        ).show());
+        // Diagnóstico temporário: em vez de um aviso passageiro na tela
+        // (difícil de ler a tempo), grava o que foi detectado DENTRO da
+        // própria nota criada — assim fica salvo e dá pra ler com calma.
+        // Remover essa linha depois que confirmarmos que a foto funciona.
+        String diagnostico = "[Diagnóstico] texto recebido: " + (text != null && !text.isEmpty())
+            + " | veio URI de imagem: " + (imageUri != null)
+            + " | imagem convertida: " + (imageDataUrl != null)
+            + (lastImageError != null ? " | motivo da falha: " + lastImageError : "");
 
         // Nada útil pra compartilhar (não era texto nem imagem reconhecida)
         if ((text == null || text.trim().isEmpty()) && imageDataUrl == null) return;
@@ -74,7 +74,7 @@ public class MainActivity extends BridgeActivity {
         JSONObject payload = new JSONObject();
         try {
             payload.put("title", subject != null ? subject : "");
-            payload.put("content", text != null ? text : "");
+            payload.put("content", diagnostico + "\n\n" + (text != null ? text : ""));
             payload.put("image", imageDataUrl != null ? imageDataUrl : JSONObject.NULL);
         } catch (Exception e) {
             return;
@@ -125,10 +125,10 @@ public class MainActivity extends BridgeActivity {
             BitmapFactory.Options bounds = new BitmapFactory.Options();
             bounds.inJustDecodeBounds = true;
             InputStream boundsInput = getContentResolver().openInputStream(uri);
-            if (boundsInput == null) return null;
+            if (boundsInput == null) { lastImageError = "não consegui abrir o arquivo (openInputStream nulo)"; return null; }
             BitmapFactory.decodeStream(boundsInput, null, bounds);
             boundsInput.close();
-            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null;
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) { lastImageError = "não é uma imagem válida (dimensões zero)"; return null; }
 
             // Calcula de quanto reduzir já na hora de decodificar
             int sample = 1;
@@ -139,10 +139,10 @@ public class MainActivity extends BridgeActivity {
             BitmapFactory.Options decodeOpts = new BitmapFactory.Options();
             decodeOpts.inSampleSize = sample;
             InputStream input = getContentResolver().openInputStream(uri);
-            if (input == null) return null;
+            if (input == null) { lastImageError = "não consegui reabrir o arquivo pra decodificar"; return null; }
             Bitmap original = BitmapFactory.decodeStream(input, null, decodeOpts);
             input.close();
-            if (original == null) return null;
+            if (original == null) { lastImageError = "decodeStream retornou nulo (formato não suportado?)"; return null; }
 
             Bitmap resized = original;
             if (original.getWidth() > maxDimension || original.getHeight() > maxDimension) {
@@ -163,6 +163,7 @@ public class MainActivity extends BridgeActivity {
             // Throwable (não só Exception) porque decodificar imagem pode
             // gerar OutOfMemoryError em fotos muito grandes — não pode
             // deixar isso derrubar o app, só desistir dessa foto.
+            lastImageError = e.getClass().getSimpleName() + (e.getMessage() != null ? ": " + e.getMessage() : "");
             return null;
         }
     }
