@@ -302,12 +302,12 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
       {draftCount > 0 && (
         <button
           onClick={() => setShowOnlyDrafts((v) => !v)}
-          className="text-[11px] font-semibold mb-1 flex items-center gap-1.5"
+          className="text-[14px] font-semibold mb-2 flex items-center gap-2 py-1"
           style={{ color: "#F9A825" }}
         >
           <span
             className="animate-pulse shrink-0"
-            style={{ width: 9, height: 9, borderRadius: "50%", background: "#F9A825" }}
+            style={{ width: 12, height: 12, borderRadius: "50%", background: "#F9A825" }}
           />
           ✏️ {draftCount} rascunho{draftCount > 1 ? "s" : ""} pendente{draftCount > 1 ? "s" : ""}
           <span style={{ textDecoration: "underline", marginLeft: 2 }}>
