@@ -694,8 +694,20 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
 
   const handleShare = async () => {
     const text = gerarTexto();
-    if (navigator.share) { try { await navigator.share({ title: `Relatório Rebobinadeira ${rebobNum}`, text }); } catch {} }
-    else { await navigator.clipboard.writeText(text); toast({ title: "✅ Copiado!" }); }
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `Relatório Rebobinadeira ${rebobNum}`, text });
+        return;
+      } catch (err: any) {
+        if (err?.name === "AbortError") return;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: "✅ Copiado!", description: "Relatório copiado para a área de transferência." });
+    } catch {
+      toast({ title: "Não foi possível compartilhar nem copiar", description: "Tente novamente.", variant: "destructive" });
+    }
   };
 
   const [showSendConfirm, setShowSendConfirm] = useState(false);

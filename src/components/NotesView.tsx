@@ -116,10 +116,19 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
       try {
         const data = JSON.parse(raw) as { title?: string; content?: string; image?: string | null };
         const title = data.title || "";
-        const content = data.content || "";
-        const images = data.image ? [data.image] : [];
-        if (!title && !content && images.length === 0) return;
-        onAdd(title, content, images);
+        const text = data.content || "";
+        if (!title && !text && !data.image) return;
+
+        // As fotos de uma nota não ficam soltas num campo à parte — elas
+        // vivem DENTRO do texto da nota, como um "bloco" de imagem (é assim
+        // que o NoteEditor lê e mostra o conteúdo). Por isso montamos o
+        // conteúdo nesse formato de blocos, em vez de só texto puro.
+        const blocks: Array<{ type: string; content?: string; url?: string }> = [];
+        if (text) blocks.push({ type: "text", content: text });
+        if (data.image) blocks.push({ type: "image", url: data.image });
+        const content = JSON.stringify(blocks);
+
+        onAdd(title, content, data.image ? [data.image] : []);
         toast({ title: "📥 Nota criada a partir do compartilhamento" });
       } catch (e) {
         console.error("Erro ao ler conteúdo compartilhado:", e);

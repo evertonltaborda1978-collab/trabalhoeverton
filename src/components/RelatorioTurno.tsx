@@ -716,8 +716,25 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   const handlePrevia = () => { setPrevia(gerarTexto()); setShowPrevia(true); };
   const handleShare = async () => {
     const text = gerarTexto();
-    if (navigator.share) { try { await navigator.share({ title: `Relatório Turno ${turno}`, text }); } catch {} }
-    else { await navigator.clipboard.writeText(text); toast({ title: "✅ Copiado!", description: "Relatório copiado para a área de transferência." }); }
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `Relatório Turno ${turno}`, text });
+        return;
+      } catch (err: any) {
+        // "AbortError" é a pessoa cancelando o menu de compartilhar de
+        // propósito — não é erro, não precisa de alternativa nem aviso.
+        if (err?.name === "AbortError") return;
+        // Qualquer outra falha do compartilhamento nativo: cai pra copiar,
+        // em vez de simplesmente não fazer nada (o problema que estava
+        // acontecendo — nenhum aviso, nenhuma alternativa, tela parada).
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: "✅ Copiado!", description: "Relatório copiado para a área de transferência." });
+    } catch {
+      toast({ title: "Não foi possível compartilhar nem copiar", description: "Tente novamente.", variant: "destructive" });
+    }
   };
   const [showSendConfirm, setShowSendConfirm] = useState(false);
   const confirmarEnvio = () => { setShowSendConfirm(false); handleShare(); };
