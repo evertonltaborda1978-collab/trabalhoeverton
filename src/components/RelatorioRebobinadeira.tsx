@@ -693,7 +693,14 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   };
 
   const handleShare = async () => {
-    const text = gerarTexto();
+    let text: string;
+    try {
+      text = gerarTexto();
+    } catch (err) {
+      console.error("Erro ao gerar texto do relatório:", err);
+      toast({ title: "Não foi possível montar o relatório", description: "Tente fechar e abrir a nota de novo.", variant: "destructive" });
+      return;
+    }
     if (navigator.share) {
       try {
         await navigator.share({ title: `Relatório Rebobinadeira ${rebobNum}`, text });

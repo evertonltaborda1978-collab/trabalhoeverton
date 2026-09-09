@@ -540,27 +540,24 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
   const [strokeWidth, setStrokeWidth] = useState(5);
   const [objects, setObjects] = useState<DrawObject[]>([]);
   const [zoom, setZoom] = useState(1);
-  const [panX, setPanX] = useState(0);
-  const [panY, setPanY] = useState(0);
   const [canvasSize, setCanvasSize] = useState({ w: 300, h: 300 });
   const [ready, setReady] = useState(false);
-  const [isGesturing, setIsGesturing] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const baseCanvasSizeRef = useRef({ w: 0, h: 0 });
-  const MIN_ZOOM = 0.5;
+  const MIN_ZOOM = 1;
   const MAX_ZOOM = 4;
+  // Rastreia só a pinça de dois dedos (pra dar zoom) — mover a foto agora é
+  // rolagem NATIVA de verdade (funciona com o dedo, com a roda do mouse, e
+  // arrastando a barra de rolagem no computador), em vez de um sistema
+  // próprio em JavaScript.
   const gestureRef = useRef<{
     pointers: Map<number, { x: number; y: number }>;
     mode: "idle" | "draw" | "pinch";
     startDist: number;
     startZoom: number;
-    startMidX: number; startMidY: number;
-    startPanX: number; startPanY: number;
-    centerX: number; centerY: number;
   }>({
     pointers: new Map(),
     mode: "idle",
-    startDist: 0, startZoom: 1, startMidX: 0, startMidY: 0, startPanX: 0, startPanY: 0, centerX: 0, centerY: 0,
+    startDist: 0, startZoom: 1,
   });
   const [textPrompt, setTextPrompt] = useState<{ x: number; y: number } | null>(null);
   const [textInput, setTextInput] = useState("");
@@ -606,41 +603,12 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
 
   useEffect(() => { if (ready) redraw(); }, [ready, redraw]);
 
-  // Mede o tamanho exibido do canvas em tela (com zoom 100%) assim que ele
-  // aparece — usado pra calcular até onde dá pra mover a foto com a pinça
-  // sem deixar espaço vazio na tela.
-  useEffect(() => {
-    if (!ready) return;
-    const id = requestAnimationFrame(() => {
-      const r = canvasRef.current?.getBoundingClientRect();
-      if (r && r.width > 0 && r.height > 0) baseCanvasSizeRef.current = { w: r.width, h: r.height };
-    });
-    return () => cancelAnimationFrame(id);
-  }, [ready]);
-
-  function clampPan(z: number, x: number, y: number) {
-    const rect = wrapperRef.current?.getBoundingClientRect();
-    if (!rect) return { x, y };
-    const scaledW = baseCanvasSizeRef.current.w * z;
-    const scaledH = baseCanvasSizeRef.current.h * z;
-    const maxX = Math.max(0, (scaledW - rect.width) / 2);
-    const maxY = Math.max(0, (scaledH - rect.height) / 2);
-    return { x: Math.max(-maxX, Math.min(maxX, x)), y: Math.max(-maxY, Math.min(maxY, y)) };
-  }
-
   function dist(a: { x: number; y: number }, b: { x: number; y: number }) {
     return Math.hypot(a.x - b.x, a.y - b.y);
   }
-  function mid(a: { x: number; y: number }, b: { x: number; y: number }) {
-    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-  }
 
   function zoomBy(delta: number) {
-    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, +(zoom + delta).toFixed(2)));
-    const clamped = clampPan(newZoom, panX * (newZoom / zoom), panY * (newZoom / zoom));
-    setZoom(newZoom);
-    setPanX(clamped.x);
-    setPanY(clamped.y);
+    setZoom((z) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, +(z + delta).toFixed(2))));
   }
 
   function getPoint(e: React.PointerEvent<HTMLCanvasElement>) {
@@ -715,15 +683,6 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
       g.mode = "pinch";
       g.startDist = dist(pts[0], pts[1]) || 1;
       g.startZoom = zoom;
-      const m = mid(pts[0], pts[1]);
-      g.startMidX = m.x;
-      g.startMidY = m.y;
-      g.startPanX = panX;
-      g.startPanY = panY;
-      const rect = e.currentTarget.getBoundingClientRect();
-      g.centerX = rect.left + rect.width / 2;
-      g.centerY = rect.top + rect.height / 2;
-      setIsGesturing(true);
       return;
     }
 
@@ -741,16 +700,8 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
     if (g.mode === "pinch" && g.pointers.size === 2) {
       const pts = Array.from(g.pointers.values());
       const newDist = dist(pts[0], pts[1]);
-      const m = mid(pts[0], pts[1]);
       const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, g.startZoom * (newDist / g.startDist)));
-      const p0x = (g.startMidX - g.centerX - g.startPanX) / g.startZoom;
-      const p0y = (g.startMidY - g.centerY - g.startPanY) / g.startZoom;
-      const newPanX = (m.x - g.centerX) - newZoom * p0x;
-      const newPanY = (m.y - g.centerY) - newZoom * p0y;
-      const clamped = clampPan(newZoom, newPanX, newPanY);
       setZoom(newZoom);
-      setPanX(clamped.x);
-      setPanY(clamped.y);
       return;
     }
 
@@ -766,7 +717,6 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
     if (g.mode === "pinch") {
       if (g.pointers.size === 0) {
         g.mode = "idle";
-        setIsGesturing(false);
       }
       // Levanta 1 dedo e ainda sobra outro: não volta a desenhar sozinho
       // com ele, pra não deixar um traço sem querer logo após a pinça.
@@ -819,10 +769,20 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
         <button onClick={handleSave} style={{ color: "#2D9E7F", fontSize: 14, fontWeight: 700, background: "none", border: "none", padding: "10px 12px", margin: "-10px -4px" }}>Salvar</button>
       </div>
 
-      {/* Canvas area */}
+      {/* Canvas area — rolagem NATIVA de verdade (funciona com a barra de
+          rolagem e a roda do mouse no computador, e com o dedo no celular),
+          em vez de um sistema de posição próprio em JavaScript. */}
       <div
         ref={wrapperRef}
-        style={{ flex: 1, overflow: "hidden", position: "relative", display: "flex", alignItems: "center", justifyContent: "center", padding: 8, touchAction: "none" }}
+        style={{
+          flex: 1,
+          overflow: "auto",
+          position: "relative",
+          display: "flex",
+          alignItems: zoom <= 1 ? "center" : "flex-start",
+          justifyContent: zoom <= 1 ? "center" : "flex-start",
+          padding: 8,
+        }}
         onPointerDown={handleWrapperPointerDown}
         onPointerMove={handleWrapperPointerMove}
         onPointerUp={handleWrapperPointerUp}
@@ -837,16 +797,14 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
           <canvas
             ref={canvasRef}
             style={{
-              maxWidth: "100%",
-              maxHeight: "100%",
-              width: "auto",
+              width: `${canvasSize.w * zoom}px`,
+              maxWidth: zoom <= 1 ? "100%" : "none",
               height: "auto",
               touchAction: "none",
               background: "#fff",
               borderRadius: 4,
-              transformOrigin: "50% 50%",
-              transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
-              transition: isGesturing ? "none" : "transform 0.15s ease",
+              margin: zoom <= 1 ? "auto" : 0,
+              transition: "width 0.15s ease",
             }}
           />
         ) : (
