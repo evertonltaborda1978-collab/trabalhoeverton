@@ -675,18 +675,31 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   }, [rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, itens, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob]);
 
   const handleSaveNote = () => {
-    const text = gerarTexto();
+    let text: string;
+    try {
+      text = gerarTexto();
+    } catch (err) {
+      console.error("Erro ao gerar texto do relatório (salvar):", err);
+      toast({ title: "Não foi possível salvar o relatório", description: "Erro ao montar o texto — tente fechar e abrir de novo.", variant: "destructive" });
+      return;
+    }
     const title = `Relatório Rebobinadeira ${rebobNum} - Letra ${letra}`;
     const stateKey = `rebobinadeira_state_${title.replace(/\s/g, "_")}`;
     const state = { rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, itens, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob, fontSize };
-    localStorage.setItem(stateKey, JSON.stringify(state));
-    // Guarda o destinatário atual como "último usado", pra próxima vez que abrir
-    // um relatório novo já vir preenchido sozinho (só precisa trocar quando mudar de turma)
-    if (dest.trim()) localStorage.setItem("rebobinadeira_last_dest", dest.trim());
-    // Embute o estado no próprio texto da nota (marcador invisível), para que
-    // reabrir o formulário funcione mesmo após limpeza de cache ou em outro aparelho.
+    try {
+      localStorage.setItem(stateKey, JSON.stringify(state));
+      if (dest.trim()) localStorage.setItem("rebobinadeira_last_dest", dest.trim());
+    } catch (err) {
+      console.error("Erro ao salvar estado do relatório no localStorage:", err);
+    }
     const marker = `\n\n<!--relatorio-rebobinadeira-state:${JSON.stringify(state)}-->`;
-    onSaveAsNote(title, text + marker);
+    try {
+      onSaveAsNote(title, text + marker);
+    } catch (err) {
+      console.error("Erro ao salvar relatório como nota:", err);
+      toast({ title: "Não foi possível salvar o relatório", description: "Tente novamente.", variant: "destructive" });
+      return;
+    }
     toast({ title: "✅ Salvo nas notas!" });
     localStorage.removeItem(RASCUNHO_KEY);
     onClose();

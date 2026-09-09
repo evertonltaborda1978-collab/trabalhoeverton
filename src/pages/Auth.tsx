@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MoonPhaseWidget } from "@/components/MoonPhaseWidget";
@@ -31,6 +32,7 @@ export default function Auth() {
   const [forgotPassword, setForgotPassword] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const { toast } = useToast();
+  const { restoreSession } = useAuth();
   const { biometricEnabled, biometricAvailable, enableBiometric, disableBiometric, biometricLogin, storedEmail } = useBiometricAuth();
   const { notice: updateNotice } = useVersionCheck();
 
@@ -98,7 +100,14 @@ export default function Auth() {
     setLoading(true);
     const result = await biometricLogin();
     if (!result.success) {
-      toast({ title: "Erro", description: friendlyAuthError(result.error), variant: "destructive" });
+      // A digital em si já confirmou quem é a pessoa (isso acontece antes
+      // da parte que precisa de rede) — se só a etapa de confirmar com o
+      // servidor falhou (sinal fraco/sem internet), tenta reaproveitar a
+      // sessão que já estava guardada, em vez de deixar a pessoa presa.
+      const restored = await restoreSession();
+      if (!restored) {
+        toast({ title: "Erro", description: friendlyAuthError(result.error), variant: "destructive" });
+      }
     }
     setLoading(false);
   };
