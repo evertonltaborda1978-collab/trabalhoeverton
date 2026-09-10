@@ -52,21 +52,11 @@ public class MainActivity extends BridgeActivity {
         String text = intent.getStringExtra(Intent.EXTRA_TEXT);
         String subject = intent.getStringExtra(Intent.EXTRA_SUBJECT);
         String imageDataUrl = null;
-        lastImageError = null;
 
         Uri imageUri = getStreamExtra(intent);
         if (imageUri != null) {
             imageDataUrl = uriToBase64DataUrl(imageUri);
         }
-
-        // Diagnóstico temporário: em vez de um aviso passageiro na tela
-        // (difícil de ler a tempo), grava o que foi detectado DENTRO da
-        // própria nota criada — assim fica salvo e dá pra ler com calma.
-        // Remover essa linha depois que confirmarmos que a foto funciona.
-        String diagnostico = "[Diagnóstico] texto recebido: " + (text != null && !text.isEmpty())
-            + " | veio URI de imagem: " + (imageUri != null)
-            + " | imagem convertida: " + (imageDataUrl != null)
-            + (lastImageError != null ? " | motivo da falha: " + lastImageError : "");
 
         // Nada útil pra compartilhar (não era texto nem imagem reconhecida)
         if ((text == null || text.trim().isEmpty()) && imageDataUrl == null) return;
@@ -74,7 +64,7 @@ public class MainActivity extends BridgeActivity {
         JSONObject payload = new JSONObject();
         try {
             payload.put("title", subject != null ? subject : "");
-            payload.put("content", diagnostico + "\n\n" + (text != null ? text : ""));
+            payload.put("content", text != null ? text : "");
             payload.put("image", imageDataUrl != null ? imageDataUrl : JSONObject.NULL);
         } catch (Exception e) {
             return;

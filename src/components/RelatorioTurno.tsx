@@ -723,6 +723,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
       toast({ title: "Não foi possível montar o relatório", description: "Tente fechar e abrir a nota de novo.", variant: "destructive" });
       return;
     }
+    window.alert("[Diagnóstico] texto montado, tamanho: " + text.length + " | navigator.share existe: " + (!!navigator.share));
     if (navigator.share) {
       try {
         await navigator.share({ title: `Relatório Turno ${turno}`, text });
@@ -744,7 +745,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
     }
   };
   const [showSendConfirm, setShowSendConfirm] = useState(false);
-  const confirmarEnvio = () => { setShowSendConfirm(false); handleShare(); };
+  const confirmarEnvio = () => { window.alert("[Diagnóstico] confirmarEnvio (Turno) foi chamado"); setShowSendConfirm(false); handleShare(); };
   const relatorioLabel = modoTombador ? "Relatório do Tombador" : `Relatório da Embaladeira ${embaladeiraNum}`;
   const handleSaveNote = () => {
     let text: string;

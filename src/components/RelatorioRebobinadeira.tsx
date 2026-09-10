@@ -714,6 +714,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
       toast({ title: "Não foi possível montar o relatório", description: "Tente fechar e abrir a nota de novo.", variant: "destructive" });
       return;
     }
+    window.alert("[Diagnóstico] texto montado, tamanho: " + text.length + " | navigator.share existe: " + (!!navigator.share));
     if (navigator.share) {
       try {
         await navigator.share({ title: `Relatório Rebobinadeira ${rebobNum}`, text });
@@ -731,7 +732,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   };
 
   const [showSendConfirm, setShowSendConfirm] = useState(false);
-  const confirmarEnvio = () => { setShowSendConfirm(false); handleShare(); };
+  const confirmarEnvio = () => { window.alert("[Diagnóstico] confirmarEnvio (Rebobinadeira) foi chamado"); setShowSendConfirm(false); handleShare(); };
 
   // ── Tema ──
   const fz = fontSize === "sm" ? 12 : fontSize === "lg" ? 16 : 14;

@@ -554,10 +554,12 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
     mode: "idle" | "draw" | "pinch";
     startDist: number;
     startZoom: number;
+    lastMidX: number;
+    lastMidY: number;
   }>({
     pointers: new Map(),
     mode: "idle",
-    startDist: 0, startZoom: 1,
+    startDist: 0, startZoom: 1, lastMidX: 0, lastMidY: 0,
   });
   const [textPrompt, setTextPrompt] = useState<{ x: number; y: number } | null>(null);
   const [textInput, setTextInput] = useState("");
@@ -605,6 +607,9 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
 
   function dist(a: { x: number; y: number }, b: { x: number; y: number }) {
     return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+  function mid(a: { x: number; y: number }, b: { x: number; y: number }) {
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
   }
 
   function zoomBy(delta: number) {
@@ -683,6 +688,9 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
       g.mode = "pinch";
       g.startDist = dist(pts[0], pts[1]) || 1;
       g.startZoom = zoom;
+      const m0 = mid(pts[0], pts[1]);
+      g.lastMidX = m0.x;
+      g.lastMidY = m0.y;
       return;
     }
 
@@ -701,6 +709,18 @@ function ImageAnnotator({ imageUrl, onSave, onCancel }: { imageUrl: string; onSa
       const pts = Array.from(g.pointers.values());
       const newDist = dist(pts[0], pts[1]);
       const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, g.startZoom * (newDist / g.startDist)));
+      const m = mid(pts[0], pts[1]);
+      // Move a rolagem de verdade (scrollLeft/scrollTop) seguindo o quanto
+      // o meio-ponto dos 2 dedos andou — isso é o que faz mover a foto pra
+      // qualquer direção funcionar, usando a MESMA rolagem que também
+      // funciona com barra de rolagem/roda do mouse no computador.
+      const wrapper = wrapperRef.current;
+      if (wrapper) {
+        wrapper.scrollLeft -= m.x - g.lastMidX;
+        wrapper.scrollTop -= m.y - g.lastMidY;
+      }
+      g.lastMidX = m.x;
+      g.lastMidY = m.y;
       setZoom(newZoom);
       return;
     }
