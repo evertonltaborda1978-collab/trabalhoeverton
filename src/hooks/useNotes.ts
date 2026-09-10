@@ -151,6 +151,10 @@ export function useNotes() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("synced");
+  // Guarda qual nota falhou ao sincronizar e o motivo exato (mensagem que
+  // vem do próprio banco), pra dar um jeito de ver o que está travando em
+  // vez de só saber que "tem 1 pendente" sem saber por quê.
+  const [lastSyncError, setLastSyncError] = useState<{ title: string; message: string } | null>(null);
   const syncingRef = useRef(false);
   const notesRef = useRef<Note[]>([]);
 
@@ -216,16 +220,21 @@ export function useNotes() {
         // Marca essa nota específica como sincronizada já — sem esperar as
         // outras da fila terminarem.
         setNotes((prev) => prev.map((n) => (n.id === note.id ? { ...n, sincronizado: true } : n)));
-      } catch {
+      } catch (err: any) {
         // Essa nota específica não sincronizou (ex: foto grande demais pro
         // limite do banco de uma vez) — mas NÃO pode travar a fila inteira:
         // as outras notas pendentes continuam tentando normalmente. Antes,
         // uma falha aqui interrompia tudo, deixando até notas sem problema
         // nenhum presas sem sincronizar até a pessoa forçar salvando de novo.
         allOk = false;
+        setLastSyncError({
+          title: note.title || "(sem título)",
+          message: err?.message || String(err) || "Erro desconhecido",
+        });
       }
     }
 
+    if (allOk) setLastSyncError(null);
     setSyncStatus(allOk ? "synced" : "offline");
     syncingRef.current = false;
   }, [user]);
@@ -938,5 +947,5 @@ export function useNotes() {
     return () => clearInterval(interval);
   }, [notes, reminderAlert]);
 
-  return { notes: activeNotes, trashedNotes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, reorderPinnedNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, loading, syncStatus, unsyncedCount, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, refreshNotes: fetchNotes };
+  return { notes: activeNotes, trashedNotes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, reorderPinnedNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, loading, syncStatus, unsyncedCount, lastSyncError, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, refreshNotes: fetchNotes };
 }

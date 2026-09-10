@@ -60,7 +60,7 @@ const Index = () => {
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const activeModalRef = useRef<string | null>(null);
   const onModalCloseRef = useRef<(() => void) | null>(null);
-  const { notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, reorderPinnedNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, syncStatus, unsyncedCount, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes, refreshNotes } = useNotes();
+  const { notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, reorderPinnedNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, syncStatus, unsyncedCount, lastSyncError, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes, refreshNotes } = useNotes();
   const { appointments, trashedAppointments, addAppointment, updateAppointment, deleteAppointment, restoreAppointment, permanentDeleteAppointment, emptyAppointmentTrash, activeAlert, dismissAlert, snoozeAlert, fetchAppointments } = useAppointments();
   const { medicationAlert, dismissMedicationAlert, snoozeMedicationAlert } = useMedicationAlerts();
   const { signOut } = useAuth();
@@ -243,15 +243,10 @@ const Index = () => {
     setTimeout(() => { void forceUpdateApp(); }, 600);
   };
 
-  // Sair estando offline: a sessão local é encerrada e, sem internet, não dá
-  // pra fazer login de novo até a conexão voltar. Confirma antes, pra não
-  // deixar a pessoa presa fora do app sem querer — as notas continuam salvas.
-  const [showOfflineLogoutConfirm, setShowOfflineLogoutConfirm] = useState(false);
+  // "Sair" agora é sempre seguro: guarda a sessão localmente pra ainda dar
+  // pra entrar de novo offline depois (ver AuthContext.tsx), então não
+  // precisa mais confirmar nada antes.
   const handleSignOutClick = () => {
-    if (!isOnline) {
-      setShowOfflineLogoutConfirm(true);
-      return;
-    }
     signOut();
   };
 
@@ -352,12 +347,21 @@ const Index = () => {
           {/* Linha 1: Esquerda (Sinal) | Centro (Título + Versão) | Direita (Menu ••• unificado + Sair) */}
           <div className="flex items-center justify-between gap-2">
             {/* Lado Esquerdo: Sinal de Conexão + aviso de notas ainda não sincronizadas */}
-            <div
+            <button
+              onClick={() => {
+                if (unsyncedCount > 0 && lastSyncError) {
+                  toast({
+                    title: `⚠️ Nota "${lastSyncError.title}" não sincronizou`,
+                    description: lastSyncError.message,
+                    variant: "destructive",
+                  });
+                }
+              }}
               className="relative flex items-center justify-center rounded-full shrink-0"
               style={{ width: 32, height: 32, background: "#FFFFFF", border: "1px solid #EBEBEB" }}
               title={
                 unsyncedCount > 0
-                  ? `${signalInfo.label} — ${unsyncedCount} nota${unsyncedCount > 1 ? "s" : ""} salva${unsyncedCount > 1 ? "s" : ""} só neste aparelho, aguardando internet pra sincronizar. Evite limpar dados/desinstalar o app até isso sincronizar.`
+                  ? `${signalInfo.label} — ${unsyncedCount} nota${unsyncedCount > 1 ? "s" : ""} salva${unsyncedCount > 1 ? "s" : ""} só neste aparelho, aguardando internet pra sincronizar. Evite limpar dados/desinstalar o app até isso sincronizar.${lastSyncError ? " Toque pra ver o motivo." : ""}`
                   : signalInfo.label
               }
             >
@@ -382,7 +386,7 @@ const Index = () => {
                   {unsyncedCount > 99 ? "99+" : unsyncedCount}
                 </span>
               )}
-            </div>
+            </button>
 
             {/* Centro: Título e Versão integrados */}
             <div className="flex flex-col items-center flex-1 min-w-0">
@@ -579,32 +583,6 @@ const Index = () => {
           defaultName={currentDevice.device_name}
           onDone={() => { closeLabelModal(); fetchDevices(); }}
         />
-      )}
-
-      {showOfflineLogoutConfirm && (
-        <div
-          className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-4"
-          style={{ background: "rgba(0,0,0,0.4)" }}
-          onClick={() => setShowOfflineLogoutConfirm(false)}
-        >
-          <div className="w-full max-w-sm rounded-2xl p-5 bg-background" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-bold text-sm text-foreground mb-2">Não é possível sair offline</h3>
-            <p className="text-xs text-muted-foreground leading-relaxed mb-4">
-              Suas notas estão seguras e não serão perdidas. Mas, sem internet, se você sair agora não
-              vai conseguir entrar de novo (nem usar o app) até a conexão voltar, porque o login precisa
-              de rede. Por isso o app não deixa sair enquanto estiver offline.
-            </p>
-            <div className="flex justify-end">
-              <button
-                onClick={() => setShowOfflineLogoutConfirm(false)}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-white"
-                style={{ background: "#1A1A2E" }}
-              >
-                Entendi
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );

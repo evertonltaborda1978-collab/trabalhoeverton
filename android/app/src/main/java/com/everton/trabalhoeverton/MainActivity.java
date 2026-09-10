@@ -119,7 +119,7 @@ public class MainActivity extends BridgeActivity {
     //    grandes de câmera por falta de memória.
     private String uriToBase64DataUrl(Uri uri) {
         try {
-            int maxDimension = 1600;
+            int maxDimension = 1000;
 
             // 1ª passada: só lê as dimensões da foto, sem carregar os pixels
             BitmapFactory.Options bounds = new BitmapFactory.Options();
@@ -156,7 +156,7 @@ public class MainActivity extends BridgeActivity {
             }
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
-            resized.compress(Bitmap.CompressFormat.JPEG, 82, out);
+            resized.compress(Bitmap.CompressFormat.JPEG, 75, out);
             String base64 = Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP);
             return "data:image/jpeg;base64," + base64;
         } catch (Throwable e) {
