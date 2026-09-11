@@ -22,6 +22,28 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
+// Lê a sessão salva direto do armazenamento do aparelho, sem chamar a rede
+// — puramente local, sempre instantâneo. O getSession() oficial do Supabase
+// às vezes tenta renovar o token pela internet por trás dos panos, e se
+// isso acontecer sem sinal (ou com sinal fraco, tipo dentro de um ônibus em
+// movimento), ele pode ficar esperando bastante tempo por uma resposta que
+// nunca chega — foi isso que causava a demora/tela branca ao abrir offline.
+function readCachedSessionFast(): any | null {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("sb-") && key.endsWith("-auth-token")) {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw);
+        const session = parsed?.currentSession || parsed;
+        if (session?.access_token) return session;
+      }
+    }
+  } catch {}
+  return null;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,6 +60,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // abrir o app), pra ignorar qualquer evento duplicado/fora de ordem
     // nesse meio tempo e evitar telas piscando.
     let settling = true;
+
+    // Mostra a sessão salva JÁ, sem esperar rede nenhuma — nunca trava,
+    // nunca fica em branco. A checagem "oficial" abaixo (que pode envolver
+    // rede) continua em segundo plano, sem bloquear a tela.
+    const cachedSession = readCachedSessionFast();
+    if (cachedSession) {
+      setSession(cachedSession);
+      setLoading(false);
+    }
 
     const { data: { subscription } } = (supabase.auth as any).onAuthStateChange(
       (_event, session) => {

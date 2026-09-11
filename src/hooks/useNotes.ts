@@ -477,7 +477,14 @@ export function useNotes() {
     setNotes((prev) => prev.map((n) => n.id === id ? { ...n, deletedAt: now, sincronizado: false } : n));
     try {
       await (supabase.from("notes") as any).update({ deleted_at: now.toISOString() }).eq("id", id);
-    } catch {}
+      // A exclusão chegou no servidor na hora — marca como sincronizada, pra
+      // não ficar marcada como pendente à toa esperando a fila de sincronia
+      // tentar de novo depois sem necessidade.
+      setNotes((prev) => prev.map((n) => n.id === id ? { ...n, sincronizado: true } : n));
+    } catch {
+      // Sem internet: fica marcada como pendente mesmo, e a fila de
+      // sincronia (syncToSupabase) reenvia sozinha quando a conexão voltar.
+    }
   }, [markSelfModified]);
 
   // Restore from trash

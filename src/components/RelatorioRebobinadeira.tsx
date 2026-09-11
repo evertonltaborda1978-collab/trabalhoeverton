@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { X, Camera, Pencil } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { shareText } from "@/lib/nativeShare";
 
 // ── Chaves localStorage ──
 const RASCUNHO_KEY = "rebobinadeira_rascunho";
@@ -714,25 +715,16 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
       toast({ title: "Não foi possível montar o relatório", description: "Tente fechar e abrir a nota de novo.", variant: "destructive" });
       return;
     }
-    window.alert("[Diagnóstico] texto montado, tamanho: " + text.length + " | navigator.share existe: " + (!!navigator.share));
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: `Relatório Rebobinadeira ${rebobNum}`, text });
-        return;
-      } catch (err: any) {
-        if (err?.name === "AbortError") return;
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(text);
+    const result = await shareText(`Relatório Rebobinadeira ${rebobNum}`, text);
+    if (result === "copied") {
       toast({ title: "✅ Copiado!", description: "Relatório copiado para a área de transferência." });
-    } catch {
+    } else if (result === "failed") {
       toast({ title: "Não foi possível compartilhar nem copiar", description: "Tente novamente.", variant: "destructive" });
     }
   };
 
   const [showSendConfirm, setShowSendConfirm] = useState(false);
-  const confirmarEnvio = () => { window.alert("[Diagnóstico] confirmarEnvio (Rebobinadeira) foi chamado"); setShowSendConfirm(false); handleShare(); };
+  const confirmarEnvio = () => { setShowSendConfirm(false); handleShare(); };
 
   // ── Tema ──
   const fz = fontSize === "sm" ? 12 : fontSize === "lg" ? 16 : 14;

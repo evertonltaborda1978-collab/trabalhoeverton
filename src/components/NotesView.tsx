@@ -437,6 +437,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
         onSchedule={onAddAppointment ? (noteTitle, noteContent, date, time, sound) => {
           onAddAppointment(noteTitle || "Nota sem título", new Date(date + "T00:00:00"), time, noteContent, sound);
         } : undefined}
+        onDelete={onDelete}
       />
 
       <ReminderModal

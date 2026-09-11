@@ -437,6 +437,7 @@ interface NoteEditorProps {
     status: "rascunho" | "publicada",
   ) => void;
   onSchedule?: (title: string, content: string, date: string, time: string, sound: AlertSoundId) => void;
+  onDelete?: (id: string) => void;
 }
 
 // ── ImageAnnotator: editor de desenho tipo Paint (caneta, seta, linha, ──
@@ -959,11 +960,12 @@ class AnnotatorErrorBoundary extends Component<
 }
 
 // ── Component ──────────────────────────────────────────
-export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, onSetReadOnly, initialSharedData, onSave, onSchedule }: NoteEditorProps) {
+export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, onSetReadOnly, initialSharedData, onSave, onSchedule, onDelete }: NoteEditorProps) {
   const [title, setTitle] = useState("");
   const [blocks, setBlocks] = useState<ContentBlock[]>([{ type: "text", content: "" }]);
   const [editingImageIdx, setEditingImageIdx] = useState<number | null>(null);
   const [pendingDeleteItem, setPendingDeleteItem] = useState<{ type: "table" | "checklist"; blockIdx: number; itemId: string; label: string } | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewTx, setViewTx] = useState(0);
@@ -2480,6 +2482,20 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                 <Undo2 size={18} />
               </button>
 
+              {/* Excluir — só aparece editando uma nota que já existe (uma
+                  nota nova, ainda não salva, não tem o que excluir) */}
+              {editingNote && onDelete && (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="p-2 rounded-lg hover:bg-black/10 transition-colors shrink-0 flex items-center justify-center"
+                  title="Excluir nota"
+                  aria-label="Excluir nota"
+                  style={{ color: "#E53935", minWidth: 36, minHeight: 36 }}
+                >
+                  <Trash2 size={18} />
+                </button>
+              )}
+
               {/* Copiar — sempre visível */}
               <button
                 onClick={handleCopy}
@@ -3563,29 +3579,32 @@ ${blocksToPlainText(blocks)}`.trim();
                 </div>
               </button>
 
-              {/* Compartilhar nativo (se disponível) */}
-              {navigator.share && (
-                <button
-                  onClick={async () => {
-                    try {
-                      await navigator.share({ title: title || "Nota", text: `${title}
+              {/* Compartilhar nativo — sempre visível: usa o plugin nativo
+                  dentro do app instalado, e navigator.share no navegador. */}
+              <button
+                onClick={async () => {
+                  const text = `${title}
 
-${blocksToPlainText(blocks)}`.trim() });
-                    } catch {}
-                    setShowShareModal(false);
-                  }}
-                  className="w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all hover:bg-gray-50 active:scale-95"
-                  style={{ border: "1px solid #E8EAF6" }}
-                >
-                  <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: "#3F51B5" }}>
-                    <Share2 size={20} color="white" />
-                  </div>
-                  <div className="text-left">
-                    <div className="text-sm font-semibold" style={{ color: "#1A1A2E" }}>Mais opções</div>
-                    <div className="text-sm" style={{ color: "#9E9E9E" }}>Telegram, SMS e outros</div>
-                  </div>
-                </button>
-              )}
+${blocksToPlainText(blocks)}`.trim();
+                  const result = await shareText(title || "Nota", text);
+                  if (result === "copied") {
+                    toast({ title: "✅ Copiado!", description: "Nota copiada para a área de transferência." });
+                  } else if (result === "failed") {
+                    toast({ title: "Não foi possível compartilhar nem copiar", variant: "destructive" });
+                  }
+                  setShowShareModal(false);
+                }}
+                className="w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all hover:bg-gray-50 active:scale-95"
+                style={{ border: "1px solid #E8EAF6" }}
+              >
+                <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: "#3F51B5" }}>
+                  <Share2 size={20} color="white" />
+                </div>
+                <div className="text-left">
+                  <div className="text-sm font-semibold" style={{ color: "#1A1A2E" }}>Mais opções</div>
+                  <div className="text-sm" style={{ color: "#9E9E9E" }}>WhatsApp, Telegram, SMS e outros</div>
+                </div>
+              </button>
 
               <button
                 onClick={() => setShowShareModal(false)}
@@ -3764,6 +3783,43 @@ ${blocksToPlainText(blocks)}`.trim() });
         )}
 
         {/* Confirmação antes de excluir um item da tabela ou checklist */}
+        {showDeleteConfirm && editingNote && (
+          <div
+            className="absolute inset-0 z-[95] flex items-center justify-center p-5"
+            style={{ background: "rgba(0,0,0,0.5)" }}
+            onClick={() => setShowDeleteConfirm(false)}
+          >
+            <div
+              className="w-full"
+              style={{ maxWidth: 320, background: theme.card, borderRadius: 18, padding: 20 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p style={{ fontWeight: 700, fontSize: 15, color: theme.text, margin: "0 0 6px" }}>🗑 Mover para a lixeira?</p>
+              <p style={{ fontSize: 13, color: theme.textMuted, margin: "0 0 16px" }}>
+                A nota "{editingNote.title || "Sem título"}" pode ser recuperada em até 30 dias.
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: isDark ? "#333" : "#F0F0F0", color: theme.text, fontWeight: 600, fontSize: 13 }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    onDelete?.(editingNote.id);
+                    setShowDeleteConfirm(false);
+                    onOpenChange(false);
+                  }}
+                  style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#E53935", color: "#FFF", fontWeight: 600, fontSize: 13 }}
+                >
+                  Mover para lixeira
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {pendingDeleteItem && (
           <div
             className="absolute inset-0 z-[90] flex items-center justify-center p-5"
