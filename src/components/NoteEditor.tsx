@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo, Component, ReactNode } from "react";
 import { Note } from "@/hooks/useNotes";
 import { takeNativePhoto, isNative } from "@/lib/native";
+import { shareOrSaveImage } from "@/lib/nativeShare";
 import {
   Camera,
   X,
@@ -966,6 +967,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const [editingImageIdx, setEditingImageIdx] = useState<number | null>(null);
   const [pendingDeleteItem, setPendingDeleteItem] = useState<{ type: "table" | "checklist"; blockIdx: number; itemId: string; label: string } | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [pendingDeleteImageIdx, setPendingDeleteImageIdx] = useState<number | null>(null);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewTx, setViewTx] = useState(0);
@@ -1235,26 +1237,11 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
   const handleViewerShareOrDownload = async () => {
     if (!viewingImage) return;
-    try {
-      const resp = await fetch(viewingImage);
-      const blob = await resp.blob();
-      const ext = (blob.type.split("/")[1] || "jpg").replace("jpeg", "jpg");
-      const file = new File([blob], `foto-nota.${ext}`, { type: blob.type });
-      const nav = navigator as Navigator & { canShare?: (data?: ShareData) => boolean; share?: (data: ShareData) => Promise<void> };
-      if (nav.share && nav.canShare && nav.canShare({ files: [file] })) {
-        await nav.share({ files: [file] });
-        return;
-      }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = file.name;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch {
-      window.open(viewingImage, "_blank");
+    const result = await shareOrSaveImage(viewingImage, "foto-nota.jpg");
+    if (result === "saved") {
+      toast({ title: "✅ Foto baixada!" });
+    } else if (result === "failed") {
+      toast({ title: "Não foi possível compartilhar essa foto", description: "Tente novamente.", variant: "destructive" });
     }
   };
   const [activeBlockIdx, setActiveBlockIdx] = useState<number | null>(null);
@@ -3257,7 +3244,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                           )}
                           {!readOnly && (
                             <button
-                              onClick={() => removeImageBlock(idx)}
+                              onClick={() => setPendingDeleteImageIdx(idx)}
                               className="rounded-full text-white transition-all hover:bg-black/80 active:scale-95"
                               style={{ background: "rgba(0,0,0,0.7)", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 6px rgba(0,0,0,0.2)" }}
                               aria-label="Remover imagem"
@@ -3814,6 +3801,42 @@ ${blocksToPlainText(blocks)}`.trim();
                   style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#E53935", color: "#FFF", fontWeight: 600, fontSize: 13 }}
                 >
                   Mover para lixeira
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {pendingDeleteImageIdx !== null && (
+          <div
+            className="absolute inset-0 z-[95] flex items-center justify-center p-5"
+            style={{ background: "rgba(0,0,0,0.5)" }}
+            onClick={() => setPendingDeleteImageIdx(null)}
+          >
+            <div
+              className="w-full"
+              style={{ maxWidth: 320, background: theme.card, borderRadius: 18, padding: 20 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p style={{ fontWeight: 700, fontSize: 15, color: theme.text, margin: "0 0 6px" }}>🗑 Remover essa foto?</p>
+              <p style={{ fontSize: 13, color: theme.textMuted, margin: "0 0 16px" }}>
+                Essa ação não pode ser desfeita. O resto da nota continua igual.
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => setPendingDeleteImageIdx(null)}
+                  style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: isDark ? "#333" : "#F0F0F0", color: theme.text, fontWeight: 600, fontSize: 13 }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    if (pendingDeleteImageIdx !== null) removeImageBlock(pendingDeleteImageIdx);
+                    setPendingDeleteImageIdx(null);
+                  }}
+                  style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#E53935", color: "#FFF", fontWeight: 600, fontSize: 13 }}
+                >
+                  Remover foto
                 </button>
               </div>
             </div>
