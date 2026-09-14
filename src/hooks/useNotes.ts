@@ -473,10 +473,14 @@ export function useNotes() {
   // Soft delete — move to trash
   const deleteNote = useCallback(async (id: string) => {
     const now = new Date();
-    markSelfModified(id);
-    setNotes((prev) => prev.map((n) => n.id === id ? { ...n, deletedAt: now, sincronizado: false } : n));
+    // 30s (igual ao fixar/desafixar) em vez de 8s — 8 segundos podia não
+    // ser tempo suficiente numa conexão mais lenta, deixando uma janela
+    // onde o realtime buscava dados de volta antes da exclusão "assentar"
+    // de vez, fazendo a nota parecer voltar sozinha.
+    markSelfModified(id, 30000);
+    setNotes((prev) => prev.map((n) => n.id === id ? { ...n, deletedAt: now, updatedAt: now, sincronizado: false } : n));
     try {
-      await (supabase.from("notes") as any).update({ deleted_at: now.toISOString() }).eq("id", id);
+      await (supabase.from("notes") as any).update({ deleted_at: now.toISOString(), updated_at: now.toISOString() }).eq("id", id);
       // A exclusão chegou no servidor na hora — marca como sincronizada, pra
       // não ficar marcada como pendente à toa esperando a fila de sincronia
       // tentar de novo depois sem necessidade.
@@ -489,16 +493,17 @@ export function useNotes() {
 
   // Restore from trash
   const restoreNote = useCallback(async (id: string) => {
-    markSelfModified(id);
-    setNotes((prev) => prev.map((n) => n.id === id ? { ...n, deletedAt: null, sincronizado: false } : n));
+    const now = new Date();
+    markSelfModified(id, 30000);
+    setNotes((prev) => prev.map((n) => n.id === id ? { ...n, deletedAt: null, updatedAt: now, sincronizado: false } : n));
     try {
-      await (supabase.from("notes") as any).update({ deleted_at: null }).eq("id", id);
+      await (supabase.from("notes") as any).update({ deleted_at: null, updated_at: now.toISOString() }).eq("id", id);
     } catch {}
   }, [markSelfModified]);
 
   // Permanent delete
   const permanentDeleteNote = useCallback(async (id: string) => {
-    markSelfModified(id);
+    markSelfModified(id, 30000);
     setNotes((prev) => prev.filter((n) => n.id !== id));
     try {
       await supabase.from("notes").delete().eq("id", id);
@@ -530,7 +535,7 @@ export function useNotes() {
   const updateNote = useCallback(
     async (id: string, title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string, status?: "rascunho" | "publicada") => {
       const now = new Date();
-      markSelfModified(id);
+      markSelfModified(id, 30000);
       setNotes((prev) =>
         prev.map((n) =>
           n.id === id
@@ -571,7 +576,7 @@ export function useNotes() {
 
   // Set/remove reminder
   const setNoteReminder = useCallback(async (id: string, reminderDate: string | null, reminderTime: string | null, reminderSound: AlertSoundId = "classico") => {
-    markSelfModified(id);
+    markSelfModified(id, 30000);
     setNotes((prev) => prev.map((n) => n.id === id ? { ...n, reminderDate, reminderTime, reminderSound, updatedAt: new Date(), sincronizado: false } : n));
     try {
       await (supabase.from("notes") as any).update({ reminder_date: reminderDate, reminder_time: reminderTime, reminder_sound: reminderSound, updated_at: new Date().toISOString(), sincronizado: true }).eq("id", id);
@@ -590,12 +595,18 @@ export function useNotes() {
       ? Math.max(-1, ...notesRef.current.filter((n) => n.isPinned && !n.deletedAt).map((n) => n.pinOrder ?? 0)) + 1
       : null;
 
-    // Ignora eventos realtime desta nota enquanto a mudança propaga
+    // Ignora eventos realtime desta nota enquanto a mudança propaga. Essa
+    // proteção (pinningSuppressRef) existia no código mas nunca era ligada
+    // de verdade — corrigido aqui, como camada extra de segurança além do
+    // markSelfModified, especificamente contra o fixar "desfazendo sozinho".
     markSelfModified(id, 30000);
+    pinningSuppressRef.current = true;
+    setTimeout(() => { pinningSuppressRef.current = false; }, 30000);
 
     // Atualizar estado local e persistência imediatamente, antes de qualquer refresh
+    const nowPin = new Date();
     const localUpdatedNotes = notesRef.current.map((n) => (
-      n.id === id ? { ...n, isPinned: newPinned, pinOrder: newPinOrder, sincronizado: false } : n
+      n.id === id ? { ...n, isPinned: newPinned, pinOrder: newPinOrder, updatedAt: nowPin, sincronizado: false } : n
     ));
     notesRef.current = localUpdatedNotes;
     setNotes(localUpdatedNotes);
@@ -608,7 +619,7 @@ export function useNotes() {
 
     try {
       const { data, error } = await (supabase.from("notes") as any)
-        .update({ is_pinned: newPinned, pin_order: newPinOrder, sincronizado: true })
+        .update({ is_pinned: newPinned, pin_order: newPinOrder, updated_at: nowPin.toISOString(), sincronizado: true })
         .eq("id", id)
         .select("id,is_pinned,pin_order")
         .single();
