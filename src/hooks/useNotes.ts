@@ -338,24 +338,35 @@ export function useNotes() {
       if (error) throw error;
 
       const remoteNotes = data ? data.map(mapRow) : [];
-      const merged = mergeNotes(localNotes, remoteNotes);
-      setNotesAndRef(merged);
-      saveLocal(user.id, merged);
+
+      // Mescla contra o estado ATUAL de verdade (via a forma funcional),
+      // nunca contra a "localNotes" capturada lá em cima antes de esperar
+      // a rede — essa espera pode levar alguns segundos, tempo de sobra
+      // pra pessoa fixar/excluir uma nota enquanto isso. Se a gente
+      // mesclasse contra aquela foto antiga, a mudança fresca da pessoa
+      // seria apagada por cima assim que essa busca terminasse.
+      let mergedResult: Note[] = localNotes;
+      setNotesAndRef((prev) => {
+        mergedResult = mergeNotes(prev, remoteNotes);
+        return mergedResult;
+      });
+      saveLocal(user.id, mergedResult);
 
       // Sync any local-only notes
-      const unsynced = merged.filter((n) => !n.sincronizado);
+      const unsynced = mergedResult.filter((n) => !n.sincronizado);
       if (unsynced.length > 0) {
-        syncToSupabase(merged);
+        syncToSupabase(mergedResult);
       } else {
         setSyncStatus("synced");
       }
     } catch {
-      // Offline - use local
-      if (localNotes.length > 0) {
-        setNotesAndRef(localNotes);
-        saveLocal(user.id, localNotes);
-        setSyncStatus("offline");
-      }
+      // Offline - mantém o que já estiver na tela (nunca apaga por cima
+      // uma mudança mais nova feita enquanto essa tentativa de rede,
+      // que falhou, ainda estava em andamento) — só usa a foto antiga
+      // salva localmente se ainda não tiver nada na tela de jeito nenhum.
+      setNotesAndRef((prev) => (prev.length > 0 ? prev : localNotes));
+      if (localNotes.length > 0) saveLocal(user.id, localNotes);
+      setSyncStatus("offline");
     }
     setLoading(false);
   }, [user, syncToSupabase]);
@@ -506,33 +517,28 @@ export function useNotes() {
   // Soft delete — move to trash
   const deleteNote = useCallback(async (id: string) => {
     const now = new Date();
-    // 30s (igual ao fixar/desafixar) em vez de 8s — 8 segundos podia não
-    // ser tempo suficiente numa conexão mais lenta, deixando uma janela
-    // onde o realtime buscava dados de volta antes da exclusão "assentar"
-    // de vez, fazendo a nota parecer voltar sozinha.
     markSelfModified(id, 30000);
-    setNotesAndRef((prev) => prev.map((n) => n.id === id ? { ...n, deletedAt: now, updatedAt: now, sincronizado: false } : n));
-    try {
-      await (supabase.from("notes") as any).update({ deleted_at: now.toISOString(), updated_at: now.toISOString() }).eq("id", id);
-      // A exclusão chegou no servidor na hora — marca como sincronizada, pra
-      // não ficar marcada como pendente à toa esperando a fila de sincronia
-      // tentar de novo depois sem necessidade.
-      setNotesAndRef((prev) => prev.map((n) => n.id === id ? { ...n, sincronizado: true } : n));
-    } catch {
-      // Sem internet: fica marcada como pendente mesmo, e a fila de
-      // sincronia (syncToSupabase) reenvia sozinha quando a conexão voltar.
-    }
-  }, [markSelfModified]);
+    setNotesAndRef((prev) => {
+      const next = prev.map((n) => n.id === id ? { ...n, deletedAt: now, updatedAt: now, sincronizado: false } : n);
+      // Manda pela fila única de sincronização (já protegida contra
+      // sobrescrever algo mais novo no servidor), em vez de uma chamada de
+      // rede própria e independente daqui — menos "gente mexendo ao mesmo
+      // tempo" reduz as chances de corrida com o realtime/outro aparelho.
+      syncToSupabase(next);
+      return next;
+    });
+  }, [markSelfModified, syncToSupabase]);
 
   // Restore from trash
   const restoreNote = useCallback(async (id: string) => {
     const now = new Date();
     markSelfModified(id, 30000);
-    setNotesAndRef((prev) => prev.map((n) => n.id === id ? { ...n, deletedAt: null, updatedAt: now, sincronizado: false } : n));
-    try {
-      await (supabase.from("notes") as any).update({ deleted_at: null, updated_at: now.toISOString() }).eq("id", id);
-    } catch {}
-  }, [markSelfModified]);
+    setNotesAndRef((prev) => {
+      const next = prev.map((n) => n.id === id ? { ...n, deletedAt: null, updatedAt: now, sincronizado: false } : n);
+      syncToSupabase(next);
+      return next;
+    });
+  }, [markSelfModified, syncToSupabase]);
 
   // Permanent delete
   const permanentDeleteNote = useCallback(async (id: string) => {
@@ -619,116 +625,70 @@ export function useNotes() {
 
   // Toggle pinned state for a note
   const togglePinNote = useCallback(async (id: string) => {
-    const note = notesRef.current.find((n) => n.id === id);
-    if (!note) return;
-
-    const newPinned = !note.isPinned;
-    // Ao fixar, a nota entra no final da lista de fixadas (pinOrder = maior atual + 1)
-    const newPinOrder = newPinned
-      ? Math.max(-1, ...notesRef.current.filter((n) => n.isPinned && !n.deletedAt).map((n) => n.pinOrder ?? 0)) + 1
-      : null;
-
-    // Ignora eventos realtime desta nota enquanto a mudança propaga. Essa
-    // proteção (pinningSuppressRef) existia no código mas nunca era ligada
-    // de verdade — corrigido aqui, como camada extra de segurança além do
-    // markSelfModified, especificamente contra o fixar "desfazendo sozinho".
-    markSelfModified(id, 30000);
-    pinningSuppressRef.current = true;
-    setTimeout(() => { pinningSuppressRef.current = false; }, 30000);
-
-    // Atualizar estado local e persistência imediatamente, antes de qualquer refresh
-    const nowPin = new Date();
-    const localUpdatedNotes = notesRef.current.map((n) => (
-      n.id === id ? { ...n, isPinned: newPinned, pinOrder: newPinOrder, updatedAt: nowPin, sincronizado: false } : n
-    ));
-    notesRef.current = localUpdatedNotes;
-    setNotesAndRef(localUpdatedNotes);
-    saveLocal(user?.id || "anon", localUpdatedNotes);
-
     if (!user) {
       setSyncStatus("offline");
       return;
     }
 
-    try {
-      const { data, error } = await (supabase.from("notes") as any)
-        .update({ is_pinned: newPinned, pin_order: newPinOrder, updated_at: nowPin.toISOString(), sincronizado: true })
-        .eq("id", id)
-        .select("id,is_pinned,pin_order")
-        .single();
+    const nowPin = new Date();
+    let newPinned = false;
+    let newPinOrder: number | null = null;
 
-      if (error) throw error;
-      if (!data || data.is_pinned !== newPinned) throw new Error("Pin update was not persisted");
-
-      // Atualizar apenas o campo sincronizado, sem refetch
-      const confirmedNotes = notesRef.current.map((n) => n.id === id ? {
-        ...n,
-        isPinned: newPinned,
-        pinOrder: data.pin_order ?? null,
-        sincronizado: true,
-      } : n);
-      notesRef.current = confirmedNotes;
-      setNotesAndRef(confirmedNotes);
-      saveLocal(user.id, confirmedNotes);
-      setSyncStatus("synced");
-    } catch {
-      setSyncStatus("offline");
-    }
-  }, [user, markSelfModified]);
+    // Usa sempre a forma "funcional" do setNotesAndRef — nunca lê a cópia
+    // rápida direto pra depois escrever um valor pronto por cima. Assim, se
+    // outra mudança (excluir, editar) tiver acontecido quase ao mesmo tempo
+    // e ainda não tiver "assentado", essa mudança nunca é apagada por cima
+    // sem querer — o React sempre aplica em cima do estado mais atual de
+    // verdade, nunca de uma foto antiga.
+    setNotesAndRef((prev) => {
+      const note = prev.find((n) => n.id === id);
+      if (!note) return prev;
+      newPinned = !note.isPinned;
+      newPinOrder = newPinned
+        ? Math.max(-1, ...prev.filter((n) => n.isPinned && !n.deletedAt).map((n) => n.pinOrder ?? 0)) + 1
+        : null;
+      const next = prev.map((n) => (
+        n.id === id ? { ...n, isPinned: newPinned, pinOrder: newPinOrder, updatedAt: nowPin, sincronizado: false } : n
+      ));
+      // Ignora eventos realtime desta nota enquanto a mudança propaga.
+      markSelfModified(id, 30000);
+      pinningSuppressRef.current = true;
+      setTimeout(() => { pinningSuppressRef.current = false; }, 30000);
+      syncToSupabase(next);
+      return next;
+    });
+  }, [user, markSelfModified, syncToSupabase]);
 
   // Reordena as notas fixadas (▲ sobe, ▼ desce). Também normaliza o pinOrder
   // de todas as fixadas para números sequenciais, corrigindo notas antigas
   // que ainda não tinham essa coluna preenchida.
   const reorderPinnedNote = useCallback(async (id: string, direction: -1 | 1) => {
-    const pinned = notesRef.current
-      .filter((n) => n.isPinned && !n.deletedAt)
-      .sort((a, b) => {
-        const ao = a.pinOrder ?? Infinity, bo = b.pinOrder ?? Infinity;
-        if (ao !== bo) return ao - bo;
-        return b.updatedAt.getTime() - a.updatedAt.getTime();
+    setNotesAndRef((prev) => {
+      const pinned = prev
+        .filter((n) => n.isPinned && !n.deletedAt)
+        .sort((a, b) => {
+          const ao = a.pinOrder ?? Infinity, bo = b.pinOrder ?? Infinity;
+          if (ao !== bo) return ao - bo;
+          return b.updatedAt.getTime() - a.updatedAt.getTime();
+        });
+
+      const idx = pinned.findIndex((n) => n.id === id);
+      const targetIdx = idx + direction;
+      if (idx === -1 || targetIdx < 0 || targetIdx >= pinned.length) return prev;
+
+      const reordered = [...pinned];
+      [reordered[idx], reordered[targetIdx]] = [reordered[targetIdx], reordered[idx]];
+      const updates = reordered.map((n, i) => ({ id: n.id, pinOrder: i }));
+      updates.forEach((u) => markSelfModified(u.id, 30000));
+
+      const next = prev.map((n) => {
+        const u = updates.find((x) => x.id === n.id);
+        return u ? { ...n, pinOrder: u.pinOrder, sincronizado: false } : n;
       });
-
-    const idx = pinned.findIndex((n) => n.id === id);
-    const targetIdx = idx + direction;
-    if (idx === -1 || targetIdx < 0 || targetIdx >= pinned.length) return;
-
-    const reordered = [...pinned];
-    [reordered[idx], reordered[targetIdx]] = [reordered[targetIdx], reordered[idx]];
-    const updates = reordered.map((n, i) => ({ id: n.id, pinOrder: i }));
-
-    updates.forEach((u) => markSelfModified(u.id, 30000));
-
-    const localUpdated = notesRef.current.map((n) => {
-      const u = updates.find((x) => x.id === n.id);
-      return u ? { ...n, pinOrder: u.pinOrder, sincronizado: false } : n;
+      syncToSupabase(next);
+      return next;
     });
-    notesRef.current = localUpdated;
-    setNotesAndRef(localUpdated);
-    saveLocal(user?.id || "anon", localUpdated);
-
-    if (!user) {
-      setSyncStatus("offline");
-      return;
-    }
-
-    try {
-      await Promise.all(updates.map((u) =>
-        (supabase.from("notes") as any)
-          .update({ pin_order: u.pinOrder, sincronizado: true })
-          .eq("id", u.id)
-      ));
-      const confirmed = notesRef.current.map((n) => (
-        updates.some((u) => u.id === n.id) ? { ...n, sincronizado: true } : n
-      ));
-      notesRef.current = confirmed;
-      setNotesAndRef(confirmed);
-      saveLocal(user.id, confirmed);
-      setSyncStatus("synced");
-    } catch {
-      setSyncStatus("offline");
-    }
-  }, [user, markSelfModified]);
-
+  }, [markSelfModified, syncToSupabase]);
 
   const lockNoteWithPin = useCallback(async (id: string, pin: string): Promise<boolean> => {
     const note = notes.find((n) => n.id === id);
