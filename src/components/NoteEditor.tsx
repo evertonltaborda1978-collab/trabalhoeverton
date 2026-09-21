@@ -1433,6 +1433,10 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
     lastNoteId.current = noteId;
     let recovered = false;
+    // Guarda o conteúdo inicial de fato carregado (seja recuperado de
+    // rascunho, seja da nota salva) pra usar como ponto de partida do
+    // histórico de Desfazer logo abaixo.
+    let initialBlocksForHistory: ContentBlock[] = [{ type: "text", content: "" }];
     // Try to recover draft from localStorage
     if (!editingNote) {
       try {
@@ -1442,7 +1446,9 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
           // Only recover if draft is for a new note (no noteId) and less than 1 hour old
           if (!draft.noteId && Date.now() - draft.timestamp < 3600000) {
             setTitle(draft.title || "");
-            setBlocks(ensureTrailingTextBlock(draft.blocks || [{ type: "text", content: "" }]));
+            const recoveredBlocks = ensureTrailingTextBlock(draft.blocks || [{ type: "text", content: "" }]);
+            setBlocks(recoveredBlocks);
+            initialBlocksForHistory = recoveredBlocks;
             setSelectedColor(draft.color || NOTE_COLORS[0].value);
             recovered = true;
           }
@@ -1456,7 +1462,9 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
           const draft = JSON.parse(raw);
           if (draft.noteId === editingNote.id && Date.now() - draft.timestamp < 3600000) {
             setTitle(draft.title || "");
-            setBlocks(draft.blocks || deserializeBlocks(editingNote.content));
+            const recoveredBlocks = draft.blocks || deserializeBlocks(editingNote.content);
+            setBlocks(recoveredBlocks);
+            initialBlocksForHistory = recoveredBlocks;
             setSelectedColor(draft.color || editingNote.color);
             recovered = true;
           }
@@ -1467,21 +1475,44 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
       if (editingNote) {
         setTitle(editingNote.title);
         const parsed = deserializeBlocks(editingNote.content);
-        setBlocks(ensureTrailingTextBlock(parsed));
+        const finalBlocks = ensureTrailingTextBlock(parsed);
+        setBlocks(finalBlocks);
+        initialBlocksForHistory = finalBlocks;
         setSelectedColor(editingNote.color);
       } else if (initialSharedData && (initialSharedData.title || initialSharedData.content)) {
         // Pre-fill from shared content received from another app
         setTitle(initialSharedData.title || "");
-        setBlocks([{ type: "text", content: initialSharedData.content || "" }]);
+        const sharedBlocks = [{ type: "text" as const, content: initialSharedData.content || "" }];
+        setBlocks(sharedBlocks);
+        initialBlocksForHistory = sharedBlocks;
         setSelectedColor(NOTE_COLORS[0].value);
       } else {
         setTitle("");
-        setBlocks([{ type: "text", content: "" }]);
+        const emptyBlocks = [{ type: "text" as const, content: "" }];
+        setBlocks(emptyBlocks);
+        initialBlocksForHistory = emptyBlocks;
         setSelectedColor(NOTE_COLORS[0].value);
       }
     }
-    setHistory([]);
-    setHistoryIdx(-1);
+
+    // Corrigido: o histórico de Desfazer agora já nasce com o texto original
+    // da nota (em vez de vazio). Antes disso, o botão só passava a funcionar
+    // depois de 2 edições completas, e mesmo assim nunca voltava pro texto
+    // de antes de qualquer edição.
+    setHistory([JSON.parse(JSON.stringify(initialBlocksForHistory))]);
+    setHistoryIdx(0);
+    clearTimeout(historyTimer.current);
+    historyTimer.current = undefined;
+
+    // Corrigido: fecha qualquer visualizador de foto ampliada ou editor de
+    // desenho que tenha ficado aberto de uma nota anterior — sem isso, a
+    // tela da foto "vazava" pra próxima nota que fosse aberta.
+    setViewingImage(null);
+    setViewZoom(1);
+    setViewTx(0);
+    setViewTy(0);
+    setViewRotation(0);
+    setEditingImageIdx(null);
   }, [open, editingNote?.id, initialSharedData?.title, initialSharedData?.content]);
 
   const [highContrast, setHighContrast] = useState<boolean>(() => localStorage.getItem("editor_high_contrast") === "true");
@@ -1554,12 +1585,20 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
 
   const undo = useCallback(() => {
     if (historyIdx <= 0) return;
+    // Corrigido: cancela o "atraso" de meio segundo que grava a edição em
+    // andamento no histórico — sem isso, esse registro pendente chegava a
+    // sobrescrever o resultado do Desfazer logo em seguida, como se nada
+    // tivesse acontecido.
+    clearTimeout(historyTimer.current);
+    historyTimer.current = undefined;
     const prev = history[historyIdx - 1];
     if (prev) { setBlocks(JSON.parse(JSON.stringify(prev))); setHistoryIdx((i) => i - 1); }
   }, [historyIdx, history]);
 
   const redo = useCallback(() => {
     if (historyIdx >= history.length - 1) return;
+    clearTimeout(historyTimer.current);
+    historyTimer.current = undefined;
     const next = history[historyIdx + 1];
     if (next) { setBlocks(JSON.parse(JSON.stringify(next))); setHistoryIdx((i) => i + 1); }
   }, [historyIdx, history]);
@@ -2291,6 +2330,15 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
       return;
     }
 
+    // Corrigido: garante que a foto ampliada/editor de desenho nunca fiquem
+    // "presos" abertos e apareçam sozinhos na próxima nota.
+    setViewingImage(null);
+    setViewZoom(1);
+    setViewTx(0);
+    setViewTy(0);
+    setViewRotation(0);
+    setEditingImageIdx(null);
+
     // A tela fecha JÁ, na hora, sempre — independente de internet ou de
     // qualquer coisa que dê errado ao salvar. O salvamento roda depois,
     // blindado, e nunca prende o botão (isso resolvia um travamento
@@ -2382,14 +2430,21 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
           >
             {/* Linha 1: voltar + título + fechar */}
             <div className="flex items-center gap-1 px-2 pb-1.5">
-              <button
-                onClick={handleClose}
-                className="p-2 rounded-lg hover:bg-black/10 transition-colors shrink-0"
-                title="Voltar"
-                aria-label="Voltar"
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={textColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
-              </button>
+              {/* Antes havia aqui uma seta "Voltar" que fazia exatamente a
+                  mesma coisa que o "X Fechar" à direita — duas setas pra uma
+                  única ação. No lugar dela, o Desfazer agora fica sempre à
+                  vista, sem precisar abrir o "•••". */}
+              {!readOnly && (
+                <button
+                  onClick={undo}
+                  disabled={!canUndo}
+                  className="p-2 rounded-lg hover:bg-black/10 transition-colors shrink-0 disabled:opacity-30"
+                  title="Desfazer"
+                  aria-label="Desfazer"
+                >
+                  <Undo2 size={20} style={{ color: textColor }} />
+                </button>
+              )}
 
               {readOnly ? (
                 <div
@@ -2457,17 +2512,8 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                 />
               )}
 
-              {/* Desfazer — sempre visível, usa o mesmo sistema do menu flutuante */}
-              <button
-                onClick={undo}
-                disabled={!canUndo}
-                className="p-2 rounded-lg hover:bg-black/10 transition-colors shrink-0 flex items-center justify-center disabled:opacity-30"
-                title="Desfazer"
-                aria-label="Desfazer"
-                style={{ color: textColor, minWidth: 36, minHeight: 36 }}
-              >
-                <Undo2 size={18} />
-              </button>
+              {/* Desfazer removido daqui — agora fica sempre visível na
+                  linha 1 do cabeçalho, sem precisar abrir esse menu. */}
 
               {/* Excluir — só aparece editando uma nota que já existe (uma
                   nota nova, ainda não salva, não tem o que excluir) */}
@@ -3404,8 +3450,18 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                 <Check size={22} color="#FFF" strokeWidth={2.5} />
               </button>
 
-              {/* Espaço vazio — direita (para centralizar o botão salvar) */}
-              <div style={{ width: 48, height: 48 }} />
+              {/* Fechar — direita, mesmo tamanho do "⋮" à esquerda. Antes era
+                  só um espaço vazio pra centralizar o Salvar; agora dá acesso
+                  rápido pra fechar a nota sem esticar o polegar até o topo. */}
+              <button
+                onClick={handleClose}
+                className="flex items-center justify-center rounded-full transition-all active:scale-95"
+                style={{ width: 48, height: 48, background: theme.headerBg, border: `2px solid ${theme.borderAccent}`, color: theme.textMuted }}
+                title="Fechar"
+                aria-label="Fechar"
+              >
+                <X size={20} />
+              </button>
             </div>
           ) : (
             <div
