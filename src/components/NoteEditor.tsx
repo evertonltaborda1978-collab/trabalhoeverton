@@ -1503,6 +1503,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     setHistoryIdx(0);
     clearTimeout(historyTimer.current);
     historyTimer.current = undefined;
+    historyLastCheckpointRef.current = Date.now();
 
     // Corrigido: fecha qualquer visualizador de foto ampliada ou editor de
     // desenho que tenha ficado aberto de uma nota anterior — sem isso, a
@@ -1583,6 +1584,21 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     setHistoryIdx((i) => Math.min(i + 1, 49));
   }, [historyIdx]);
 
+  // Corrigido: antes, o ponto de checagem do Desfazer só era gravado quando
+  // a digitação parava de vez (meio segundo sem digitar) — então, digitando
+  // sem pausar, um único "Desfazer" apagava TUDO que tinha sido escrito
+  // desde a última pausa, de uma vez só, em vez de aos poucos. Agora, a cada
+  // ~2 segundos de digitação contínua, um novo ponto é gravado — assim o
+  // Desfazer nunca some com mais do que uns 2 segundos de texto por vez.
+  const historyLastCheckpointRef = useRef<number>(Date.now());
+  const maybeCheckpoint = useCallback(() => {
+    const now = Date.now();
+    if (now - historyLastCheckpointRef.current > 2000) {
+      setBlocks((current) => { pushHistory(current); return current; });
+      historyLastCheckpointRef.current = now;
+    }
+  }, [pushHistory]);
+
   const undo = useCallback(() => {
     if (historyIdx <= 0) return;
     // Corrigido: cancela o "atraso" de meio segundo que grava a edição em
@@ -1591,6 +1607,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     // tivesse acontecido.
     clearTimeout(historyTimer.current);
     historyTimer.current = undefined;
+    historyLastCheckpointRef.current = Date.now();
     const prev = history[historyIdx - 1];
     if (prev) { setBlocks(JSON.parse(JSON.stringify(prev))); setHistoryIdx((i) => i - 1); }
   }, [historyIdx, history]);
@@ -1599,6 +1616,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     if (historyIdx >= history.length - 1) return;
     clearTimeout(historyTimer.current);
     historyTimer.current = undefined;
+    historyLastCheckpointRef.current = Date.now();
     const next = history[historyIdx + 1];
     if (next) { setBlocks(JSON.parse(JSON.stringify(next))); setHistoryIdx((i) => i + 1); }
   }, [historyIdx, history]);
@@ -1621,6 +1639,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     if (!el) return;
     const html = el.innerHTML;
     const plain = el.innerText;
+    maybeCheckpoint();
     setBlocks((prev) => {
       const next = [...prev];
       next[index] = { ...next[index], content: plain, contentHtml: html };
@@ -1888,6 +1907,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   };
 
   const updateChecklistItem = (blockIdx: number, itemId: string, updates: Partial<ChecklistItem>) => {
+    maybeCheckpoint();
     setBlocks((prev) => {
       const next = [...prev];
       if (next[blockIdx]?.type === "checklist" && next[blockIdx].items) {
@@ -1956,6 +1976,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   };
 
   const updateTableItem = (blockIdx: number, itemId: string, updates: Partial<TableItem>) => {
+    maybeCheckpoint();
     setBlocks((prev) => {
       const next = [...prev];
       if (next[blockIdx]?.type === "table" && next[blockIdx].tableItems) {
@@ -2004,6 +2025,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   };
 
   const updateTableTitle = (blockIdx: number, title: string) => {
+    maybeCheckpoint();
     setBlocks((prev) => {
       const next = [...prev];
       if (next[blockIdx]?.type === "table") {
@@ -2020,6 +2042,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   // Guarda o nome customizado da barra "Soma Total" na 1ª tabela da nota (é o
   // mesmo valor pra nota inteira, não por tabela — só precisa de um lugar pra ficar)
   const updateSomaTotalLabel = (label: string) => {
+    maybeCheckpoint();
     setBlocks((prev) => {
       const next = [...prev];
       const firstTableIdx = next.findIndex((b) => b.type === "table" && b.tableItems);
@@ -3773,7 +3796,7 @@ ${blocksToPlainText(blocks)}`.trim();
         {showQrScanner && (
           <div className="absolute inset-0 z-50 flex flex-col bg-black">
             {/* Header */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", paddingTop: "calc(16px + env(safe-area-inset-top))" }}>
               <span style={{ color: "#FFF", fontWeight: 700, fontSize: 16 }}>📷 Leitor de Código</span>
               <button onClick={handleStopQrScanner} style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.15)", border: "none", color: "#FFF", fontSize: 18, cursor: "pointer" }}>✕</button>
             </div>
@@ -3943,7 +3966,7 @@ ${blocksToPlainText(blocks)}`.trim();
             style={{ background: `rgba(0,0,0,${viewCloseOpacity})` }}
             onClick={() => setViewingImage(null)}
           >
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "12px 16px 4px", flexShrink: 0 }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "12px 16px 4px", paddingTop: "calc(12px + env(safe-area-inset-top))", flexShrink: 0 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
                 <span style={{ color: "#FFF", fontWeight: 700, fontSize: 14 }}>🔍 Ver ampliado</span>
                 <div style={{ display: "flex", gap: 4 }}>
@@ -4052,7 +4075,7 @@ ${blocksToPlainText(blocks)}`.trim();
             className="absolute inset-0 z-[90] flex flex-col"
             style={{ background: highContrast ? (isDark ? "#000" : "#FFF") : theme.bg }}
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${theme.lines}`, flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", paddingTop: "calc(14px + env(safe-area-inset-top))", borderBottom: `1px solid ${theme.lines}`, flexShrink: 0 }}>
               <button onClick={() => setReadingMode(false)} style={{ background: "none", border: "none", color: textColor, display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 600 }}>
                 <X size={20} /> Fechar
               </button>
