@@ -1278,7 +1278,6 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   // Undo/redo
   const [history, setHistory] = useState<ContentBlock[][]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
-  const historyTimer = useRef<ReturnType<typeof setTimeout>>();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -1501,9 +1500,6 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     // de antes de qualquer edição.
     setHistory([JSON.parse(JSON.stringify(initialBlocksForHistory))]);
     setHistoryIdx(0);
-    clearTimeout(historyTimer.current);
-    historyTimer.current = undefined;
-    historyLastCheckpointRef.current = Date.now();
 
     // Corrigido: fecha qualquer visualizador de foto ampliada ou editor de
     // desenho que tenha ficado aberto de uma nota anterior — sem isso, a
@@ -1575,50 +1571,34 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const placeholderColor = isDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.3)";
 
   // ── Undo / Redo ──────────────────────────────────────
+  // Corrigido: antes, um único "Desfazer" apagava um trecho inteiro de
+  // texto de uma vez (tudo que foi digitado numa sequência sem pausa).
+  // Agora cada edição vira um ponto próprio no histórico, então o Desfazer
+  // volta aos poucos, na ordem que foi digitado — inclusive letra por letra,
+  // se for isso que a pessoa continuar apertando.
+  // Importante: aqui usamos cópia RASA (só o array, não o conteúdo de cada
+  // bloco) porque cada edição já troca o bloco por um objeto novo em vez de
+  // alterar o antigo — então o histórico pode reaproveitar os blocos que não
+  // mudaram (como fotos) sem duplicar esse conteúdo pesado a cada tecla.
   const pushHistory = useCallback((newBlocks: ContentBlock[]) => {
     setHistory((h) => {
       const trimmed = h.slice(0, historyIdx + 1);
-      const limited = [...trimmed, JSON.parse(JSON.stringify(newBlocks))].slice(-50);
+      const limited = [...trimmed, [...newBlocks]].slice(-100);
       return limited;
     });
-    setHistoryIdx((i) => Math.min(i + 1, 49));
+    setHistoryIdx((i) => Math.min(i + 1, 99));
   }, [historyIdx]);
-
-  // Corrigido: antes, o ponto de checagem do Desfazer só era gravado quando
-  // a digitação parava de vez (meio segundo sem digitar) — então, digitando
-  // sem pausar, um único "Desfazer" apagava TUDO que tinha sido escrito
-  // desde a última pausa, de uma vez só, em vez de aos poucos. Agora, a cada
-  // ~2 segundos de digitação contínua, um novo ponto é gravado — assim o
-  // Desfazer nunca some com mais do que uns 2 segundos de texto por vez.
-  const historyLastCheckpointRef = useRef<number>(Date.now());
-  const maybeCheckpoint = useCallback(() => {
-    const now = Date.now();
-    if (now - historyLastCheckpointRef.current > 2000) {
-      setBlocks((current) => { pushHistory(current); return current; });
-      historyLastCheckpointRef.current = now;
-    }
-  }, [pushHistory]);
 
   const undo = useCallback(() => {
     if (historyIdx <= 0) return;
-    // Corrigido: cancela o "atraso" de meio segundo que grava a edição em
-    // andamento no histórico — sem isso, esse registro pendente chegava a
-    // sobrescrever o resultado do Desfazer logo em seguida, como se nada
-    // tivesse acontecido.
-    clearTimeout(historyTimer.current);
-    historyTimer.current = undefined;
-    historyLastCheckpointRef.current = Date.now();
     const prev = history[historyIdx - 1];
-    if (prev) { setBlocks(JSON.parse(JSON.stringify(prev))); setHistoryIdx((i) => i - 1); }
+    if (prev) { setBlocks([...prev]); setHistoryIdx((i) => i - 1); }
   }, [historyIdx, history]);
 
   const redo = useCallback(() => {
     if (historyIdx >= history.length - 1) return;
-    clearTimeout(historyTimer.current);
-    historyTimer.current = undefined;
-    historyLastCheckpointRef.current = Date.now();
     const next = history[historyIdx + 1];
-    if (next) { setBlocks(JSON.parse(JSON.stringify(next))); setHistoryIdx((i) => i + 1); }
+    if (next) { setBlocks([...next]); setHistoryIdx((i) => i + 1); }
   }, [historyIdx, history]);
 
   // Keyboard shortcuts
@@ -1639,16 +1619,12 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     if (!el) return;
     const html = el.innerHTML;
     const plain = el.innerText;
-    maybeCheckpoint();
     setBlocks((prev) => {
       const next = [...prev];
       next[index] = { ...next[index], content: plain, contentHtml: html };
+      pushHistory(next);
       return next;
     });
-    clearTimeout(historyTimer.current);
-    historyTimer.current = setTimeout(() => {
-      setBlocks((current) => { pushHistory(current); return current; });
-    }, 500);
   };
 
   // Aplica cor/negrito só no trecho selecionado (ou no que for digitado a partir
@@ -1907,7 +1883,6 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   };
 
   const updateChecklistItem = (blockIdx: number, itemId: string, updates: Partial<ChecklistItem>) => {
-    maybeCheckpoint();
     setBlocks((prev) => {
       const next = [...prev];
       if (next[blockIdx]?.type === "checklist" && next[blockIdx].items) {
@@ -1918,12 +1893,9 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
           ),
         };
       }
+      pushHistory(next);
       return next;
     });
-    clearTimeout(historyTimer.current);
-    historyTimer.current = setTimeout(() => {
-      setBlocks((current) => { pushHistory(current); return current; });
-    }, 500);
   };
 
   const removeChecklistItem = (blockIdx: number, itemId: string) => {
@@ -1976,7 +1948,6 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   };
 
   const updateTableItem = (blockIdx: number, itemId: string, updates: Partial<TableItem>) => {
-    maybeCheckpoint();
     setBlocks((prev) => {
       const next = [...prev];
       if (next[blockIdx]?.type === "table" && next[blockIdx].tableItems) {
@@ -1987,12 +1958,9 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
           ),
         };
       }
+      pushHistory(next);
       return next;
     });
-    clearTimeout(historyTimer.current);
-    historyTimer.current = setTimeout(() => {
-      setBlocks((current) => { pushHistory(current); return current; });
-    }, 500);
   };
 
   const removeTableItem = (blockIdx: number, itemId: string) => {
@@ -2025,36 +1993,28 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   };
 
   const updateTableTitle = (blockIdx: number, title: string) => {
-    maybeCheckpoint();
     setBlocks((prev) => {
       const next = [...prev];
       if (next[blockIdx]?.type === "table") {
         next[blockIdx] = { ...next[blockIdx], tableTitle: title };
       }
+      pushHistory(next);
       return next;
     });
-    clearTimeout(historyTimer.current);
-    historyTimer.current = setTimeout(() => {
-      setBlocks((current) => { pushHistory(current); return current; });
-    }, 500);
   };
 
   // Guarda o nome customizado da barra "Soma Total" na 1ª tabela da nota (é o
   // mesmo valor pra nota inteira, não por tabela — só precisa de um lugar pra ficar)
   const updateSomaTotalLabel = (label: string) => {
-    maybeCheckpoint();
     setBlocks((prev) => {
       const next = [...prev];
       const firstTableIdx = next.findIndex((b) => b.type === "table" && b.tableItems);
       if (firstTableIdx !== -1) {
         next[firstTableIdx] = { ...next[firstTableIdx], somaTotalLabel: label };
       }
+      pushHistory(next);
       return next;
     });
-    clearTimeout(historyTimer.current);
-    historyTimer.current = setTimeout(() => {
-      setBlocks((current) => { pushHistory(current); return current; });
-    }, 500);
   };
 
   // ── OCR ──────────────────────────────────────────────

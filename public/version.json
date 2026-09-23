@@ -1,6 +1,7 @@
 {
-  "version": "v4.17",
+  "version": "v4.18",
   "history": [
+    { "version": "v4.18", "changes": "Corrigido de vez o botão 'Desfazer': antes apagava um trecho inteiro de texto de uma vez (tudo que foi digitado sem pausar). Agora cada letra digitada vira um passo próprio no histórico — apertando Desfazer repetidas vezes, o texto volta aos poucos, letra por letra, até onde quiser." },
     { "version": "v4.17", "changes": "Corrigido: em 3 telas de nota (foto ampliada/lupa, modo de leitura com texto grande, e leitor de QR Code), o botão de fechar do topo podia ficar parcialmente escondido atrás do notch/barra de status do celular, dificultando o toque — mesma proteção que outras telas do app já tinham foi aplicada nessas 3." },
     { "version": "v4.16", "changes": "Corrigido: o botão 'Desfazer' apagava de uma vez só tudo que tinha sido digitado sem pausar (em vez de aos poucos). Agora ele grava um novo ponto a cada ~2 segundos de digitação contínua, então cada toque em Desfazer volta só uns 2 segundos de texto por vez." },
     { "version": "v4.15", "changes": "Corrigida a foto de uma nota anterior que às vezes aparecia sozinha ao abrir outra nota (visualizador ampliado e editor de desenho agora sempre fecham de vez ao trocar ou sair de uma nota). Corrigido de verdade o botão 'Desfazer': antes só passava a funcionar depois de 2 edições e nunca voltava pro texto original — agora funciona desde a primeira edição e sempre resgata o texto de antes. Botão 'Desfazer' agora sempre visível no topo da nota (sem precisar abrir o menu '•••'), no lugar da seta 'Voltar' que fazia a mesma coisa que o botão de fechar. Novo botão 'Fechar' no rodapé, ao lado do botão de salvar — mais fácil de alcançar com o polegar." },
