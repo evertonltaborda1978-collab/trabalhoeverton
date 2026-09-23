@@ -1,6 +1,7 @@
 {
-  "version": "v4.18",
+  "version": "v4.19",
   "history": [
+    { "version": "v4.19", "changes": "Corrigido na aba Localização: 4 telas (identificar aparelho, editar endereço, lembrete por local, alertar dispositivo) tinham os botões de baixo sem espaço reservado pra barra de gestos do celular — podiam ficar parcialmente escondidos atrás dela. Aplicada a mesma proteção que as outras telas da Localização já tinham." },
     { "version": "v4.18", "changes": "Corrigido de vez o botão 'Desfazer': antes apagava um trecho inteiro de texto de uma vez (tudo que foi digitado sem pausar). Agora cada letra digitada vira um passo próprio no histórico — apertando Desfazer repetidas vezes, o texto volta aos poucos, letra por letra, até onde quiser." },
     { "version": "v4.17", "changes": "Corrigido: em 3 telas de nota (foto ampliada/lupa, modo de leitura com texto grande, e leitor de QR Code), o botão de fechar do topo podia ficar parcialmente escondido atrás do notch/barra de status do celular, dificultando o toque — mesma proteção que outras telas do app já tinham foi aplicada nessas 3." },
     { "version": "v4.16", "changes": "Corrigido: o botão 'Desfazer' apagava de uma vez só tudo que tinha sido digitado sem pausar (em vez de aos poucos). Agora ele grava um novo ponto a cada ~2 segundos de digitação contínua, então cada toque em Desfazer volta só uns 2 segundos de texto por vez." },

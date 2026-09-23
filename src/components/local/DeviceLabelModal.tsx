@@ -34,8 +34,25 @@ export function DeviceLabelModal({ deviceId, defaultName, onDone }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-3" style={{ background: "rgba(0,0,0,0.5)" }}>
-      <div className="w-full max-w-md rounded-2xl p-5" style={{ background: "#FFF" }}>
+    <div
+      className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center"
+      style={{
+        background: "rgba(0,0,0,0.5)",
+        paddingLeft: 12,
+        paddingRight: 12,
+        paddingTop: "calc(12px + env(safe-area-inset-top))",
+        paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
+      }}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl overflow-y-auto"
+        style={{
+          background: "#FFF",
+          padding: 20,
+          paddingBottom: "calc(20px + env(safe-area-inset-bottom))",
+          maxHeight: "calc(90vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))",
+        }}
+      >
         <div className="flex items-center gap-3 mb-3">
           <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: "#E8F5E9" }}>
             <Smartphone size={22} style={{ color: "#2D9E7F" }} />

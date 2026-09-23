@@ -24,13 +24,24 @@ export function AlertModal({ deviceName, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-3"
-      style={{ background: "rgba(0,0,0,0.5)" }}
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center"
+      style={{
+        background: "rgba(0,0,0,0.5)",
+        paddingLeft: 12,
+        paddingRight: 12,
+        paddingTop: "calc(12px + env(safe-area-inset-top))",
+        paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
+      }}
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl p-5 animate-fade-in"
-        style={{ background: "#FFF" }}
+        className="w-full max-w-md rounded-2xl overflow-y-auto animate-fade-in"
+        style={{
+          background: "#FFF",
+          padding: 20,
+          paddingBottom: "calc(20px + env(safe-area-inset-bottom))",
+          maxHeight: "calc(90vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))",
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-4">

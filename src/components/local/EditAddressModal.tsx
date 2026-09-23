@@ -83,8 +83,27 @@ export function EditAddressModal({ deviceId, deviceName, currentAddress, lat, ln
   };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-3" style={{ background: "rgba(0,0,0,0.5)" }} onClick={saved ? undefined : onClose}>
-      <div className="w-full max-w-md rounded-2xl p-5 max-h-[90vh] overflow-y-auto" style={{ background: "#FFF" }} onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center"
+      style={{
+        background: "rgba(0,0,0,0.5)",
+        paddingLeft: 12,
+        paddingRight: 12,
+        paddingTop: "calc(12px + env(safe-area-inset-top))",
+        paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
+      }}
+      onClick={saved ? undefined : onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl overflow-y-auto"
+        style={{
+          background: "#FFF",
+          padding: 20,
+          paddingBottom: "calc(20px + env(safe-area-inset-bottom))",
+          maxHeight: "calc(90vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between mb-3">
           <div>
             <h3 className="font-bold text-base" style={{ color: "#1A1A2E" }}>Editar endereço</h3>
