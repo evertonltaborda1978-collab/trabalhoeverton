@@ -1,6 +1,8 @@
 {
-  "version": "v4.19",
+  "version": "v4.21",
   "history": [
+    { "version": "v4.21", "changes": "Compartilhar localização: agora mostra o endereço que está sendo compartilhado logo acima do campo de nome, pra ficar claro qual local você está nomeando." },
+    { "version": "v4.20", "changes": "Corrigido: o Desfazer não funcionava no campo de título da nota (só no corpo) — agora título e corpo compartilham o mesmo histórico letra por letra. Localização: novo Histórico de compartilhamentos — dá pra nomear cada localização compartilhada, buscar, reenviar a mesma novamente e apagar as que não quiser mais guardar." },
     { "version": "v4.19", "changes": "Corrigido na aba Localização: 4 telas (identificar aparelho, editar endereço, lembrete por local, alertar dispositivo) tinham os botões de baixo sem espaço reservado pra barra de gestos do celular — podiam ficar parcialmente escondidos atrás dela. Aplicada a mesma proteção que as outras telas da Localização já tinham." },
     { "version": "v4.18", "changes": "Corrigido de vez o botão 'Desfazer': antes apagava um trecho inteiro de texto de uma vez (tudo que foi digitado sem pausar). Agora cada letra digitada vira um passo próprio no histórico — apertando Desfazer repetidas vezes, o texto volta aos poucos, letra por letra, até onde quiser." },
     { "version": "v4.17", "changes": "Corrigido: em 3 telas de nota (foto ampliada/lupa, modo de leitura com texto grande, e leitor de QR Code), o botão de fechar do topo podia ficar parcialmente escondido atrás do notch/barra de status do celular, dificultando o toque — mesma proteção que outras telas do app já tinham foi aplicada nessas 3." },

@@ -9,6 +9,7 @@ interface Props {
   lng: number;
   address?: string | null;
   deviceId?: string | null;
+  initialLabel?: string | null;
   onClose: () => void;
 }
 
@@ -19,16 +20,34 @@ const durations: { label: string; hours: number | null }[] = [
   { label: "Sempre", hours: null },
 ];
 
-export function ShareLocationModal({ lat, lng, address, deviceId, onClose }: Props) {
+export function ShareLocationModal({ lat, lng, address, deviceId, initialLabel, onClose }: Props) {
   const { user } = useAuth();
   const [copied, setCopied] = useState(false);
   const [duration, setDuration] = useState<{ label: string; hours: number | null }>(durations[0]);
   const [publicLink, setPublicLink] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [label, setLabel] = useState(initialLabel || "");
 
   const mapLink = address
     ? `https://www.google.com/maps?q=${encodeURIComponent(address)}&ll=${lat},${lng}`
     : `https://www.google.com/maps?q=${lat},${lng}`;
+
+  // Grava esse compartilhamento no histórico — com ou sem link ativo — pra
+  // aparecer depois na tela de "Histórico de compartilhamentos", com o nome
+  // que a pessoa der, e poder ser reenviado ou apagado depois.
+  const recordShare = async (token: string | null, expiresAt: string | null) => {
+    if (!user) return;
+    await supabase.from("location_shares").insert({
+      user_id: user.id,
+      device_id: deviceId ?? null,
+      token,
+      expires_at: expiresAt,
+      label: label.trim() || null,
+      address: address ?? null,
+      latitude: lat,
+      longitude: lng,
+    });
+  };
 
   const createPublicLink = async () => {
     if (!user) return;
@@ -40,6 +59,10 @@ export function ShareLocationModal({ lat, lng, address, deviceId, onClose }: Pro
       device_id: deviceId ?? null,
       token,
       expires_at,
+      label: label.trim() || null,
+      address: address ?? null,
+      latitude: lat,
+      longitude: lng,
     });
     setCreating(false);
     if (error) {
@@ -59,9 +82,11 @@ export function ShareLocationModal({ lat, lng, address, deviceId, onClose }: Pro
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+    if (!publicLink) recordShare(null, null);
   };
 
   const share = async (channel: string) => {
+    if (!publicLink) recordShare(null, null);
     if (channel === "whatsapp") return window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
     if (channel === "more" && navigator.share) { try { await navigator.share({ title: "Localização", text }); } catch {} return; }
     await navigator.clipboard.writeText(text);
@@ -99,6 +124,23 @@ export function ShareLocationModal({ lat, lng, address, deviceId, onClose }: Pro
             <X size={18} />
           </button>
         </div>
+
+        {address && (
+          <div className="flex items-start gap-1.5 mb-3 px-3 py-2 rounded-xl" style={{ background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
+            <span style={{ fontSize: 13 }}>📍</span>
+            <p className="text-xs font-medium leading-snug" style={{ color: "#2D9E7F" }}>{address}</p>
+          </div>
+        )}
+
+        <p className="text-xs font-bold mb-1.5" style={{ color: "#1A1A2E" }}>🏷️ Nome (opcional)</p>
+        <input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Ex.: Casa, Trabalho, Oficina..."
+          maxLength={40}
+          className="w-full mb-3 px-3 py-2 rounded-xl text-sm"
+          style={{ border: "1.5px solid #E2E8F0", color: "#1A1A2E" }}
+        />
 
         <p className="text-xs font-bold mb-2" style={{ color: "#1A1A2E" }}>⏱ Duração</p>
         <div className="flex flex-wrap gap-1.5 mb-3">

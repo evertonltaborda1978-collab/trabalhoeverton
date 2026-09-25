@@ -1275,9 +1275,11 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   // Snapshot of content when entering edit mode (for cancel)
   const snapshotRef = useRef<{ title: string; blocks: ContentBlock[]; color: string } | null>(null);
 
-  // Undo/redo
-  const [history, setHistory] = useState<ContentBlock[][]>([]);
+  // Undo/redo — cada ponto do histórico guarda título + corpo juntos, então
+  // o Desfazer também volta o campo de título, não só o texto da nota.
+  const [history, setHistory] = useState<{ title: string; blocks: ContentBlock[] }[]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
+  const titleRef = useRef("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -1434,8 +1436,9 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     let recovered = false;
     // Guarda o conteúdo inicial de fato carregado (seja recuperado de
     // rascunho, seja da nota salva) pra usar como ponto de partida do
-    // histórico de Desfazer logo abaixo.
+    // histórico de Desfazer logo abaixo — título e corpo juntos.
     let initialBlocksForHistory: ContentBlock[] = [{ type: "text", content: "" }];
+    let initialTitleForHistory = "";
     // Try to recover draft from localStorage
     if (!editingNote) {
       try {
@@ -1445,6 +1448,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
           // Only recover if draft is for a new note (no noteId) and less than 1 hour old
           if (!draft.noteId && Date.now() - draft.timestamp < 3600000) {
             setTitle(draft.title || "");
+            initialTitleForHistory = draft.title || "";
             const recoveredBlocks = ensureTrailingTextBlock(draft.blocks || [{ type: "text", content: "" }]);
             setBlocks(recoveredBlocks);
             initialBlocksForHistory = recoveredBlocks;
@@ -1461,6 +1465,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
           const draft = JSON.parse(raw);
           if (draft.noteId === editingNote.id && Date.now() - draft.timestamp < 3600000) {
             setTitle(draft.title || "");
+            initialTitleForHistory = draft.title || "";
             const recoveredBlocks = draft.blocks || deserializeBlocks(editingNote.content);
             setBlocks(recoveredBlocks);
             initialBlocksForHistory = recoveredBlocks;
@@ -1473,6 +1478,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     if (!recovered) {
       if (editingNote) {
         setTitle(editingNote.title);
+        initialTitleForHistory = editingNote.title;
         const parsed = deserializeBlocks(editingNote.content);
         const finalBlocks = ensureTrailingTextBlock(parsed);
         setBlocks(finalBlocks);
@@ -1481,12 +1487,14 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
       } else if (initialSharedData && (initialSharedData.title || initialSharedData.content)) {
         // Pre-fill from shared content received from another app
         setTitle(initialSharedData.title || "");
+        initialTitleForHistory = initialSharedData.title || "";
         const sharedBlocks = [{ type: "text" as const, content: initialSharedData.content || "" }];
         setBlocks(sharedBlocks);
         initialBlocksForHistory = sharedBlocks;
         setSelectedColor(NOTE_COLORS[0].value);
       } else {
         setTitle("");
+        initialTitleForHistory = "";
         const emptyBlocks = [{ type: "text" as const, content: "" }];
         setBlocks(emptyBlocks);
         initialBlocksForHistory = emptyBlocks;
@@ -1494,11 +1502,12 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
       }
     }
 
-    // Corrigido: o histórico de Desfazer agora já nasce com o texto original
-    // da nota (em vez de vazio). Antes disso, o botão só passava a funcionar
-    // depois de 2 edições completas, e mesmo assim nunca voltava pro texto
-    // de antes de qualquer edição.
-    setHistory([JSON.parse(JSON.stringify(initialBlocksForHistory))]);
+    // Corrigido: o histórico de Desfazer agora já nasce com o título e o
+    // texto originais da nota (em vez de vazio). Antes disso, o botão só
+    // passava a funcionar depois de 2 edições completas, nunca voltava pro
+    // texto de antes de qualquer edição, e nunca considerava o título.
+    titleRef.current = initialTitleForHistory;
+    setHistory([{ title: initialTitleForHistory, blocks: JSON.parse(JSON.stringify(initialBlocksForHistory)) }]);
     setHistoryIdx(0);
 
     // Corrigido: fecha qualquer visualizador de foto ampliada ou editor de
@@ -1580,10 +1589,12 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   // bloco) porque cada edição já troca o bloco por um objeto novo em vez de
   // alterar o antigo — então o histórico pode reaproveitar os blocos que não
   // mudaram (como fotos) sem duplicar esse conteúdo pesado a cada tecla.
+  // Corrigido: o histórico agora grava o TÍTULO junto com o corpo (antes só
+  // gravava o corpo, então o Desfazer nunca tinha efeito no campo de título).
   const pushHistory = useCallback((newBlocks: ContentBlock[]) => {
     setHistory((h) => {
       const trimmed = h.slice(0, historyIdx + 1);
-      const limited = [...trimmed, [...newBlocks]].slice(-100);
+      const limited = [...trimmed, { title: titleRef.current, blocks: [...newBlocks] }].slice(-100);
       return limited;
     });
     setHistoryIdx((i) => Math.min(i + 1, 99));
@@ -1592,14 +1603,42 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const undo = useCallback(() => {
     if (historyIdx <= 0) return;
     const prev = history[historyIdx - 1];
-    if (prev) { setBlocks([...prev]); setHistoryIdx((i) => i - 1); }
+    if (prev) {
+      setBlocks([...prev.blocks]);
+      setTitle(prev.title);
+      titleRef.current = prev.title;
+      setHistoryIdx((i) => i - 1);
+    }
   }, [historyIdx, history]);
 
   const redo = useCallback(() => {
     if (historyIdx >= history.length - 1) return;
     const next = history[historyIdx + 1];
-    if (next) { setBlocks([...next]); setHistoryIdx((i) => i + 1); }
+    if (next) {
+      setBlocks([...next.blocks]);
+      setTitle(next.title);
+      titleRef.current = next.title;
+      setHistoryIdx((i) => i + 1);
+    }
   }, [historyIdx, history]);
+
+  // Mantém titleRef sempre atualizado (usado pelo pushHistory acima, pra
+  // não gravar um título "atrasado" quando o corpo da nota é editado logo
+  // depois de mexer no título).
+  useEffect(() => {
+    titleRef.current = title;
+  }, [title]);
+
+  // Chamado pelo campo de título — grava um ponto de histórico a cada
+  // alteração, igual já acontece no corpo da nota (letra por letra).
+  const updateTitle = (value: string) => {
+    setTitle(value);
+    titleRef.current = value;
+    setBlocks((currentBlocks) => {
+      pushHistory(currentBlocks);
+      return currentBlocks;
+    });
+  };
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -2451,7 +2490,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                     }
                   }}
                   value={title}
-                  onChange={(e) => setTitle(e.target.value)}
+                  onChange={(e) => updateTitle(e.target.value)}
                   onFocus={() => { activeFieldRef.current = "title"; }}
                   onPaste={handleMobilePaste}
                   placeholder="Título da nota..."
