@@ -37,7 +37,7 @@ export function ShareLocationModal({ lat, lng, address, deviceId, initialLabel, 
   // que a pessoa der, e poder ser reenviado ou apagado depois.
   const recordShare = async (token: string | null, expiresAt: string | null) => {
     if (!user) return;
-    await supabase.from("location_shares").insert({
+    const { error } = await supabase.from("location_shares").insert({
       user_id: user.id,
       device_id: deviceId ?? null,
       token,
@@ -47,6 +47,9 @@ export function ShareLocationModal({ lat, lng, address, deviceId, initialLabel, 
       latitude: lat,
       longitude: lng,
     });
+    if (error) {
+      toast({ title: "Não salvou no histórico", description: error.message, variant: "destructive" });
+    }
   };
 
   const createPublicLink = async () => {
