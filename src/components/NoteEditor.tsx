@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo, Component, ReactNode } from "react";
 import { Note } from "@/hooks/useNotes";
 import { takeNativePhoto, isNative } from "@/lib/native";
-import { shareOrSaveImage } from "@/lib/nativeShare";
+import { shareOrSaveImage, shareText } from "@/lib/nativeShare";
 import {
   Camera,
   X,
