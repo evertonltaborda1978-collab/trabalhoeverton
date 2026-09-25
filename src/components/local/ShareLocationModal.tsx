@@ -77,9 +77,12 @@ export function ShareLocationModal({ lat, lng, address, deviceId, initialLabel, 
     toast({ title: "Link criado!", description: `Válido por ${duration.label}` });
   };
 
+  // Se a pessoa deu um nome, ele entra no lugar de "Minha localização" —
+  // assim quem recebe a mensagem também vê o nome, não só quem compartilhou.
+  const heading = label.trim() ? `📍 ${label.trim()}` : "📍 Minha localização";
   const text = publicLink
-    ? `📍 Minha localização (${duration.label}):\n${address ? address + "\n" : ""}${publicLink}`
-    : `📍 Minha localização:\n${address ? address + "\n" : ""}${mapLink}`;
+    ? `${heading} (${duration.label}):\n${address ? address + "\n" : ""}${publicLink}`
+    : `${heading}:\n${address ? address + "\n" : ""}${mapLink}`;
 
   const copy = async () => {
     await navigator.clipboard.writeText(text);

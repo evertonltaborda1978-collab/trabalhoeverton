@@ -1,6 +1,7 @@
 {
-  "version": "v4.22",
+  "version": "v4.23",
   "history": [
+    { "version": "v4.23", "changes": "Compartilhar localização: o nome que você dá (ex.: 'Casa', 'Oficina') agora também aparece na própria mensagem enviada pro WhatsApp/copiada — antes só ficava guardado no histórico, não aparecia pra quem recebia." },
     { "version": "v4.22", "changes": "Compartilhar localização: se o salvamento no histórico falhar por algum motivo (ex.: banco de dados não atualizado), agora aparece um aviso na tela em vez de falhar em silêncio — ajuda a identificar o problema." },
     { "version": "v4.21", "changes": "Compartilhar localização: agora mostra o endereço que está sendo compartilhado logo acima do campo de nome, pra ficar claro qual local você está nomeando." },
     { "version": "v4.20", "changes": "Corrigido: o Desfazer não funcionava no campo de título da nota (só no corpo) — agora título e corpo compartilham o mesmo histórico letra por letra. Localização: novo Histórico de compartilhamentos — dá pra nomear cada localização compartilhada, buscar, reenviar a mesma novamente e apagar as que não quiser mais guardar." },
