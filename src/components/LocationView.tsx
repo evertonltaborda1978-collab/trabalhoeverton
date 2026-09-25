@@ -5,6 +5,7 @@ import { toast } from "@/hooks/use-toast";
 import { UpdateIndicator } from "./local/UpdateIndicator";
 import { AlertModal } from "./local/AlertModal";
 import { ShareLocationModal } from "./local/ShareLocationModal";
+import { ShareHistoryModal } from "./local/ShareHistoryModal";
 import { EditAddressModal } from "./local/EditAddressModal";
 import { useDeviceTracking } from "@/hooks/useDeviceTracking";
 import { useDeviceLocations, reverseGeocodeFetch } from "@/hooks/useDeviceLocations";
@@ -41,7 +42,8 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
   const [lastUpdateAt, setLastUpdateAt] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now());
   const [showAlertModal, setShowAlertModal] = useState<{ deviceId: string; name: string } | null>(null);
-  const [showShareModal, setShowShareModal] = useState<{ lat: number; lng: number; address?: string | null } | null>(null);
+  const [showShareModal, setShowShareModal] = useState<{ lat: number; lng: number; address?: string | null; label?: string | null } | null>(null);
+  const [showShareHistory, setShowShareHistory] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [captureProgress, setCaptureProgress] = useState(0);
   const [captureAccuracy, setCaptureAccuracy] = useState<number | null>(null);
@@ -919,6 +921,14 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
         </button>
       </div>
 
+      <button
+        onClick={() => setShowShareHistory(true)}
+        className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
+        style={{ background: "#F7F5F2", color: "#4A5568", border: "1px solid #E2E8F0" }}
+      >
+        <History size={13} /> Histórico de compartilhamentos
+      </button>
+
       {/* Geofence section */}
       <GeofenceSection currentPosition={position} />
 
@@ -1180,8 +1190,18 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
           lat={showShareModal.lat}
           lng={showShareModal.lng}
           address={showShareModal.address ?? currentAddress}
+          initialLabel={showShareModal.label}
           deviceId={currentDevice?.id ?? null}
           onClose={() => setShowShareModal(null)}
+        />
+      )}
+      {showShareHistory && (
+        <ShareHistoryModal
+          onClose={() => setShowShareHistory(false)}
+          onReshare={(entry) => {
+            setShowShareHistory(false);
+            setShowShareModal({ lat: entry.lat, lng: entry.lng, address: entry.address, label: entry.label });
+          }}
         />
       )}
       {editingDevice && (
