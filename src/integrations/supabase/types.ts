@@ -239,30 +239,42 @@ export type Database = {
       }
       location_shares: {
         Row: {
+          address: string | null
           created_at: string
           device_id: string | null
           expires_at: string | null
           id: string
           is_active: boolean
-          token: string
+          label: string | null
+          latitude: number | null
+          longitude: number | null
+          token: string | null
           user_id: string
         }
         Insert: {
+          address?: string | null
           created_at?: string
           device_id?: string | null
           expires_at?: string | null
           id?: string
           is_active?: boolean
-          token: string
+          label?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          token?: string | null
           user_id: string
         }
         Update: {
+          address?: string | null
           created_at?: string
           device_id?: string | null
           expires_at?: string | null
           id?: string
           is_active?: boolean
-          token?: string
+          label?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          token?: string | null
           user_id?: string
         }
         Relationships: [
