@@ -6,6 +6,7 @@ import { UpdateIndicator } from "./local/UpdateIndicator";
 import { AlertModal } from "./local/AlertModal";
 import { ShareLocationModal } from "./local/ShareLocationModal";
 import { ShareHistoryModal } from "./local/ShareHistoryModal";
+import { ManageDevicesModal } from "./local/ManageDevicesModal";
 import { EditAddressModal } from "./local/EditAddressModal";
 import { useDeviceTracking } from "@/hooks/useDeviceTracking";
 import { useDeviceLocations, reverseGeocodeFetch } from "@/hooks/useDeviceLocations";
@@ -29,7 +30,7 @@ interface Position {
 }
 
 export function LocationView({ onBack }: { onBack?: () => void }) {
-  const { devices, currentDevice, fetchDevices } = useDeviceTracking();
+  const { devices, currentDevice, fetchDevices, removeDevice } = useDeviceTracking();
   const { latestByDevice, recordLocation } = useDeviceLocations();
   const [editingDevice, setEditingDevice] = useState<{ id: string; name: string; address: string | null; lat?: number; lng?: number } | null>(null);
 
@@ -44,6 +45,7 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
   const [showAlertModal, setShowAlertModal] = useState<{ deviceId: string; name: string } | null>(null);
   const [showShareModal, setShowShareModal] = useState<{ lat: number; lng: number; address?: string | null; label?: string | null } | null>(null);
   const [showShareHistory, setShowShareHistory] = useState(false);
+  const [showManageDevices, setShowManageDevices] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [captureProgress, setCaptureProgress] = useState(0);
   const [captureAccuracy, setCaptureAccuracy] = useState<number | null>(null);
@@ -929,6 +931,14 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
         <History size={13} /> Histórico de compartilhamentos
       </button>
 
+      <button
+        onClick={() => setShowManageDevices(true)}
+        className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
+        style={{ background: "#F7F5F2", color: "#4A5568", border: "1px solid #E2E8F0" }}
+      >
+        <Smartphone size={13} /> Gerenciar aparelhos ({devices.length})
+      </button>
+
       {/* Geofence section */}
       <GeofenceSection currentPosition={position} />
 
@@ -1202,6 +1212,14 @@ export function LocationView({ onBack }: { onBack?: () => void }) {
             setShowShareHistory(false);
             setShowShareModal({ lat: entry.lat, lng: entry.lng, address: entry.address, label: entry.label });
           }}
+        />
+      )}
+      {showManageDevices && (
+        <ManageDevicesModal
+          devices={devices}
+          onClose={() => setShowManageDevices(false)}
+          onRemove={async (id) => { await removeDevice(id); }}
+          onRenamed={() => fetchDevices()}
         />
       )}
       {editingDevice && (

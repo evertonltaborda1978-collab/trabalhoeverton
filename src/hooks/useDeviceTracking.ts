@@ -34,17 +34,32 @@ function getDeviceInfo() {
 
   const deviceName = /Mobile|Android|iPhone|iPad/.test(ua) ? "Celular/Tablet" : "Computador";
 
-  // Stable fingerprint — only uses values that don't change between sessions
-  const fingerprint = btoa([
-    navigator.language,
-    screen.width,
-    screen.height,
-    screen.colorDepth,
-    (navigator as any).hardwareConcurrency,
-    (navigator as any).platform,
-  ].join('-')).slice(0, 32);
+  return { browser, os, device_name: `${deviceName} - ${browser}/${os}` };
+}
 
-  return { browser, os, device_name: `${deviceName} - ${browser}/${os}`, fingerprint };
+// Corrigido: antes, a "impressão digital" do aparelho era calculada a partir
+// de características do navegador (idioma, tamanho de tela, núcleos do
+// processador, etc.) — isso fazia o MESMO celular contar como 2 aparelhos
+// diferentes quando acessado pelo Chrome e depois pelo app instalado (são
+// ambientes tecnicamente separados, com características ligeiramente
+// diferentes). Agora usamos um identificador fixo, gerado uma única vez e
+// salvo no próprio aparelho — continua o mesmo pra sempre, mesmo depois de
+// atualizar o app, o sistema, ou o navegador.
+const DEVICE_ID_KEY = "sv_stable_device_id";
+
+function getStableDeviceId(): string {
+  try {
+    let id = localStorage.getItem(DEVICE_ID_KEY);
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem(DEVICE_ID_KEY, id);
+    }
+    return id;
+  } catch {
+    // Se por algum motivo o localStorage não estiver disponível, ainda
+    // assim retorna algo utilizável (só não vai persistir entre sessões).
+    return crypto.randomUUID();
+  }
 }
 
 export function useDeviceTracking() {
@@ -56,13 +71,14 @@ export function useDeviceTracking() {
     if (!user) return;
 
     const info = getDeviceInfo();
+    const stableId = getStableDeviceId();
 
     // Check if device already exists
     const { data: existing } = await supabase
       .from("user_devices")
       .select("id, custom_label")
       .eq("user_id", user.id)
-      .eq("device_fingerprint", info.fingerprint)
+      .eq("device_fingerprint", stableId)
       .maybeSingle();
 
     if (existing) {
@@ -86,7 +102,7 @@ export function useDeviceTracking() {
         custom_label: info.device_name,
         browser: info.browser,
         os: info.os,
-        device_fingerprint: info.fingerprint,
+        device_fingerprint: stableId,
         is_current: true,
         last_seen_at: new Date().toISOString(),
       });
@@ -96,7 +112,7 @@ export function useDeviceTracking() {
           .from("user_devices")
           .select("id, custom_label")
           .eq("user_id", user.id)
-          .eq("device_fingerprint", info.fingerprint)
+          .eq("device_fingerprint", stableId)
           .maybeSingle();
 
         if (conflictDevice) {

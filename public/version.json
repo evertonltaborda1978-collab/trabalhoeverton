@@ -1,6 +1,7 @@
 {
-  "version": "v4.23",
+  "version": "v4.24",
   "history": [
+    { "version": "v4.24", "changes": "Corrigida a causa raiz da contagem errada de aparelhos: em vez de calcular uma 'impressão digital' a partir de características do navegador (que mudava entre Chrome e o app instalado no mesmo celular, contando como 2 aparelhos), agora cada aparelho tem um identificador fixo salvo nele mesmo, que nunca muda. Novo: tela 'Gerenciar aparelhos' na Localização, pra ver todos, renomear e apagar os antigos/duplicados." },
     { "version": "v4.23", "changes": "Compartilhar localização: o nome que você dá (ex.: 'Casa', 'Oficina') agora também aparece na própria mensagem enviada pro WhatsApp/copiada — antes só ficava guardado no histórico, não aparecia pra quem recebia." },
     { "version": "v4.22", "changes": "Compartilhar localização: se o salvamento no histórico falhar por algum motivo (ex.: banco de dados não atualizado), agora aparece um aviso na tela em vez de falhar em silêncio — ajuda a identificar o problema." },
     { "version": "v4.21", "changes": "Compartilhar localização: agora mostra o endereço que está sendo compartilhado logo acima do campo de nome, pra ficar claro qual local você está nomeando." },
