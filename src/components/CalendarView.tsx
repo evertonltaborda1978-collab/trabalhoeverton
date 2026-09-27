@@ -1,10 +1,10 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { Appointment } from "@/hooks/useAppointments";
 import { GoogleEvent, useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 import { format, isSameDay, startOfWeek, endOfWeek, eachDayOfInterval, startOfMonth, endOfMonth, addMonths, subMonths, isToday, isSameMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, Trash2, Clock, RefreshCw, Unplug, Pencil, ChevronLeft, ChevronRight, CalendarDays, CalendarRange, LayoutList } from "lucide-react";
+import { Plus, Trash2, Clock, RefreshCw, Unplug, Pencil, ChevronLeft, ChevronRight, CalendarDays, CalendarRange, LayoutList, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -134,6 +134,16 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
     setDescription("");
     setAlertSound(null);
   };
+
+  // Registra essa tela cheia no mesmo mecanismo do botão físico de voltar
+  // do Android usado pelas outras telas cheias (nota, relatórios) — assim
+  // "voltar" fecha essa tela em vez de sair do app ou trocar de aba.
+  useEffect(() => {
+    if (!dialogOpen) return;
+    (window as any).__registerModal?.("novo-compromisso", closeDialog);
+    return () => { (window as any).__unregisterModal?.(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dialogOpen]);
 
   const handleDeleteWithConfirm = (id: string) => {
     const apt = appointments.find((a) => a.id === id);
@@ -493,52 +503,75 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
       {/* ── MONTH VIEW ── */}
       {viewMode === "month" && renderMonthView()}
 
-      {/* New/Edit dialog */}
-      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); else setDialogOpen(true); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-display">{editingId ? "Editar compromisso" : "Novo compromisso"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 mt-2">
-            <Input placeholder="Título" value={title} onChange={(e) => setTitle(e.target.value)} className="font-semibold" />
-            <div className="flex items-center gap-2 text-xs font-medium" style={{ color: "#666" }}>
-              <CalendarDays size={14} />
-              <span>{format(selected, "d 'de' MMMM, yyyy", { locale: ptBR })}</span>
-            </div>
-            <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
-            <Textarea placeholder="Descrição (opcional)" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="resize-none" />
-            <div>
-              <p className="text-[11px] font-bold mb-1.5" style={{ color: "#9E9E9E" }}>SOM DO ALERTA (toque para ouvir e escolher)</p>
-              <div className="grid grid-cols-2 gap-1.5">
-                {ALERT_SOUND_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => { setAlertSound(opt.id); playAlertSoundPreview(opt.id); }}
-                    className="text-left px-2.5 py-2 rounded-lg text-xs font-semibold transition-all"
-                    style={
-                      alertSound === opt.id
-                        ? { background: "#1A1A2E", color: "#FFF" }
-                        : { background: "rgba(0,0,0,0.05)", border: "1px solid #E0E0E0", color: "#555" }
-                    }
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+      {/* New/Edit — tela cheia (evita o "pulo"/recentralização que a janela
+          centralizada do Dialog padrão causava quando o teclado abria) */}
+      {dialogOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex flex-col"
+          style={{
+            background: "#FFFFFF",
+            paddingTop: "env(safe-area-inset-top)",
+            paddingBottom: "env(safe-area-inset-bottom)",
+          }}
+        >
+          <div
+            className="flex items-center justify-between px-4 py-3 shrink-0"
+            style={{ borderBottom: "1px solid #EBEBEB" }}
+          >
+            <h2 className="font-display font-bold text-base" style={{ color: "#1A1A2E" }}>
+              {editingId ? "Editar compromisso" : "Novo compromisso"}
+            </h2>
+            <button
+              onClick={closeDialog}
+              className="flex items-center justify-center rounded-full"
+              style={{ width: 30, height: 30, background: "rgba(0,0,0,0.05)" }}
+            >
+              <X size={16} style={{ color: "#666" }} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-4 py-4">
+            <div className="space-y-3 max-w-md mx-auto">
+              <Input placeholder="Título" value={title} onChange={(e) => setTitle(e.target.value)} className="font-semibold" />
+              <div className="flex items-center gap-2 text-xs font-medium" style={{ color: "#666" }}>
+                <CalendarDays size={14} />
+                <span>{format(selected, "d 'de' MMMM, yyyy", { locale: ptBR })}</span>
+              </div>
+              <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+              <Textarea placeholder="Descrição (opcional)" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="resize-none" />
+              <div>
+                <p className="text-[11px] font-bold mb-1.5" style={{ color: "#9E9E9E" }}>SOM DO ALERTA (toque para ouvir e escolher)</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {ALERT_SOUND_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => { setAlertSound(opt.id); playAlertSoundPreview(opt.id); }}
+                      className="text-left px-2.5 py-2 rounded-lg text-xs font-semibold transition-all"
+                      style={
+                        alertSound === opt.id
+                          ? { background: "#1A1A2E", color: "#FFF" }
+                          : { background: "rgba(0,0,0,0.05)", border: "1px solid #E0E0E0", color: "#555" }
+                      }
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {connected && !editingId && (
+                <p className="text-[11px] font-medium flex items-center gap-1" style={{ color: "#4CAF50" }}>
+                  ✓ Será sincronizado com Google Agenda
+                </p>
+              )}
+              <div className="flex gap-2 pt-1 pb-2">
+                <Button variant="outline" onClick={closeDialog} className="flex-1">Cancelar</Button>
+                <Button onClick={handleSave} className="flex-1">{editingId ? "Salvar" : "Agendar"}</Button>
               </div>
             </div>
-            {connected && !editingId && (
-              <p className="text-[11px] font-medium flex items-center gap-1" style={{ color: "#4CAF50" }}>
-                ✓ Será sincronizado com Google Agenda
-              </p>
-            )}
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={closeDialog} className="flex-1">Cancelar</Button>
-              <Button onClick={handleSave} className="flex-1">{editingId ? "Salvar" : "Agendar"}</Button>
-            </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       <Dialog open={!!confirmDeleteId} onOpenChange={(v) => { if (!v) setConfirmDeleteId(null); }}>
