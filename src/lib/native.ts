@@ -33,7 +33,15 @@ export async function takeNativePhoto(source: "camera" | "gallery" = "camera"): 
 // de novo com o mesmo id não duplica.
 const ALERT_CHANNEL_ID = "alertas-urgentes";
 
+// Só usamos o channelId customizado na hora de agendar SE a criação do
+// canal realmente deu certo. Referenciar um canal que não existe faz o
+// Android descartar a notificação inteira, sem erro nenhum — por isso é
+// mais seguro cair de volta pro canal padrão do sistema do que arriscar
+// isso.
+let alertChannelReady = false;
+
 async function ensureAlertChannel(): Promise<void> {
+  if (alertChannelReady) return;
   if (Capacitor.getPlatform() !== "android") return;
   try {
     const { LocalNotifications } = await import("@capacitor/local-notifications");
@@ -46,8 +54,10 @@ async function ensureAlertChannel(): Promise<void> {
       vibration: true,
       lights: true,
     });
+    alertChannelReady = true;
   } catch {
-    /* silencioso: se não conseguir criar o canal, usa o padrão do sistema */
+    alertChannelReady = false;
+    /* segue sem o canal customizado — usa o padrão do sistema */
   }
 }
 
@@ -110,7 +120,7 @@ export async function syncNativeReminders(reminders: NativeReminder[]): Promise<
         body: r.body,
         schedule: { at: r.at, allowWhileIdle: true },
         smallIcon: "ic_stat_icon_config_sample",
-        channelId: ALERT_CHANNEL_ID,
+        ...(alertChannelReady ? { channelId: ALERT_CHANNEL_ID } : {}),
       })),
     });
   } catch {
