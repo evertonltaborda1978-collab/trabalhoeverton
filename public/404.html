@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Redirecionando...</title>
+    <script type="text/javascript">
+      // Truque padrão pra apps de página única (SPA) funcionarem certo no
+      // GitHub Pages: quando alguém entra direto num link como
+      // /trabalhoeverton/admin, o GitHub não acha esse "arquivo" e cai
+      // aqui. Aqui a gente guarda o caminho pedido numa "pergunta" (?/admin)
+      // e manda de volta pra página principal, que devolve pro caminho
+      // certo assim que carregar (ver o scriptzinho no index.html).
+      var pathSegmentsToKeep = 1; // mantém "/trabalhoeverton" no começo do link
+      var l = window.location;
+      l.replace(
+        l.protocol + "//" + l.hostname + (l.port ? ":" + l.port : "") +
+        l.pathname.split("/").slice(0, 1 + pathSegmentsToKeep).join("/") + "/?/" +
+        l.pathname.slice(1).split("/").slice(pathSegmentsToKeep).join("/").replace(/&/g, "~and~") +
+        (l.search ? "&" + l.search.slice(1).replace(/&/g, "~and~") : "") +
+        l.hash
+      );
+    </script>
+  </head>
+  <body></body>
+</html>
