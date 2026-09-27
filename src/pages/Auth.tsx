@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useBiometricAuth } from "@/hooks/useBiometricAuth";
 import { useVersionCheck } from "@/hooks/useVersionCheck";
 import { APP_VERSION, VERSION_HISTORY, forceUpdateApp } from "@/lib/appVersion";
-import { Mail, Lock, Eye, EyeOff, Fingerprint, HelpCircle, X, RotateCcw } from "lucide-react";
+import { Mail, Lock, User, Eye, EyeOff, Fingerprint, HelpCircle, X, RotateCcw } from "lucide-react";
 
 // Alguns erros vêm crus e técnicos direto do navegador (ex: "Failed to
 // fetch", quando não tem internet de verdade pra completar o login no
@@ -25,6 +25,7 @@ function friendlyAuthError(message: string | undefined): string {
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -64,8 +65,31 @@ export default function Auth() {
       }
 
       if (isLogin) {
-        const { error } = await (supabase.auth as any).signInWithPassword({ email, password });
+        const { data, error } = await (supabase.auth as any).signInWithPassword({ email, password });
         if (error) throw error;
+
+        // Portão de aprovação: só entra quem o administrador aprovou.
+        // Consultamos a tabela "profiles" (criada junto com o sistema de
+        // aprovação) para saber a situação desta conta.
+        const { data: profile } = await (supabase as any)
+          .from("profiles")
+          .select("status")
+          .eq("id", data.user.id)
+          .maybeSingle();
+
+        if (!profile || profile.status !== "approved") {
+          await supabase.auth.signOut();
+          const isRejected = profile?.status === "rejected";
+          toast({
+            title: isRejected ? "Acesso não autorizado" : "Aguardando aprovação",
+            description: isRejected
+              ? "Seu acesso a este aplicativo não foi liberado pelo administrador."
+              : "Seu cadastro foi recebido. Assim que o administrador aprovar, você poderá entrar.",
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
 
         if (biometricAvailable && !biometricEnabled) {
           const enabled = await enableBiometric(email, password);
@@ -77,13 +101,20 @@ export default function Auth() {
         const { error } = await (supabase.auth as any).signUp({
           email,
           password,
-          options: { emailRedirectTo: window.location.origin },
+          options: {
+            emailRedirectTo: window.location.origin,
+            data: { full_name: fullName },
+          },
         });
         if (error) throw error;
+        // Garante que a conta recém-criada não fica logada antes da aprovação
+        await supabase.auth.signOut();
         toast({
-          title: "Conta criada!",
-          description: "Verifique seu email para confirmar o cadastro.",
+          title: "Cadastro enviado!",
+          description: "Aguarde a aprovação do administrador para poder entrar no aplicativo.",
         });
+        setIsLogin(true);
+        setPassword("");
       }
     } catch (error: any) {
       toast({
@@ -181,6 +212,21 @@ export default function Auth() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
+          {!isLogin && !forgotPassword && (
+            <div className="relative">
+              <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Nome completo"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="pl-10"
+                autoComplete="name"
+                name="fullName"
+                required
+              />
+            </div>
+          )}
           <div className="relative">
             <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
