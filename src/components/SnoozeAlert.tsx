@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { X, Clock, BellRing } from "lucide-react";
-import { triggerAlert, type AlertSoundId } from "@/lib/alertSound";
+import { startAlertLoop, type AlertSoundId } from "@/lib/alertSound";
 
 export interface SnoozeAlertData {
   id: string;
@@ -22,7 +22,10 @@ export function SnoozeAlert({ alert, onDismiss, onSnooze }: SnoozeAlertProps) {
   useEffect(() => {
     if (alert) {
       setVisible(true);
-      triggerAlert(alert.soundId);
+      // Toca e vibra em looping até a tela ser fechada (Dispensar/Adiar) —
+      // o cleanup abaixo (quando "alert" muda ou fica null) para o loop.
+      const stopLoop = startAlertLoop(alert.soundId);
+      return () => stopLoop();
     } else {
       setVisible(false);
     }

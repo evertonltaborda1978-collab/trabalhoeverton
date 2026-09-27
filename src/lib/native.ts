@@ -26,17 +26,44 @@ export async function takeNativePhoto(source: "camera" | "gallery" = "camera"): 
   }
 }
 
+// Canal de notificação próprio (Android), com prioridade máxima e
+// vibração forte — pra lembretes se destacarem mesmo em ambiente
+// barulhento, aparecendo por cima de outras notificações e vibrando bem
+// mais forte que o padrão. Um canal só precisa ser criado uma vez; chamar
+// de novo com o mesmo id não duplica.
+const ALERT_CHANNEL_ID = "alertas-urgentes";
+
+async function ensureAlertChannel(): Promise<void> {
+  if (Capacitor.getPlatform() !== "android") return;
+  try {
+    const { LocalNotifications } = await import("@capacitor/local-notifications");
+    await LocalNotifications.createChannel({
+      id: ALERT_CHANNEL_ID,
+      name: "Lembretes e Alertas",
+      description: "Compromissos, lembretes de notas e remédios",
+      importance: 5, // máxima: aparece por cima de outras telas (heads-up)
+      visibility: 1,
+      vibration: true,
+      lights: true,
+    });
+  } catch {
+    /* silencioso: se não conseguir criar o canal, usa o padrão do sistema */
+  }
+}
+
 /** Pede permissão de notificações no app nativo. */
 export async function initNativeNotifications(): Promise<boolean> {
   if (!isNative()) return false;
   try {
     const { LocalNotifications } = await import("@capacitor/local-notifications");
     const perm = await LocalNotifications.checkPermissions();
-    if (perm.display !== "granted") {
+    let granted = perm.display === "granted";
+    if (!granted) {
       const req = await LocalNotifications.requestPermissions();
-      return req.display === "granted";
+      granted = req.display === "granted";
     }
-    return true;
+    if (granted) await ensureAlertChannel();
+    return granted;
   } catch {
     return false;
   }
@@ -83,6 +110,7 @@ export async function syncNativeReminders(reminders: NativeReminder[]): Promise<
         body: r.body,
         schedule: { at: r.at, allowWhileIdle: true },
         smallIcon: "ic_stat_icon_config_sample",
+        channelId: ALERT_CHANNEL_ID,
       })),
     });
   } catch {

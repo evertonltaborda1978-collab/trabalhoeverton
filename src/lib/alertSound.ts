@@ -109,13 +109,39 @@ export function playAlertSoundPreview(id: AlertSoundId) {
   PATTERNS[id]?.();
 }
 
-// Vibrate and play alert sound. Recebe o som escolhido pra ESSE alerta
-// específico; se não vier nenhum (compatibilidade com algo antigo), usa
-// o último som salvo como retrocesso.
+// Vibração mais longa e insistente que o padrão antigo — pensada pra chamar
+// atenção mesmo em ambiente barulhento (chão de fábrica).
+const VIBRATION_PATTERN = [350, 150, 350, 150, 350, 150, 600];
+
+// Vibrate and play alert sound (um único toque). Recebe o som escolhido pra
+// ESSE alerta específico; se não vier nenhum (compatibilidade com algo
+// antigo), usa o último som salvo como retrocesso.
 export function triggerAlert(soundId?: AlertSoundId) {
-  // Vibrate (mobile)
   if (navigator.vibrate) {
-    navigator.vibrate([200, 100, 200, 100, 300]);
+    navigator.vibrate(VIBRATION_PATTERN);
   }
   PATTERNS[soundId || getAlertSoundChoice()]?.();
+}
+
+let alertLoopTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Toca e vibra repetidamente (a cada `intervalMs`) até `stopAlertLoop()`
+ * ser chamado — pensado pra alertas que não podem passar despercebidos.
+ * Só funciona enquanto a tela/app estiver aberta (aba em primeiro plano);
+ * com o app fechado ou a tela bloqueada, quem assume é a notificação
+ * nativa (ver native.ts).
+ */
+export function startAlertLoop(soundId?: AlertSoundId, intervalMs = 2500): () => void {
+  stopAlertLoop();
+  triggerAlert(soundId);
+  alertLoopTimer = setInterval(() => triggerAlert(soundId), intervalMs);
+  return stopAlertLoop;
+}
+
+export function stopAlertLoop() {
+  if (alertLoopTimer) {
+    clearInterval(alertLoopTimer);
+    alertLoopTimer = null;
+  }
 }
