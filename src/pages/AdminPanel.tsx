@@ -4,9 +4,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Trash2, ShieldCheck, ArrowLeft } from "lucide-react";
+import { Check, X, Trash2, ShieldCheck, ArrowLeft, ChevronDown, ChevronUp } from "lucide-react";
 
 type ProfileStatus = "pending" | "approved" | "rejected";
+
+type Permissions = {
+  calendar: boolean;
+  fuel: boolean;
+  medication: boolean;
+  weather: boolean;
+  location: boolean;
+  devices: boolean;
+  turno: boolean;
+};
 
 type Profile = {
   id: string;
@@ -14,6 +24,7 @@ type Profile = {
   full_name: string | null;
   status: ProfileStatus;
   is_admin: boolean;
+  permissions: Permissions | null;
   created_at: string;
 };
 
@@ -29,6 +40,26 @@ const statusColor: Record<ProfileStatus, string> = {
   rejected: "#E53935",
 };
 
+const PERMISSION_LABELS: { key: keyof Permissions; label: string }[] = [
+  { key: "turno", label: "Relatórios de Turno (Turno, Tombador, Rebobinadeira, Linha de Bobinas)" },
+  { key: "calendar", label: "Agenda" },
+  { key: "weather", label: "Tempo" },
+  { key: "location", label: "Localização" },
+  { key: "devices", label: "Segurança / Dispositivos" },
+  { key: "fuel", label: "Combustível" },
+  { key: "medication", label: "Saúde" },
+];
+
+const DEFAULT_PERMISSIONS: Permissions = {
+  calendar: true,
+  fuel: true,
+  medication: true,
+  weather: true,
+  location: true,
+  devices: true,
+  turno: true,
+};
+
 export default function AdminPanel() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -37,6 +68,7 @@ export default function AdminPanel() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const loadProfiles = async () => {
     setLoading(true);
@@ -99,6 +131,18 @@ export default function AdminPanel() {
     loadProfiles();
   };
 
+  const togglePermission = async (p: Profile, key: keyof Permissions) => {
+    const current = { ...DEFAULT_PERMISSIONS, ...(p.permissions || {}) };
+    const updated = { ...current, [key]: !current[key] };
+    // Atualiza a tela na hora, sem esperar o servidor confirmar
+    setProfiles((prev) => prev.map((row) => (row.id === p.id ? { ...row, permissions: updated } : row)));
+    const { error } = await (supabase as any).from("profiles").update({ permissions: updated }).eq("id", p.id);
+    if (error) {
+      toast({ title: "Erro ao salvar permissão", description: error.message, variant: "destructive" });
+      loadProfiles();
+    }
+  };
+
   if (checking) return <div className="min-h-screen bg-background" />;
   if (!isAdmin) return null;
 
@@ -124,39 +168,72 @@ export default function AdminPanel() {
         )}
 
         <div className="space-y-2">
-          {profiles.map((p) => (
-            <div
-              key={p.id}
-              className="rounded-xl border p-3 flex items-center justify-between gap-2"
-              style={{ borderColor: "#EBEBEB" }}
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-semibold truncate">{p.full_name || "(sem nome)"}</p>
-                <p className="text-xs text-muted-foreground truncate">{p.email}</p>
-                <span className="text-[10px] font-bold" style={{ color: statusColor[p.status] }}>
-                  {statusLabel[p.status]}
-                  {p.is_admin ? " · Admin" : ""}
-                </span>
-              </div>
-              {!p.is_admin && (
-                <div className="flex items-center gap-1 shrink-0">
-                  {p.status !== "approved" && (
-                    <Button size="icon" variant="outline" title="Aprovar" onClick={() => updateStatus(p.id, "approved")}>
-                      <Check size={15} style={{ color: "#43A047" }} />
-                    </Button>
+          {profiles.map((p) => {
+            const perms = { ...DEFAULT_PERMISSIONS, ...(p.permissions || {}) };
+            const isExpanded = expandedId === p.id;
+            return (
+              <div
+                key={p.id}
+                className="rounded-xl border p-3 space-y-2"
+                style={{ borderColor: "#EBEBEB" }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold truncate">{p.full_name || "(sem nome)"}</p>
+                    <p className="text-xs text-muted-foreground truncate">{p.email}</p>
+                    <span className="text-[10px] font-bold" style={{ color: statusColor[p.status] }}>
+                      {statusLabel[p.status]}
+                      {p.is_admin ? " · Admin" : ""}
+                    </span>
+                  </div>
+                  {!p.is_admin && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      {p.status !== "approved" && (
+                        <Button size="icon" variant="outline" title="Aprovar" onClick={() => updateStatus(p.id, "approved")}>
+                          <Check size={15} style={{ color: "#43A047" }} />
+                        </Button>
+                      )}
+                      {p.status !== "rejected" && (
+                        <Button size="icon" variant="outline" title="Recusar acesso" onClick={() => updateStatus(p.id, "rejected")}>
+                          <X size={15} style={{ color: "#F9A825" }} />
+                        </Button>
+                      )}
+                      <Button size="icon" variant="outline" title="Excluir" onClick={() => deleteProfile(p.id)}>
+                        <Trash2 size={15} style={{ color: "#E53935" }} />
+                      </Button>
+                    </div>
                   )}
-                  {p.status !== "rejected" && (
-                    <Button size="icon" variant="outline" title="Recusar acesso" onClick={() => updateStatus(p.id, "rejected")}>
-                      <X size={15} style={{ color: "#F9A825" }} />
-                    </Button>
-                  )}
-                  <Button size="icon" variant="outline" title="Excluir" onClick={() => deleteProfile(p.id)}>
-                    <Trash2 size={15} style={{ color: "#E53935" }} />
-                  </Button>
                 </div>
-              )}
-            </div>
-          ))}
+
+                {!p.is_admin && p.status === "approved" && (
+                  <div>
+                    <button
+                      onClick={() => setExpandedId(isExpanded ? null : p.id)}
+                      className="flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+                    >
+                      {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                      O que essa pessoa pode ver no app
+                    </button>
+                    {isExpanded && (
+                      <div className="mt-2 space-y-1.5 pl-1">
+                        {PERMISSION_LABELS.map(({ key, label }) => (
+                          <label key={key} className="flex items-center gap-2 text-xs cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={perms[key]}
+                              onChange={() => togglePermission(p, key)}
+                              className="w-3.5 h-3.5"
+                            />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

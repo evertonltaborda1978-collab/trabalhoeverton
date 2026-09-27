@@ -1,29 +1,34 @@
 import { useState, useRef, useEffect } from "react";
 import { StickyNote, Calendar, MapPin, Shield, CloudSun, Fuel, Pill, MoreHorizontal } from "lucide-react";
+import type { AppPermissions } from "@/contexts/AuthContext";
 
 type Tab = "notes" | "calendar" | "weather" | "location" | "devices" | "fuel" | "medication";
 
 interface BottomNavProps {
   active: Tab;
   onChange: (tab: Tab) => void;
+  permissions: AppPermissions;
 }
 
-// "Mais" menu options (everything except Notas, which has its own button)
-const moreTabs: { id: Tab; icon: typeof StickyNote; label: string }[] = [
-  { id: "calendar", icon: Calendar, label: "Agenda" },
-  { id: "fuel", icon: Fuel, label: "Combustível" },
-  { id: "medication", icon: Pill, label: "Saúde" },
-  { id: "weather", icon: CloudSun, label: "Tempo" },
-  { id: "location", icon: MapPin, label: "Local" },
-  { id: "devices", icon: Shield, label: "Segurança" },
+// "Mais" menu options (everything except Notas, which has its own button).
+// Cada item tem a chave de permissão correspondente em AppPermissions.
+const moreTabs: { id: Tab; icon: typeof StickyNote; label: string; permKey: keyof AppPermissions }[] = [
+  { id: "calendar", icon: Calendar, label: "Agenda", permKey: "calendar" },
+  { id: "fuel", icon: Fuel, label: "Combustível", permKey: "fuel" },
+  { id: "medication", icon: Pill, label: "Saúde", permKey: "medication" },
+  { id: "weather", icon: CloudSun, label: "Tempo", permKey: "weather" },
+  { id: "location", icon: MapPin, label: "Local", permKey: "location" },
+  { id: "devices", icon: Shield, label: "Segurança", permKey: "devices" },
 ];
 
-export function BottomNav({ active, onChange }: BottomNavProps) {
+export function BottomNav({ active, onChange, permissions }: BottomNavProps) {
   const [showMore, setShowMore] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  const visibleMoreTabs = moreTabs.filter((t) => permissions[t.permKey] !== false);
+
   const isNotesActive = active === "notes";
-  const isMoreActive = moreTabs.some((t) => t.id === active);
+  const isMoreActive = visibleMoreTabs.some((t) => t.id === active);
 
   // Close the "more" menu when clicking outside of it
   useEffect(() => {
@@ -64,7 +69,7 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
             minWidth: 160,
           }}
         >
-          {moreTabs.map(({ id, icon: Icon, label }) => {
+          {visibleMoreTabs.map(({ id, icon: Icon, label }) => {
             const isActive = active === id;
             return (
               <button
@@ -131,31 +136,33 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
           </span>
         </button>
 
-        {/* "Mais" button */}
-        <button
-          onClick={() => setShowMore((v) => !v)}
-          className="flex items-center gap-1.5 rounded-full transition-all duration-200 shrink-0"
-          style={{
-            padding: "6px 14px",
-            background: (isMoreActive || showMore) ? "rgba(26,26,46,0.06)" : "transparent",
-          }}
-        >
-          <MoreHorizontal
-            size={16}
-            strokeWidth={(isMoreActive || showMore) ? 2.5 : 2}
-            style={{ color: (isMoreActive || showMore) ? "#1A1A2E" : "#6B6B7D" }}
-          />
-          <span
-            className="font-extrabold tracking-wide"
+        {/* "Mais" button — só aparece se sobrar pelo menos uma aba liberada */}
+        {visibleMoreTabs.length > 0 && (
+          <button
+            onClick={() => setShowMore((v) => !v)}
+            className="flex items-center gap-1.5 rounded-full transition-all duration-200 shrink-0"
             style={{
-              fontSize: 10,
-              color: (isMoreActive || showMore) ? "#1A1A2E" : "#6B6B7D",
-              whiteSpace: "nowrap",
+              padding: "6px 14px",
+              background: (isMoreActive || showMore) ? "rgba(26,26,46,0.06)" : "transparent",
             }}
           >
-            Mais
-          </span>
-        </button>
+            <MoreHorizontal
+              size={16}
+              strokeWidth={(isMoreActive || showMore) ? 2.5 : 2}
+              style={{ color: (isMoreActive || showMore) ? "#1A1A2E" : "#6B6B7D" }}
+            />
+            <span
+              className="font-extrabold tracking-wide"
+              style={{
+                fontSize: 10,
+                color: (isMoreActive || showMore) ? "#1A1A2E" : "#6B6B7D",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Mais
+            </span>
+          </button>
+        )}
       </div>
     </nav>
   );

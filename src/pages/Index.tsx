@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { lazy, Suspense } from "react";
+import { useNavigate } from "react-router-dom";
 import { BottomNav } from "@/components/BottomNav";
 import { NotesView } from "@/components/NotesView";
 import { SnoozeAlert } from "@/components/SnoozeAlert";
@@ -24,7 +25,7 @@ import { APP_VERSION, forceUpdateApp } from "@/lib/appVersion";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { syncNativeReminders, type NativeReminder } from "@/lib/native";
-import { LogOut, RefreshCw, RotateCcw, Cloud, CloudOff, Download, Upload, SignalHigh, SignalMedium, SignalLow, SignalZero, MoreHorizontal, ClipboardList, Trash2 } from "lucide-react";
+import { LogOut, RefreshCw, RotateCcw, Cloud, CloudOff, Download, Upload, SignalHigh, SignalMedium, SignalLow, SignalZero, MoreHorizontal, ClipboardList, Trash2, ShieldCheck } from "lucide-react";
 import type { AlertSoundId } from "@/lib/alertSound";
 import { useAppTextSize, APP_TEXT_SIZE_LABELS } from "@/hooks/useAppTextSize";
 import { useMedicationAlerts } from "@/hooks/useMedicationAlerts";
@@ -63,7 +64,8 @@ const Index = () => {
   const { notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, reorderPinnedNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, syncStatus, unsyncedCount, lastSyncError, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes, refreshNotes } = useNotes();
   const { appointments, trashedAppointments, addAppointment, updateAppointment, deleteAppointment, restoreAppointment, permanentDeleteAppointment, emptyAppointmentTrash, activeAlert, dismissAlert, snoozeAlert, fetchAppointments } = useAppointments();
   const { medicationAlert, dismissMedicationAlert, snoozeMedicationAlert } = useMedicationAlerts();
-  const { signOut } = useAuth();
+  const { signOut, permissions, isAdmin } = useAuth();
+  const navigate = useNavigate();
   const { currentDevice, fetchDevices } = useDeviceTracking();
   const { recordLocation } = useDeviceLocations();
   const [showLabelModal, setShowLabelModal] = useState(false);
@@ -427,6 +429,15 @@ const Index = () => {
                     className="absolute top-full right-0 mt-1 rounded-xl p-2 flex flex-col gap-1 z-20"
                     style={{ background: "#FFF", border: "1px solid #EBEBEB", boxShadow: "0 8px 24px -4px rgba(0,0,0,0.15)", minWidth: 210 }}
                   >
+                    {isAdmin && (
+                      <button
+                        onClick={() => { setShowBackupMenu(false); navigate("/admin"); }}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+                        style={{ color: "#1A1A2E" }}
+                      >
+                        <ShieldCheck size={15} style={{ color: "#3949AB" }} /> Administração
+                      </button>
+                    )}
                     {tab === "notes" && (
                       <>
                         <div className="px-3 pt-1 pb-2 border-b" style={{ borderColor: "#EBEBEB" }}>
@@ -451,13 +462,15 @@ const Index = () => {
                             ))}
                           </div>
                         </div>
-                        <button
-                          onClick={() => { setShowBackupMenu(false); window.dispatchEvent(new Event("notes-menu:relatorio")); }}
-                          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
-                          style={{ color: "#1A1A2E" }}
-                        >
-                          <ClipboardList size={15} style={{ color: "#F9A825" }} /> Relatório de Turno
-                        </button>
+                        {permissions.turno !== false && (
+                          <button
+                            onClick={() => { setShowBackupMenu(false); window.dispatchEvent(new Event("notes-menu:relatorio")); }}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+                            style={{ color: "#1A1A2E" }}
+                          >
+                            <ClipboardList size={15} style={{ color: "#F9A825" }} /> Relatório de Turno
+                          </button>
+                        )}
                         <button
                           onClick={() => { setShowBackupMenu(false); window.dispatchEvent(new Event("notes-menu:trash")); }}
                           className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
@@ -549,7 +562,7 @@ const Index = () => {
             onEmptyTrash={emptyTrash}
           />
         )}
-        {tab === "calendar" && (
+        {tab === "calendar" && permissions.calendar !== false && (
           <Suspense fallback={<TabLoading />}>
             <CalendarView
               appointments={appointments}
@@ -563,15 +576,15 @@ const Index = () => {
             />
           </Suspense>
         )}
-        {tab === "weather" && <Suspense fallback={<TabLoading />}><WeatherView /></Suspense>}
-        {tab === "fuel" && <Suspense fallback={<TabLoading />}><FuelCalculatorView /></Suspense>}
-        {tab === "medication" && <Suspense fallback={<TabLoading />}><MedicationView /></Suspense>}
-        {tab === "location" && <Suspense fallback={<TabLoading />}><LocationView onBack={() => changeTab("notes")} /></Suspense>}
-        {tab === "devices" && <Suspense fallback={<TabLoading />}><DevicesView /></Suspense>}
+        {tab === "weather" && permissions.weather !== false && <Suspense fallback={<TabLoading />}><WeatherView /></Suspense>}
+        {tab === "fuel" && permissions.fuel !== false && <Suspense fallback={<TabLoading />}><FuelCalculatorView /></Suspense>}
+        {tab === "medication" && permissions.medication !== false && <Suspense fallback={<TabLoading />}><MedicationView /></Suspense>}
+        {tab === "location" && permissions.location !== false && <Suspense fallback={<TabLoading />}><LocationView onBack={() => changeTab("notes")} /></Suspense>}
+        {tab === "devices" && permissions.devices !== false && <Suspense fallback={<TabLoading />}><DevicesView /></Suspense>}
       </main>
 
       {/* Bottom Navigation */}
-      <BottomNav active={tab} onChange={changeTab} />
+      <BottomNav active={tab} onChange={changeTab} permissions={permissions} />
       <SnoozeAlert
         alert={activeAlert || reminderAlert || medicationAlert}
         onDismiss={(id) => { dismissAlert(id); dismissReminderAlert(id); dismissMedicationAlert(id); }}
