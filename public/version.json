@@ -1,6 +1,8 @@
 {
-  "version": "v4.28",
+  "version": "v4.30",
   "history": [
+    { "version": "v4.30", "changes": "Administração: o botão Excluir agora apaga a conta de verdade (antes só apagava o registro de aprovação e o email ficava preso, sem conseguir se cadastrar de novo). Apenas o administrador pode usar, e não dá pra excluir a si mesmo nem outro administrador." },
+    { "version": "v4.29", "changes": "As mensagens de aviso do app (erros, confirmações, avisos) agora aparecem centralizadas no meio da tela, em vez de no canto inferior direito ou no topo." },
     { "version": "v4.28", "changes": "Segurança: o bloqueio de contas não aprovadas agora vale em qualquer forma de entrada (link de confirmação do email, biometria ou sessão guardada), e não só na tela de login. Conta recusada ou excluída pelo administrador é desconectada assim que o app confirmar com o servidor. Sem internet, o app continua abrindo normalmente." },
     { "version": "v4.27", "changes": "Login: a mensagem \"Email not confirmed\" agora aparece em português, explicando que é preciso confirmar o email e depois aguardar a aprovação do administrador. O aviso após o cadastro também explica as duas etapas." },
     { "version": "v4.26", "changes": "Cadastro: novo campo \"Confirmar senha\" (digite a senha duas vezes pra evitar erro de digitação) e mensagens de erro em português, explicando como criar uma senha forte quando a escolhida for muito comum ou curta." },

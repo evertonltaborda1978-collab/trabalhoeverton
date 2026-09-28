@@ -124,8 +124,10 @@ export default function AdminPanel({ onClose }: { onClose?: () => void }) {
   };
 
   const deleteProfile = async (id: string) => {
-    if (!confirm("Excluir este usuário? Ele não conseguirá mais entrar no aplicativo.")) return;
-    const { error } = await (supabase as any).from("profiles").delete().eq("id", id);
+    if (!confirm("Excluir este usuário de vez? A conta será apagada e o email poderá ser cadastrado de novo.")) return;
+    // Apaga a conta de login inteira (e o registro de aprovação junto),
+    // por uma função segura do banco que só o administrador consegue usar.
+    const { error } = await (supabase as any).rpc("admin_delete_user", { target: id });
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
       return;
