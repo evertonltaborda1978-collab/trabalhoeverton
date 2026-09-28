@@ -26,6 +26,9 @@ function friendlyAuthError(message: string | undefined): string {
   if (raw.includes("at least") && raw.includes("password")) {
     return "A senha é curta demais. Use pelo menos 8 caracteres.";
   }
+  if (raw.includes("email not confirmed")) {
+    return "Seu email ainda não foi confirmado. Abra o email que enviamos no seu cadastro (veja também o spam) e toque no link de confirmação. Depois disso, o administrador ainda precisa aprovar seu acesso.";
+  }
   if (raw.includes("already registered")) {
     return "Este email já está cadastrado. Toque em Entrar.";
   }
@@ -130,7 +133,7 @@ export default function Auth() {
         await supabase.auth.signOut();
         toast({
           title: "Cadastro enviado!",
-          description: "Aguarde a aprovação do administrador para poder entrar no aplicativo.",
+          description: "Confirme seu email pelo link que enviamos (veja também o spam) e aguarde a aprovação do administrador para poder entrar.",
         });
         setIsLogin(true);
         setPassword("");
