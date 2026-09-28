@@ -60,10 +60,13 @@ const DEFAULT_PERMISSIONS: Permissions = {
   turno: true,
 };
 
-export default function AdminPanel() {
+export default function AdminPanel({ onClose }: { onClose?: () => void }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  // Quando aberto por cima do app (Index), "voltar" só fecha a tela;
+  // aberto pela rota /admin, navega de volta pro início.
+  const goBack = () => (onClose ? onClose() : navigate("/"));
   const [checking, setChecking] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -84,7 +87,7 @@ export default function AdminPanel() {
   useEffect(() => {
     const check = async () => {
       if (!user) {
-        navigate("/");
+        goBack();
         return;
       }
       const { data } = await (supabase as any)
@@ -99,7 +102,7 @@ export default function AdminPanel() {
           description: "Só o administrador pode ver esta página.",
           variant: "destructive",
         });
-        navigate("/");
+        goBack();
         return;
       }
       setIsAdmin(true);
@@ -153,7 +156,7 @@ export default function AdminPanel() {
     >
       <div className="max-w-lg mx-auto space-y-4">
         <div className="flex items-center gap-2">
-          <button onClick={() => navigate("/")} className="p-1 rounded-full hover:bg-black/5">
+          <button onClick={goBack} className="p-1 rounded-full hover:bg-black/5">
             <ArrowLeft size={18} />
           </button>
           <h1 className="text-lg font-bold flex items-center gap-1.5">

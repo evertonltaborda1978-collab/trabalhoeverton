@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { lazy, Suspense } from "react";
-import { useNavigate } from "react-router-dom";
+import AdminPanel from "./AdminPanel";
 import { BottomNav } from "@/components/BottomNav";
 import { NotesView } from "@/components/NotesView";
 import { SnoozeAlert } from "@/components/SnoozeAlert";
@@ -65,7 +65,7 @@ const Index = () => {
   const { appointments, trashedAppointments, addAppointment, updateAppointment, deleteAppointment, restoreAppointment, permanentDeleteAppointment, emptyAppointmentTrash, activeAlert, dismissAlert, snoozeAlert, fetchAppointments } = useAppointments();
   const { medicationAlert, dismissMedicationAlert, snoozeMedicationAlert } = useMedicationAlerts();
   const { signOut, permissions, isAdmin } = useAuth();
-  const navigate = useNavigate();
+  const [showAdmin, setShowAdmin] = useState(false);
   const { currentDevice, fetchDevices } = useDeviceTracking();
   const { recordLocation } = useDeviceLocations();
   const [showLabelModal, setShowLabelModal] = useState(false);
@@ -321,6 +321,14 @@ const Index = () => {
     deleteAppointment(id);
   };
 
+  // Administração abre como tela cheia por cima do app (sem depender de
+  // rota) e o botão físico de voltar do Android fecha só ela.
+  useEffect(() => {
+    if (!showAdmin) return;
+    (window as any).__registerModal?.("admin", () => setShowAdmin(false));
+    return () => { (window as any).__unregisterModal?.(); };
+  }, [showAdmin]);
+
   const signalInfo = (() => {
     if (!isOnline || syncStatus === "offline") {
       return { Icon: SignalZero, color: "#9E9E9E", label: !isOnline ? "Sem conexão" : "Sinal fraco — sincronização com dificuldade" };
@@ -431,7 +439,7 @@ const Index = () => {
                   >
                     {isAdmin && (
                       <button
-                        onClick={() => { setShowBackupMenu(false); navigate("/admin"); }}
+                        onClick={() => { setShowBackupMenu(false); setShowAdmin(true); }}
                         className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
                         style={{ color: "#1A1A2E" }}
                       >
@@ -583,6 +591,11 @@ const Index = () => {
         {tab === "devices" && permissions.devices !== false && <Suspense fallback={<TabLoading />}><DevicesView /></Suspense>}
       </main>
 
+      {showAdmin && (
+        <div className="fixed inset-0 z-[100] overflow-y-auto bg-background">
+          <AdminPanel onClose={() => setShowAdmin(false)} />
+        </div>
+      )}
       {/* Bottom Navigation */}
       <BottomNav active={tab} onChange={changeTab} permissions={permissions} />
       <SnoozeAlert
