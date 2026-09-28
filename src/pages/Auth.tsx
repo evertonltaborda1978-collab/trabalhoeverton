@@ -20,6 +20,15 @@ function friendlyAuthError(message: string | undefined): string {
     return "Sem internet no momento. Conecte-se e tente entrar de novo.";
   }
   if (message === "Invalid login credentials") return "Email ou senha incorretos";
+  if (raw.includes("weak") || raw.includes("easy to guess")) {
+    return "Essa senha é muito comum e fácil de adivinhar. Escolha outra com pelo menos 8 caracteres, misturando letras maiúsculas e minúsculas, números e um símbolo (ex.: @ ou !). Evite sequências como 123456 ou palavras como \"senha\".";
+  }
+  if (raw.includes("at least") && raw.includes("password")) {
+    return "A senha é curta demais. Use pelo menos 8 caracteres.";
+  }
+  if (raw.includes("already registered")) {
+    return "Este email já está cadastrado. Toque em Entrar.";
+  }
   return message;
 }
 
@@ -28,6 +37,7 @@ export default function Auth() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [forgotPassword, setForgotPassword] = useState(false);
@@ -98,6 +108,15 @@ export default function Auth() {
           }
         }
       } else {
+        if (password !== confirmPassword) {
+          toast({
+            title: "As senhas não são iguais",
+            description: "Digite a mesma senha nos dois campos para evitar erro de digitação.",
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
         const { error } = await (supabase.auth as any).signUp({
           email,
           password,
@@ -115,6 +134,7 @@ export default function Auth() {
         });
         setIsLogin(true);
         setPassword("");
+        setConfirmPassword("");
       }
     } catch (error: any) {
       toast({
@@ -252,7 +272,7 @@ export default function Auth() {
                 autoComplete={isLogin ? "current-password" : "new-password"}
                 name="password"
                 required
-                minLength={6}
+                minLength={isLogin ? 1 : 8}
               />
               <button
                 type="button"
@@ -262,6 +282,30 @@ export default function Auth() {
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
+          )}
+          {!isLogin && !forgotPassword && (
+            <>
+              <p className="text-[11px] text-muted-foreground -mt-2">
+                Use pelo menos 8 caracteres, misturando letras, números e um símbolo (ex.: @ ou !). Evite sequências como 123456.
+              </p>
+              <div className="relative">
+                <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Confirmar senha"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="pl-10"
+                  autoComplete="new-password"
+                  name="confirmPassword"
+                  required
+                  minLength={8}
+                />
+              </div>
+              {confirmPassword.length > 0 && confirmPassword !== password && (
+                <p className="text-[11px] -mt-2" style={{ color: "#E53935" }}>As senhas não são iguais</p>
+              )}
+            </>
           )}
           {isLogin && !forgotPassword && (
             <div className="text-right">
@@ -292,7 +336,7 @@ export default function Auth() {
             <>
               {isLogin ? "Não tem conta?" : "Já tem conta?"}{" "}
               <button
-                onClick={() => setIsLogin(!isLogin)}
+                onClick={() => { setIsLogin(!isLogin); setConfirmPassword(""); }}
                 className="text-primary font-semibold hover:underline"
               >
                 {isLogin ? "Cadastre-se" : "Entrar"}

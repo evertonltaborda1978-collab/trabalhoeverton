@@ -1,6 +1,7 @@
 {
-  "version": "v4.25",
+  "version": "v4.26",
   "history": [
+    { "version": "v4.26", "changes": "Cadastro: novo campo \"Confirmar senha\" (digite a senha duas vezes pra evitar erro de digitação) e mensagens de erro em português, explicando como criar uma senha forte quando a escolhida for muito comum ou curta." },
     { "version": "v4.25", "changes": "Novo: aprovação de cadastros — quem se cadastrar (agora com nome completo) só entra depois que o administrador aprovar, com aviso por email a cada novo pedido. Novo painel de Administração (menu •••) para aprovar, recusar e excluir usuários e escolher o que cada pessoa pode ver (Relatórios de Turno e cada aba). Agenda: a tela de novo compromisso agora abre em tela cheia, sem o pulo quando o teclado abre. Alertas: o som e a vibração repetem até você dispensar ou adiar, com vibração mais forte. Link direto do site (ex.: /admin) não cai mais no erro 404 do GitHub Pages." },
     { "version": "v4.24", "changes": "Corrigida a causa raiz da contagem errada de aparelhos: em vez de calcular uma 'impressão digital' a partir de características do navegador (que mudava entre Chrome e o app instalado no mesmo celular, contando como 2 aparelhos), agora cada aparelho tem um identificador fixo salvo nele mesmo, que nunca muda. Reflete automaticamente na tela 'Dispositivos Conectados' já existente em Segurança." },
     { "version": "v4.23", "changes": "Compartilhar localização: o nome que você dá (ex.: 'Casa', 'Oficina') agora também aparece na própria mensagem enviada pro WhatsApp/copiada — antes só ficava guardado no histórico, não aparecia pra quem recebia." },
