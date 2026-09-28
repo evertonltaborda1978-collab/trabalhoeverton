@@ -1,6 +1,7 @@
 {
-  "version": "v4.27",
+  "version": "v4.28",
   "history": [
+    { "version": "v4.28", "changes": "Segurança: o bloqueio de contas não aprovadas agora vale em qualquer forma de entrada (link de confirmação do email, biometria ou sessão guardada), e não só na tela de login. Conta recusada ou excluída pelo administrador é desconectada assim que o app confirmar com o servidor. Sem internet, o app continua abrindo normalmente." },
     { "version": "v4.27", "changes": "Login: a mensagem \"Email not confirmed\" agora aparece em português, explicando que é preciso confirmar o email e depois aguardar a aprovação do administrador. O aviso após o cadastro também explica as duas etapas." },
     { "version": "v4.26", "changes": "Cadastro: novo campo \"Confirmar senha\" (digite a senha duas vezes pra evitar erro de digitação) e mensagens de erro em português, explicando como criar uma senha forte quando a escolhida for muito comum ou curta." },
     { "version": "v4.25", "changes": "Novo: aprovação de cadastros — quem se cadastrar (agora com nome completo) só entra depois que o administrador aprovar, com aviso por email a cada novo pedido. Novo painel de Administração (menu •••) para aprovar, recusar e excluir usuários e escolher o que cada pessoa pode ver (Relatórios de Turno e cada aba). Agenda: a tela de novo compromisso agora abre em tela cheia, sem o pulo quando o teclado abre. Alertas: o som e a vibração repetem até você dispensar ou adiar, com vibração mais forte. Link direto do site (ex.: /admin) não cai mais no erro 404 do GitHub Pages." },

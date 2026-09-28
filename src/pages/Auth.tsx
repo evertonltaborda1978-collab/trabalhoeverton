@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,36 @@ export default function Auth() {
     });
   }, [updateNotice]);
 
+  // Aviso quando a conta foi desconectada por não estar aprovada (ex.: a
+  // pessoa clicou no link de confirmação do email antes da aprovação).
+  const lastNoticeRef = useRef(0);
+  useEffect(() => {
+    const show = () => {
+      let kind: string | null = null;
+      try {
+        kind = sessionStorage.getItem("approval_notice");
+        sessionStorage.removeItem("approval_notice");
+      } catch {}
+      if (!kind) return;
+      if (Date.now() - lastNoticeRef.current < 3000) return; // evita aviso duplicado
+      lastNoticeRef.current = Date.now();
+      toast({
+        title: kind === "rejected" ? "Acesso não autorizado" : kind === "missing" ? "Conta não encontrada" : "Aguardando aprovação",
+        description:
+          kind === "rejected"
+            ? "Seu acesso a este aplicativo não foi liberado pelo administrador."
+            : kind === "missing"
+            ? "Não encontramos esta conta. Fale com o administrador."
+            : "Seu email foi confirmado! Agora aguarde o administrador aprovar seu acesso.",
+        variant: "destructive",
+      });
+    };
+    show();
+    window.addEventListener("approval-notice", show);
+    return () => window.removeEventListener("approval-notice", show);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -92,6 +122,7 @@ export default function Auth() {
 
         if (!profile || profile.status !== "approved") {
           await supabase.auth.signOut();
+          lastNoticeRef.current = Date.now();
           const isRejected = profile?.status === "rejected";
           toast({
             title: isRejected ? "Acesso não autorizado" : "Aguardando aprovação",

@@ -149,11 +149,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     (supabase as any)
       .from("profiles")
-      .select("is_admin, permissions")
+      .select("is_admin, permissions, status")
       .eq("id", userId)
       .maybeSingle()
-      .then(({ data }: any) => {
-        if (cancelled || !data) return;
+      .then(async ({ data, error }: any) => {
+        // Sem rede ou erro de leitura: mantém como está (não trava quem
+        // está offline). Só bloqueia quando o servidor respondeu de verdade.
+        if (cancelled || error) return;
+        // Portão de aprovação em QUALQUER caminho de entrada (link de
+        // confirmação do email, biometria, sessão guardada): conta que não
+        // está aprovada (ou foi excluída) é desconectada na hora.
+        if (!data || data.status !== "approved") {
+          try { sessionStorage.setItem("approval_notice", !data ? "missing" : data.status); } catch {}
+          softLoggedOutRef.current = true;
+          setSession(null);
+          try { await (supabase.auth as any).signOut(); } catch {}
+          window.dispatchEvent(new Event("approval-notice"));
+          return;
+        }
         setIsAdmin(!!data.is_admin);
         setPermissions({ ...DEFAULT_PERMISSIONS, ...(data.permissions || {}) });
       })
