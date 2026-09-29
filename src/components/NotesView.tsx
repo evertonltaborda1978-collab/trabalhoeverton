@@ -108,6 +108,12 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
   // pelo navegador/PWA) ou direto pelo MainActivity.java (app instalado no
   // Android). Assim que aparecer, cria uma nota nova automaticamente com
   // esse título/texto/foto.
+  // Reforço extra (além do lado nativo em MainActivity.java) contra o
+  // mesmo compartilhamento virar duas notas: guarda uma "assinatura" do
+  // último conteúdo compartilhado processado e ignora uma repetição
+  // idêntica que chegue nos segundos seguintes.
+  const lastSharedRef = useRef<{ signature: string; at: number } | null>(null);
+
   useEffect(() => {
     const consumeSharedNote = () => {
       const raw = sessionStorage.getItem("shared_note_data");
@@ -118,6 +124,13 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
         const title = data.title || "";
         const text = data.content || "";
         if (!title && !text && !data.image) return;
+
+        const signature = `${title}|${text}|${data.image || ""}`;
+        const now = Date.now();
+        if (lastSharedRef.current && lastSharedRef.current.signature === signature && now - lastSharedRef.current.at < 4000) {
+          return; // mesmo compartilhamento chegou de novo em seguida — ignora
+        }
+        lastSharedRef.current = { signature, at: now };
 
         // As fotos de uma nota não ficam soltas num campo à parte — elas
         // vivem DENTRO do texto da nota, como um "bloco" de imagem (é assim

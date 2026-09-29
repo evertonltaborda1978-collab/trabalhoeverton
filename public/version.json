@@ -1,6 +1,7 @@
 {
-  "version": "v4.30",
+  "version": "v4.31",
   "history": [
+    { "version": "v4.31", "changes": "Corrigida uma causa de nota duplicada ao compartilhar de outro app (WhatsApp, Galeria, navegador, etc.): em alguns aparelhos o mesmo compartilhamento chegava duas vezes pro app Android e criava duas notas iguais. Agora um compartilhamento idêntico repetido em poucos segundos é ignorado, tanto do lado do Android quanto do app." },
     { "version": "v4.30", "changes": "Administração: o botão Excluir agora apaga a conta de verdade (antes só apagava o registro de aprovação e o email ficava preso, sem conseguir se cadastrar de novo). Apenas o administrador pode usar, e não dá pra excluir a si mesmo nem outro administrador." },
     { "version": "v4.29", "changes": "As mensagens de aviso do app (erros, confirmações, avisos) agora aparecem centralizadas no meio da tela, em vez de no canto inferior direito ou no topo." },
     { "version": "v4.28", "changes": "Segurança: o bloqueio de contas não aprovadas agora vale em qualquer forma de entrada (link de confirmação do email, biometria ou sessão guardada), e não só na tela de login. Conta recusada ou excluída pelo administrador é desconectada assim que o app confirmar com o servidor. Sem internet, o app continua abrindo normalmente." },

@@ -17,6 +17,16 @@ public class MainActivity extends BridgeActivity {
     // diagnóstico temporário que aparece dentro da nota criada.
     private String lastImageError;
 
+    // Proteção contra o mesmo compartilhamento ser processado duas vezes: em
+    // alguns aparelhos/launchers Android, o mesmo "Compartilhar" pode chegar
+    // tanto em onCreate() quanto em onNewIntent() (ex.: o app já tinha uma
+    // tarefa em segundo plano). Guardamos uma "assinatura" do último
+    // compartilhamento tratado e ignoramos uma repetição idêntica em
+    // seguida — evita a nota duplicada, sem afetar dois compartilhamentos
+    // diferentes feitos de propósito, um logo após o outro.
+    private String lastShareSignature;
+    private long lastShareAtMs;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -51,9 +61,20 @@ public class MainActivity extends BridgeActivity {
 
         String text = intent.getStringExtra(Intent.EXTRA_TEXT);
         String subject = intent.getStringExtra(Intent.EXTRA_SUBJECT);
-        String imageDataUrl = null;
-
         Uri imageUri = getStreamExtra(intent);
+
+        // Confere ANTES de decodificar a foto (que é um trabalho pesado) se
+        // esse exato compartilhamento (mesmo texto + mesma foto) já foi
+        // tratado há poucos segundos — se for repetição, ignora.
+        String signature = (text == null ? "" : text) + "|" + (subject == null ? "" : subject) + "|" + (imageUri == null ? "" : imageUri.toString());
+        long now = System.currentTimeMillis();
+        if (signature.equals(lastShareSignature) && (now - lastShareAtMs) < 4000) {
+            return;
+        }
+        lastShareSignature = signature;
+        lastShareAtMs = now;
+
+        String imageDataUrl = null;
         if (imageUri != null) {
             imageDataUrl = uriToBase64DataUrl(imageUri);
         }
