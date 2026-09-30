@@ -46,8 +46,28 @@ export async function ensureExactAlarmPermission(): Promise<boolean> {
   }
 }
 
-/** Teste rápido: dispara um alarme daqui a 10 segundos. */
-export async function scheduleTestAlarm(): Promise<void> {
-  const testId = 999999;
-  await scheduleNativeAlarm(testId, new Date(Date.now() + 10000), "Teste de alarme", "Se você está vendo e ouvindo isso, funcionou!");
+export type TestAlarmResult =
+  | { ok: true; exact: boolean }
+  | { ok: false; reason: "not-native" | "error"; message?: string };
+
+/**
+ * Teste rápido: dispara um alarme daqui a 10 segundos. Diferente de
+ * scheduleNativeAlarm (que nunca lança erro de propósito), esta função
+ * DEVOLVE o que realmente aconteceu — inclusive se o Android negou o
+ * alarme exato — pra podermos avisar a pessoa na hora, em vez de mostrar
+ * sempre a mesma mensagem de sucesso.
+ */
+export async function scheduleTestAlarm(): Promise<TestAlarmResult> {
+  if (!isNative()) return { ok: false, reason: "not-native" };
+  try {
+    const { exact } = await AlarmPlugin.scheduleAlarm({
+      id: 999999,
+      at: Date.now() + 10000,
+      title: "Teste de alarme",
+      body: "Se você está vendo e ouvindo isso, funcionou!",
+    });
+    return { ok: true, exact };
+  } catch (e: any) {
+    return { ok: false, reason: "error", message: e?.message || String(e) };
+  }
 }

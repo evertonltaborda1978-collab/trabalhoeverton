@@ -448,10 +448,24 @@ const Index = () => {
                     )}
                     {isAdmin && (
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           setShowBackupMenu(false);
-                          scheduleTestAlarm();
-                          toast({ title: "⏰ Alarme de teste agendado", description: "Toca em 10 segundos — pode fechar o app." });
+                          const result = await scheduleTestAlarm();
+                          if (!result.ok) {
+                            toast({
+                              title: "Não consegui agendar",
+                              description: result.reason === "not-native" ? "Isso só funciona no app instalado (APK), não no navegador." : (result.message || "Erro desconhecido."),
+                              variant: "destructive",
+                            });
+                          } else if (!result.exact) {
+                            toast({
+                              title: "⚠️ Agendado, mas sem hora exata",
+                              description: "O Android não liberou 'Alarmes e lembretes' pra este app — pode demorar bem mais que 10s, ou não disparar. Libere essa permissão e teste de novo.",
+                              variant: "destructive",
+                            });
+                          } else {
+                            toast({ title: "⏰ Alarme de teste agendado", description: "Toca em 10 segundos — pode fechar o app." });
+                          }
                         }}
                         className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
                         style={{ color: "#1A1A2E" }}
