@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { lazy, Suspense } from "react";
 import AdminPanel from "./AdminPanel";
-import { scheduleTestAlarm } from "@/lib/nativeAlarm";
+import { scheduleTestAlarm, pickAlarmSound } from "@/lib/nativeAlarm";
 import { BottomNav } from "@/components/BottomNav";
 import { NotesView } from "@/components/NotesView";
 import { SnoozeAlert } from "@/components/SnoozeAlert";
@@ -472,6 +472,19 @@ const Index = () => {
                         style={{ color: "#1A1A2E" }}
                       >
                         <ClipboardList size={15} style={{ color: "#E53935" }} /> Testar alarme nativo (10s)
+                      </button>
+                    )}
+                    {isAdmin && (
+                      <button
+                        onClick={async () => {
+                          setShowBackupMenu(false);
+                          const name = await pickAlarmSound();
+                          if (name) toast({ title: "🔔 Som do alarme alterado", description: name });
+                        }}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+                        style={{ color: "#1A1A2E" }}
+                      >
+                        <ClipboardList size={15} style={{ color: "#8E24AA" }} /> Escolher som do alarme nativo
                       </button>
                     )}
                     {tab === "notes" && (

@@ -46,6 +46,32 @@ export async function ensureExactAlarmPermission(): Promise<boolean> {
   }
 }
 
+/**
+ * Abre a tela nativa de escolha de som de ALARME do Android. Devolve o
+ * nome do som escolhido, ou null se a pessoa cancelou/escolheu "Nenhum"
+ * (nesse caso o som salvo anteriormente continua valendo).
+ */
+export async function pickAlarmSound(): Promise<string | null> {
+  if (!isNative()) return null;
+  try {
+    const { name } = await AlarmPlugin.pickAlarmSound();
+    return name;
+  } catch {
+    return null;
+  }
+}
+
+/** Nome do som de alarme escolhido atualmente (ou null se ainda usa o padrão do sistema). */
+export async function getAlarmSoundName(): Promise<string | null> {
+  if (!isNative()) return null;
+  try {
+    const { name } = await AlarmPlugin.getAlarmSoundName();
+    return name;
+  } catch {
+    return null;
+  }
+}
+
 export type TestAlarmResult =
   | { ok: true; exact: boolean }
   | { ok: false; reason: "not-native" | "error"; message?: string };

@@ -4,14 +4,20 @@ import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.media.Ringtone;
+import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
+
+import androidx.activity.result.ActivityResult;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 // Plugin nativo que agenda um "alarme de verdade" (toca no volume de Alarme
@@ -20,6 +26,75 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 // simples e toca só uma vez, no volume de Notificação.
 @CapacitorPlugin(name = "AlarmPlugin")
 public class AlarmPlugin extends Plugin {
+
+    private static final String PREFS_NAME = "alarm_prefs";
+    private static final String PREF_SOUND_URI = "alarm_sound_uri";
+
+    // Lido também pelo AlarmService na hora de tocar o alarme de verdade —
+    // por isso é "static" e recebe o Context de fora, em vez de depender
+    // de uma instância do plugin (o serviço não tem uma).
+    static Uri getSavedAlarmSoundUri(Context context) {
+        String raw = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(PREF_SOUND_URI, null);
+        return raw != null ? Uri.parse(raw) : null;
+    }
+
+    private static void saveAlarmSoundUri(Context context, Uri uri) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(PREF_SOUND_URI, uri.toString())
+            .apply();
+    }
+
+    // Abre a tela nativa de escolha de som de ALARME do próprio Android
+    // (a mesma usada em Configurações > Som > Som do alarme). A pessoa
+    // escolhe entre os sons de alarme já instalados no aparelho.
+    @PluginMethod
+    public void pickAlarmSound(PluginCall call) {
+        Intent intent = new Intent(RingtoneManager.ACTION_RINGTONE_PICKER);
+        intent.putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM);
+        intent.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false);
+        intent.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true);
+        Uri current = getSavedAlarmSoundUri(getContext());
+        if (current != null) {
+            intent.putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, current);
+        }
+        startActivityForResult(call, intent, "onAlarmSoundPicked");
+    }
+
+    @ActivityCallback
+    private void onAlarmSoundPicked(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        Uri uri = null;
+        if (result.getData() != null) {
+            uri = result.getData().getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI);
+        }
+        JSObject ret = new JSObject();
+        if (uri == null) {
+            // Cancelou ou escolheu "Nenhum" — mantém o som já salvo (ou o
+            // padrão do sistema, se nunca escolheu nenhum ainda).
+            ret.put("name", (String) null);
+        } else {
+            saveAlarmSoundUri(getContext(), uri);
+            Ringtone ringtone = RingtoneManager.getRingtone(getContext(), uri);
+            ret.put("name", ringtone != null ? ringtone.getTitle(getContext()) : "Som escolhido");
+        }
+        call.resolve(ret);
+    }
+
+    // Nome do som salvo atualmente, pra mostrar na tela sem precisar abrir
+    // o seletor de novo.
+    @PluginMethod
+    public void getAlarmSoundName(PluginCall call) {
+        Uri uri = getSavedAlarmSoundUri(getContext());
+        JSObject ret = new JSObject();
+        if (uri == null) {
+            ret.put("name", (String) null);
+        } else {
+            Ringtone ringtone = RingtoneManager.getRingtone(getContext(), uri);
+            ret.put("name", ringtone != null ? ringtone.getTitle(getContext()) : "Som escolhido");
+        }
+        call.resolve(ret);
+    }
 
     @PluginMethod
     public void scheduleAlarm(PluginCall call) {

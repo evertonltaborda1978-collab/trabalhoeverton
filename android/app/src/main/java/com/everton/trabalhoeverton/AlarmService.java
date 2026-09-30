@@ -106,13 +106,22 @@ public class AlarmService extends Service {
     }
 
     private void startRinging() {
+        // Preferência: som escolhido pela pessoa (AlarmPlugin.pickAlarmSound)
+        // > som de alarme padrão do sistema > som de notificação (último caso).
+        Uri chosen = AlarmPlugin.getSavedAlarmSoundUri(this);
+        if (tryPlay(chosen)) return;
+        Uri defaultAlarm = RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM);
+        if (tryPlay(defaultAlarm)) return;
+        tryPlay(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION));
+        // Se nem isso funcionar, o alarme ainda vibra — o som é só um extra,
+        // não pode travar o serviço.
+    }
+
+    private boolean tryPlay(Uri uri) {
+        if (uri == null) return false;
         try {
-            Uri alarmUri = RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM);
-            if (alarmUri == null) {
-                alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
-            }
             mediaPlayer = new MediaPlayer();
-            mediaPlayer.setDataSource(this, alarmUri);
+            mediaPlayer.setDataSource(this, uri);
             mediaPlayer.setAudioAttributes(
                 new AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_ALARM)
@@ -122,9 +131,13 @@ public class AlarmService extends Service {
             mediaPlayer.setLooping(true);
             mediaPlayer.prepare();
             mediaPlayer.start();
+            return true;
         } catch (Exception e) {
-            // Se não conseguir tocar som (raro), o alarme ainda vibra — não
-            // trava o serviço por causa disso.
+            if (mediaPlayer != null) {
+                try { mediaPlayer.release(); } catch (Exception ignored) {}
+                mediaPlayer = null;
+            }
+            return false;
         }
     }
 
