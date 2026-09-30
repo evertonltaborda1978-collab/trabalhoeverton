@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { lazy, Suspense } from "react";
 import AdminPanel from "./AdminPanel";
+import { scheduleTestAlarm } from "@/lib/nativeAlarm";
 import { BottomNav } from "@/components/BottomNav";
 import { NotesView } from "@/components/NotesView";
 import { SnoozeAlert } from "@/components/SnoozeAlert";
