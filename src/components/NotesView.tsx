@@ -442,7 +442,13 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
 
       <NoteEditor
         open={dialogOpen}
-        onOpenChange={(v) => { setDialogOpen(v); }}
+        onOpenChange={(v) => {
+          setDialogOpen(v);
+          // Ao fechar a nota, volta a lista pro topo (onde ficam as mais
+          // recentes) — sem isso, a rolagem ficava do jeito que estava
+          // antes de abrir a nota.
+          if (!v) window.scrollTo({ top: 0, behavior: "auto" });
+        }}
         editingNote={editingNote}
         readOnly={editorReadOnly}
         onSetReadOnly={setEditorReadOnly}

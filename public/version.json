@@ -1,6 +1,8 @@
 {
-  "version": "v4.31",
+  "version": "v4.33",
   "history": [
+    { "version": "v4.33", "changes": "Etapa 1 do alarme nativo (Android): som no volume de Alarme (mais alto que notificação comum), vibração contínua e tela cheia por cima da tela bloqueada, até tocar em Desligar. Ainda não ligado aos lembretes de verdade — só um botão de teste (menu ••• > Testar alarme nativo) por enquanto." },
+    { "version": "v4.32", "changes": "Corrigido: ao fechar uma nota, a lista agora volta pro topo (onde ficam as notas mais recentes) em vez de ficar na rolagem de onde estava antes de abrir." },
     { "version": "v4.31", "changes": "Corrigida uma causa de nota duplicada ao compartilhar de outro app (WhatsApp, Galeria, navegador, etc.): em alguns aparelhos o mesmo compartilhamento chegava duas vezes pro app Android e criava duas notas iguais. Agora um compartilhamento idêntico repetido em poucos segundos é ignorado, tanto do lado do Android quanto do app." },
     { "version": "v4.30", "changes": "Administração: o botão Excluir agora apaga a conta de verdade (antes só apagava o registro de aprovação e o email ficava preso, sem conseguir se cadastrar de novo). Apenas o administrador pode usar, e não dá pra excluir a si mesmo nem outro administrador." },
     { "version": "v4.29", "changes": "As mensagens de aviso do app (erros, confirmações, avisos) agora aparecem centralizadas no meio da tela, em vez de no canto inferior direito ou no topo." },

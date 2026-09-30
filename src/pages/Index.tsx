@@ -446,6 +446,19 @@ const Index = () => {
                         <ShieldCheck size={15} style={{ color: "#3949AB" }} /> Administração
                       </button>
                     )}
+                    {isAdmin && (
+                      <button
+                        onClick={() => {
+                          setShowBackupMenu(false);
+                          scheduleTestAlarm();
+                          toast({ title: "⏰ Alarme de teste agendado", description: "Toca em 10 segundos — pode fechar o app." });
+                        }}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+                        style={{ color: "#1A1A2E" }}
+                      >
+                        <ClipboardList size={15} style={{ color: "#E53935" }} /> Testar alarme nativo (10s)
+                      </button>
+                    )}
                     {tab === "notes" && (
                       <>
                         <div className="px-3 pt-1 pb-2 border-b" style={{ borderColor: "#EBEBEB" }}>
