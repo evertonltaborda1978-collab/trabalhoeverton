@@ -8,13 +8,13 @@ import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { toast } from "@/hooks/use-toast";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import Index from "./pages/Index";
-import Auth from "./pages/Auth";
-import AdminPanel from "./pages/AdminPanel";
-import NotFound from "./pages/NotFound";
-import ResetPassword from "./pages/ResetPassword";
-import ShareReceiver from "./pages/ShareReceiver";
-import PublicShare from "./pages/PublicShare";
+import Index from "./Index";
+import Auth from "./Auth";
+import AdminPanel from "./AdminPanel";
+import NotFound from "./NotFound";
+import ResetPassword from "./ResetPassword";
+import ShareReceiver from "./ShareReceiver";
+import PublicShare from "./PublicShare";
 
 const queryClient = new QueryClient();
 
