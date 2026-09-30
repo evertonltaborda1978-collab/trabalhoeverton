@@ -15,6 +15,7 @@ import android.os.Build;
 import android.os.IBinder;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
+import android.os.VibratorManager;
 import androidx.core.app.NotificationCompat;
 
 // Serviço em primeiro plano: toca o som em loop (no volume de ALARME, não
@@ -128,12 +129,22 @@ public class AlarmService extends Service {
     }
 
     private void startVibrating() {
-        if (vibrator == null || !vibrator.hasVibrator()) return;
+        // A partir do Android 12 (S), pegar o Vibrator pelo jeito antigo
+        // (Context.VIBRATOR_SERVICE) é o método descontinuado — em alguns
+        // aparelhos (like este Xiaomi) ele simplesmente não vibra de verdade
+        // por esse caminho. O jeito atual é pelo VibratorManager.
+        Vibrator v = vibrator;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            VibratorManager manager = (VibratorManager) getSystemService(Context.VIBRATOR_MANAGER_SERVICE);
+            if (manager != null) v = manager.getDefaultVibrator();
+        }
+        if (v == null || !v.hasVibrator()) return;
+        vibrator = v;
         long[] pattern = {0, 400, 300, 400, 300, 800};
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator.vibrate(VibrationEffect.createWaveform(pattern, 0)); // repete desde o índice 0, sem parar
+            v.vibrate(VibrationEffect.createWaveform(pattern, 0)); // repete desde o índice 0, sem parar
         } else {
-            vibrator.vibrate(pattern, 0);
+            v.vibrate(pattern, 0);
         }
     }
 

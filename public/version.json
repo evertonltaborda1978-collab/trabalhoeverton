@@ -1,6 +1,7 @@
 {
-  "version": "v4.34",
+  "version": "v4.35",
   "history": [
+    { "version": "v4.35", "changes": "Alarme nativo: corrigida a vibração (usava um jeito antigo de pedir vibração ao Android, que em alguns aparelhos mais novos não funcionava de verdade) e deixada a tela do alarme mais robusta, com o botão Desligar bem maior e fixado na parte de baixo." },
     { "version": "v4.34", "changes": "Alarme nativo: o botão de teste agora avisa de verdade o que aconteceu ao agendar (se o Android negou o alarme exato, ou deu erro), em vez de sempre mostrar a mesma mensagem de sucesso mesmo quando algo falhou por baixo." },
     { "version": "v4.33", "changes": "Etapa 1 do alarme nativo (Android): som no volume de Alarme (mais alto que notificação comum), vibração contínua e tela cheia por cima da tela bloqueada, até tocar em Desligar. Ainda não ligado aos lembretes de verdade — só um botão de teste (menu ••• > Testar alarme nativo) por enquanto." },
     { "version": "v4.32", "changes": "Corrigido: ao fechar uma nota, a lista agora volta pro topo (onde ficam as notas mais recentes) em vez de ficar na rolagem de onde estava antes de abrir." },
