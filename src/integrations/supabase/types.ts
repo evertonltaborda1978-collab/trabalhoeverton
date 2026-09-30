@@ -383,6 +383,36 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string | null
+          full_name: string | null
+          id: string
+          is_admin: boolean
+          permissions: Json
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id: string
+          is_admin?: boolean
+          permissions?: Json
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          is_admin?: boolean
+          permissions?: Json
+          status?: string
+        }
+        Relationships: []
+      }
       user_devices: {
         Row: {
           browser: string
@@ -436,6 +466,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_delete_user: { Args: { target: string }; Returns: undefined }
       get_shared_location: {
         Args: { _token: string }
         Returns: {
@@ -449,6 +480,7 @@ export type Database = {
           share_id: string
         }[]
       }
+      is_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
