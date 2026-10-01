@@ -75,25 +75,78 @@ public class AlarmPlugin extends Plugin {
             ret.put("name", (String) null);
         } else {
             saveAlarmSoundUri(getContext(), uri);
-            Ringtone ringtone = RingtoneManager.getRingtone(getContext(), uri);
-            ret.put("name", ringtone != null ? ringtone.getTitle(getContext()) : "Som escolhido");
+            ret.put("name", resolveSoundDisplayName(uri));
         }
         call.resolve(ret);
     }
 
+    // Abre o gerenciador de arquivos do Android, filtrando só áudios — pra
+    // usar como alarme qualquer música já baixada no aparelho (não é a
+    // mesma lista do seletor de "sons de alarme" do sistema).
+    @PluginMethod
+    public void pickAlarmSoundFile(PluginCall call) {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("audio/*");
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        startActivityForResult(call, intent, "onAlarmSoundFilePicked");
+    }
+
+    @ActivityCallback
+    private void onAlarmSoundFilePicked(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        Uri uri = result.getData() != null ? result.getData().getData() : null;
+        JSObject ret = new JSObject();
+        if (uri == null) {
+            ret.put("name", (String) null);
+            call.resolve(ret);
+            return;
+        }
+        try {
+            // Permissão PERSISTENTE: sem isso, o arquivo só pode ser lido
+            // enquanto esta tela está aberta — e o alarme precisa tocar ele
+            // muito depois, com o app fechado.
+            getContext().getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } catch (Exception ignored) {
+            // Alguns gerenciadores de arquivo não suportam isso — ainda
+            // assim tentamos usar o arquivo normalmente.
+        }
+        saveAlarmSoundUri(getContext(), uri);
+        ret.put("name", resolveSoundDisplayName(uri));
+        call.resolve(ret);
+    }
+
     // Nome do som salvo atualmente, pra mostrar na tela sem precisar abrir
-    // o seletor de novo.
+    // o seletor de novo. Funciona tanto pra som de alarme do sistema
+    // quanto pra arquivo de música escolhido.
     @PluginMethod
     public void getAlarmSoundName(PluginCall call) {
         Uri uri = getSavedAlarmSoundUri(getContext());
         JSObject ret = new JSObject();
-        if (uri == null) {
-            ret.put("name", (String) null);
-        } else {
-            Ringtone ringtone = RingtoneManager.getRingtone(getContext(), uri);
-            ret.put("name", ringtone != null ? ringtone.getTitle(getContext()) : "Som escolhido");
-        }
+        ret.put("name", uri == null ? null : resolveSoundDisplayName(uri));
         call.resolve(ret);
+    }
+
+    private String resolveSoundDisplayName(Uri uri) {
+        // Primeiro tenta como som de alarme do sistema
+        try {
+            Ringtone ringtone = RingtoneManager.getRingtone(getContext(), uri);
+            if (ringtone != null) {
+                String title = ringtone.getTitle(getContext());
+                if (title != null && !title.isEmpty()) return title;
+            }
+        } catch (Exception ignored) {}
+        // Senão, tenta como nome de arquivo (música escolhida do aparelho)
+        try (android.database.Cursor cursor = getContext().getContentResolver().query(uri, null, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                int idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+                if (idx >= 0) {
+                    String n = cursor.getString(idx);
+                    if (n != null) return n;
+                }
+            }
+        } catch (Exception ignored) {}
+        return "Som escolhido";
     }
 
     @PluginMethod
