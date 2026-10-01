@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { lazy, Suspense } from "react";
 import AdminPanel from "./AdminPanel";
-import { scheduleTestAlarm, pickAlarmSound } from "@/lib/nativeAlarm";
+import { scheduleTestAlarm, pickAlarmSound, pickAlarmSoundFile } from "@/lib/nativeAlarm";
 import { BottomNav } from "@/components/BottomNav";
 import { NotesView } from "@/components/NotesView";
 import { SnoozeAlert } from "@/components/SnoozeAlert";
@@ -25,7 +25,8 @@ import { useVersionCheck } from "@/hooks/useVersionCheck";
 import { APP_VERSION, forceUpdateApp } from "@/lib/appVersion";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { syncNativeReminders, type NativeReminder } from "@/lib/native";
+import { syncNativeAlarms, type NativeAlarmReminder } from "@/lib/nativeAlarm";
+import { getCurrentPhaseIndex, type Medication } from "@/lib/medicationTypes";
 import { LogOut, RefreshCw, RotateCcw, Cloud, CloudOff, Download, Upload, SignalHigh, SignalMedium, SignalLow, SignalZero, MoreHorizontal, ClipboardList, Trash2, ShieldCheck } from "lucide-react";
 import type { AlertSoundId } from "@/lib/alertSound";
 import { useAppTextSize, APP_TEXT_SIZE_LABELS } from "@/hooks/useAppTextSize";
@@ -65,7 +66,7 @@ const Index = () => {
   const { notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, reorderPinnedNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, syncStatus, unsyncedCount, lastSyncError, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes, refreshNotes } = useNotes();
   const { appointments, trashedAppointments, addAppointment, updateAppointment, deleteAppointment, restoreAppointment, permanentDeleteAppointment, emptyAppointmentTrash, activeAlert, dismissAlert, snoozeAlert, fetchAppointments } = useAppointments();
   const { medicationAlert, dismissMedicationAlert, snoozeMedicationAlert } = useMedicationAlerts();
-  const { signOut, permissions, isAdmin } = useAuth();
+  const { user, signOut, permissions, isAdmin } = useAuth();
   const [showAdmin, setShowAdmin] = useState(false);
   const { currentDevice, fetchDevices } = useDeviceTracking();
   const { recordLocation } = useDeviceLocations();
@@ -216,8 +217,43 @@ const Index = () => {
       });
     }
 
-    syncNativeReminders(reminders);
-  }, [notes, appointments]);
+    // Remédios: os horários se repetem todo dia (não têm uma data fixa
+    // como nota/compromisso), então agenda sempre a PRÓXIMA ocorrência de
+    // cada um — hoje, se ainda não passou, senão já amanhã no mesmo
+    // horário. Recalcula de novo a cada mudança, então o dia seguinte
+    // sempre acaba entrando na lista.
+    if (user) {
+      try {
+        const raw = localStorage.getItem(`medications_${user.id}`);
+        const meds: Medication[] = raw ? JSON.parse(raw) : [];
+        const now = new Date();
+        for (const med of meds) {
+          const phaseIdx = getCurrentPhaseIndex(med.phases, med.startDate);
+          const phase = med.phases[phaseIdx];
+          if (!phase) continue;
+          for (const t of phase.schedules) {
+            const [h, m] = t.split(":").map(Number);
+            if (isNaN(h)) continue;
+            let at = new Date(now);
+            at.setHours(h, m || 0, 0, 0);
+            if (at.getTime() <= now.getTime()) {
+              at = new Date(at.getTime() + 24 * 60 * 60 * 1000);
+            }
+            reminders.push({
+              key: `med-${med.id}-${t}`,
+              title: `Remédio: ${med.name}`,
+              body: `Horário: ${t}`,
+              at,
+            });
+          }
+        }
+      } catch {}
+    }
+
+    // O alarme nativo substitui a notificação simples de antes — evita
+    // dois avisos diferentes para o mesmo lembrete.
+    syncNativeAlarms(reminders);
+  }, [notes, appointments, user]);
 
   // Aviso único de atualização, logo após o login (não se repete durante o uso)
   useEffect(() => {
@@ -485,6 +521,19 @@ const Index = () => {
                         style={{ color: "#1A1A2E" }}
                       >
                         <ClipboardList size={15} style={{ color: "#8E24AA" }} /> Escolher som do alarme nativo
+                      </button>
+                    )}
+                    {isAdmin && (
+                      <button
+                        onClick={async () => {
+                          setShowBackupMenu(false);
+                          const name = await pickAlarmSoundFile();
+                          if (name) toast({ title: "🎵 Música do alarme alterada", description: name });
+                        }}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+                        style={{ color: "#1A1A2E" }}
+                      >
+                        <ClipboardList size={15} style={{ color: "#00897B" }} /> Escolher música do celular
                       </button>
                     )}
                     {tab === "notes" && (

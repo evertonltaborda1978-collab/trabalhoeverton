@@ -6,6 +6,9 @@ interface AlarmPluginType {
   cancelAlarm(options: { id: number }): Promise<void>;
   canScheduleExactAlarms(): Promise<{ value: boolean }>;
   openExactAlarmSettings(): Promise<void>;
+  pickAlarmSound(): Promise<{ name: string | null }>;
+  pickAlarmSoundFile(): Promise<{ name: string | null }>;
+  getAlarmSoundName(): Promise<{ name: string | null }>;
 }
 
 // Ponte com o plugin nativo (AlarmPlugin.java) que agenda um alarme de
@@ -61,6 +64,21 @@ export async function pickAlarmSound(): Promise<string | null> {
   }
 }
 
+/**
+ * Abre o gerenciador de arquivos do Android (filtrando só áudios), pra
+ * escolher como som do alarme qualquer música já baixada no aparelho —
+ * diferente de pickAlarmSound, que só mostra os sons de alarme do sistema.
+ */
+export async function pickAlarmSoundFile(): Promise<string | null> {
+  if (!isNative()) return null;
+  try {
+    const { name } = await AlarmPlugin.pickAlarmSoundFile();
+    return name;
+  } catch {
+    return null;
+  }
+}
+
 /** Nome do som de alarme escolhido atualmente (ou null se ainda usa o padrão do sistema). */
 export async function getAlarmSoundName(): Promise<string | null> {
   if (!isNative()) return null;
@@ -69,6 +87,65 @@ export async function getAlarmSoundName(): Promise<string | null> {
     return name;
   } catch {
     return null;
+  }
+}
+
+export interface NativeAlarmReminder {
+  /** chave estável (ex.: "note-123", "apt-456", "med-789-08:00") */
+  key: string;
+  title: string;
+  body: string;
+  at: Date;
+}
+
+const SCHEDULED_IDS_KEY = "native_alarm_scheduled_ids";
+
+function readScheduledIds(): number[] {
+  try {
+    return JSON.parse(localStorage.getItem(SCHEDULED_IDS_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function writeScheduledIds(ids: number[]): void {
+  try {
+    localStorage.setItem(SCHEDULED_IDS_KEY, JSON.stringify(ids));
+  } catch {}
+}
+
+/** id numérico estável a partir de uma string */
+function hashId(key: string): number {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
+  return (Math.abs(h) % 2000000000) || 1;
+}
+
+/**
+ * Reprograma TODOS os alarmes nativos de uma vez (cancela os antigos,
+ * agenda os novos) — mesma ideia do syncNativeReminders em native.ts (que
+ * cuidava da notificação simples), só que aqui é o alarme de verdade:
+ * toca no volume de Alarme e insiste até a pessoa desligar.
+ */
+export async function syncNativeAlarms(reminders: NativeAlarmReminder[]): Promise<void> {
+  if (!isNative()) return;
+  try {
+    const oldIds = readScheduledIds();
+    for (const id of oldIds) {
+      await cancelNativeAlarm(id);
+    }
+
+    const now = Date.now();
+    const future = reminders.filter((r) => r.at.getTime() > now).slice(0, 60);
+    const newIds: number[] = [];
+    for (const r of future) {
+      const id = hashId(r.key);
+      await scheduleNativeAlarm(id, r.at, r.title, r.body);
+      newIds.push(id);
+    }
+    writeScheduledIds(newIds);
+  } catch {
+    /* silencioso: alarme nativo é um extra, não pode travar o app */
   }
 }
 

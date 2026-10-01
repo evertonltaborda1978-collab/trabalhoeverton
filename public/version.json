@@ -1,6 +1,8 @@
 {
-  "version": "v4.36",
+  "version": "v4.38",
   "history": [
+    { "version": "v4.38", "changes": "Alarme nativo: agora também dá pra escolher qualquer música baixada no celular como som do alarme (menu ••• > Escolher música do celular), além dos sons de alarme do sistema." },
+    { "version": "v4.37", "changes": "Etapa 2 do alarme nativo: notas, compromissos e remédios agora usam o alarme de verdade (som de Alarme + vibração contínua, tela cheia até desligar) em vez da notificação simples de antes, inclusive com o app fechado. Remédio passou a ter aviso com o app fechado pela primeira vez." },
     { "version": "v4.36", "changes": "Alarme nativo: agora dá pra escolher o som entre os sons de alarme já instalados no celular (menu ••• > Escolher som do alarme nativo), em vez de usar sempre o padrão do sistema. Se o som escolhido algum dia parar de funcionar, o alarme volta sozinho para o padrão." },
     { "version": "v4.35", "changes": "Alarme nativo: corrigida a vibração (usava um jeito antigo de pedir vibração ao Android, que em alguns aparelhos mais novos não funcionava de verdade) e deixada a tela do alarme mais robusta, com o botão Desligar bem maior e fixado na parte de baixo." },
     { "version": "v4.34", "changes": "Alarme nativo: o botão de teste agora avisa de verdade o que aconteceu ao agendar (se o Android negou o alarme exato, ou deu erro), em vez de sempre mostrar a mesma mensagem de sucesso mesmo quando algo falhou por baixo." },
