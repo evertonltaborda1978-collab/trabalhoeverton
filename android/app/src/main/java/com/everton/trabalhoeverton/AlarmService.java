@@ -48,9 +48,14 @@ public class AlarmService extends Service {
         String body = (intent != null && intent.getStringExtra("body") != null) ? intent.getStringExtra("body") : "";
         int alarmId = intent != null ? intent.getIntExtra("alarmId", 0) : 0;
 
+        // A vibração e a notificação vêm ANTES do som de propósito: elas
+        // não podem depender do áudio pra acontecer. Se o serviço de mídia
+        // do Android enroscar (acontece, principalmente na primeira vez
+        // depois de instalar o app), pelo menos a pessoa sente o celular
+        // vibrando e vê a tela, mesmo sem som.
         startForeground(NOTIFICATION_ID, buildNotification(title, body, alarmId));
-        startRinging();
         startVibrating();
+        startRinging();
 
         return START_STICKY;
     }
@@ -105,21 +110,45 @@ public class AlarmService extends Service {
         manager.createNotificationChannel(channel);
     }
 
+    // Fila de sons pra tentar, na ordem de preferência: escolhido pela
+    // pessoa > padrão de alarme do sistema > som de notificação (reforço
+    // final). Guardada aqui porque o preparo agora é ASSÍNCRONO — se um
+    // falhar, o próximo da fila só é tentado quando o Android avisar.
+    private java.util.List<Uri> soundQueue;
+    private int soundQueueIndex;
+    private final android.os.Handler timeoutHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private int preparingGeneration = 0;
+
     private void startRinging() {
-        // Preferência: som escolhido pela pessoa (AlarmPlugin.pickAlarmSound)
-        // > som de alarme padrão do sistema > som de notificação (último caso).
+        soundQueue = new java.util.ArrayList<>();
         Uri chosen = AlarmPlugin.getSavedAlarmSoundUri(this);
-        if (tryPlay(chosen)) return;
+        if (chosen != null) soundQueue.add(chosen);
         Uri defaultAlarm = RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM);
-        if (tryPlay(defaultAlarm)) return;
-        tryPlay(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION));
-        // Se nem isso funcionar, o alarme ainda vibra — o som é só um extra,
-        // não pode travar o serviço.
+        if (defaultAlarm != null) soundQueue.add(defaultAlarm);
+        Uri notificationSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+        if (notificationSound != null) soundQueue.add(notificationSound);
+        soundQueueIndex = 0;
+        tryNextSound();
     }
 
-    private boolean tryPlay(Uri uri) {
-        if (uri == null) return false;
+    // Prepara o som de forma ASSÍNCRONA (prepareAsync, não prepare) — essa
+    // é a correção principal: o jeito antigo (prepare síncrono) podia
+    // travar a linha de execução inteira se o serviço de mídia do Android
+    // enroscasse (foi exatamente isso que aconteceu num teste: nem a
+    // vibração nem a notificação apareceram, porque ficaram paradas
+    // esperando o som). Com prepareAsync, o Android avisa quando terminar
+    // (ou quando der erro) através de um retorno — nunca trava nada.
+    private void tryNextSound() {
+        if (soundQueue == null || soundQueueIndex >= soundQueue.size()) {
+            return; // acabaram as opções — o alarme segue só com vibração
+        }
+        Uri uri = soundQueue.get(soundQueueIndex);
+        soundQueueIndex++;
+        final int myGeneration = ++preparingGeneration;
         try {
+            if (mediaPlayer != null) {
+                try { mediaPlayer.release(); } catch (Exception ignored) {}
+            }
             mediaPlayer = new MediaPlayer();
             mediaPlayer.setDataSource(this, uri);
             mediaPlayer.setAudioAttributes(
@@ -129,15 +158,23 @@ public class AlarmService extends Service {
                     .build()
             );
             mediaPlayer.setLooping(true);
-            mediaPlayer.prepare();
-            mediaPlayer.start();
-            return true;
+            mediaPlayer.setOnPreparedListener(mp -> {
+                preparingGeneration++; // cancela o timeout desse som — já deu certo
+                mp.start();
+            });
+            mediaPlayer.setOnErrorListener((mp, what, extra) -> {
+                tryNextSound(); // esse som falhou — tenta o próximo da fila
+                return true;
+            });
+            mediaPlayer.prepareAsync();
+
+            // Se em 5 segundos nem "preparado" nem "erro" chegarem (serviço
+            // de mídia do Android travado), desiste dessa opção sozinho.
+            timeoutHandler.postDelayed(() -> {
+                if (myGeneration == preparingGeneration) tryNextSound();
+            }, 5000);
         } catch (Exception e) {
-            if (mediaPlayer != null) {
-                try { mediaPlayer.release(); } catch (Exception ignored) {}
-                mediaPlayer = null;
-            }
-            return false;
+            tryNextSound(); // deu erro já de cara — tenta o próximo
         }
     }
 
@@ -162,6 +199,8 @@ public class AlarmService extends Service {
     }
 
     private void stopAlarm() {
+        preparingGeneration++; // invalida qualquer "tempo limite" ainda pendente
+        timeoutHandler.removeCallbacksAndMessages(null);
         try {
             if (mediaPlayer != null) {
                 if (mediaPlayer.isPlaying()) mediaPlayer.stop();
