@@ -1,6 +1,8 @@
 {
-  "version": "v4.40",
+  "version": "v4.42",
   "history": [
+    { "version": "v4.42", "changes": "Preparado o acesso ao microfone no app Android para recursos futuros (gravar áudio, ditado por voz). Nada muda no uso do app por enquanto: o Android só vai pedir a permissão quando algum recurso realmente precisar do microfone. Precisa instalar o APK novo." },
+    { "version": "v4.41", "changes": "Corrigida a câmera no app Android: a permissão de câmera não estava declarada, então o Android nunca oferecia o acesso e o app nem aparecia na lista de permissões de câmera do celular (o leitor de QR Code e as fotos das notas ficavam sem câmera). Também declarada a permissão de alarme exato automática do Android 13+, para os lembretes tocarem na hora certa. Atenção: precisa instalar o APK novo (desinstalar o antigo antes, principalmente no Xiaomi)." },
     { "version": "v4.40", "changes": "Agora dá pra escolher o som do alarme nativo (som do sistema ou música do celular) separadamente para cada nota, compromisso e remédio, na mesma tela onde já se escolhe entre os 8 sons de sempre. Corrigido também um erro que fazia o app usar sempre um único som global para todos os lembretes, ignorando essa escolha por item. Removidos os botões de teste do menu ••• (já cumpriram seu papel)." },
     { "version": "v4.39", "changes": "Corrigida uma causa de alarme nativo totalmente mudo (sem som, sem vibração, sem tela) quando o serviço de mídia do Android enroscava: trocado o preparo do som para um jeito que nunca trava o resto do alarme, vibração e tela passam a acontecer sempre primeiro, e um tempo limite de 5s desiste de um som travado sozinho." },
     { "version": "v4.38", "changes": "Alarme nativo: agora também dá pra escolher qualquer música baixada no celular como som do alarme (menu ••• > Escolher música do celular), além dos sons de alarme do sistema." },
