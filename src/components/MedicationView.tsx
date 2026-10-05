@@ -131,7 +131,9 @@ export function MedicationView() {
 
   const handleSave = () => {
     if (!formName.trim()) { toast({ title: "Informe o nome do medicamento" }); return; }
-    if (!formSound) { toast({ title: "Escolha um som de alerta", description: "Toque numa das opções antes de salvar.", variant: "destructive" }); return; }
+    // "Som do sistema" / "Música do celular" já valem como escolha de som.
+    const effectiveSound: AlertSoundId | null = formSound ?? (formNativeSound.uri ? "classico" : null);
+    if (!effectiveSound) { toast({ title: "Escolha um som de alerta", description: "Toque numa das opções, ou use Som do sistema / Música do celular.", variant: "destructive" }); return; }
     const newMed: Medication = {
       id: crypto.randomUUID(),
       profileId: activeProfile,
@@ -144,7 +146,7 @@ export function MedicationView() {
       lowStockAlert: formLowStock,
       color: formColor,
       takenDates: [],
-      alertSound: formSound,
+      alertSound: effectiveSound,
       nativeSoundUri: formNativeSound.uri,
       nativeSoundName: formNativeSound.name,
     };

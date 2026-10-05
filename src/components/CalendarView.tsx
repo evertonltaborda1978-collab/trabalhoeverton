@@ -91,16 +91,20 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
       setFormError("Digite um título para o compromisso.");
       return;
     }
-    if (!alertSound) {
-      setFormError("Escolha um som de alerta (toque em uma das opções acima) antes de agendar.");
+    // Se a pessoa escolheu "Som do sistema" ou "Música do celular", isso já
+    // vale como escolha de som — o som estilizado da grade fica só como
+    // reserva (para quando o app está aberto na tela).
+    const effectiveSound: AlertSoundId | null = alertSound ?? (nativeSound.uri ? "classico" : null);
+    if (!effectiveSound) {
+      setFormError("Escolha um som de alerta: toque em um dos sons acima ou use \"Som do sistema\" / \"Música do celular\".");
       return;
     }
     setFormError(null);
     if (editingId) {
-      onUpdate(editingId, title, selected, time, description, alertSound, nativeSound.uri, nativeSound.name);
+      onUpdate(editingId, title, selected, time, description, effectiveSound, nativeSound.uri, nativeSound.name);
       toast({ title: "✅ Compromisso atualizado!" });
     } else {
-      onAdd(title, selected, time, description, alertSound, nativeSound.uri, nativeSound.name);
+      onAdd(title, selected, time, description, effectiveSound, nativeSound.uri, nativeSound.name);
       if (connected) {
         const dateStr = format(selected, "yyyy-MM-dd");
         const ok = await pushEvent(title, dateStr, time, description);

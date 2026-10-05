@@ -1,6 +1,7 @@
 {
-  "version": "v4.43",
+  "version": "v4.44",
   "history": [
+    { "version": "v4.44", "changes": "Corrigido: escolher só \"Som do sistema\" ou \"Música do celular\" não bastava para o botão Agendar/Salvar funcionar — o app ainda exigia tocar num dos 8 sons da grade. Agora a escolha do som do sistema ou da música do celular já vale (Agenda, Remédios e Lembrete de nota). Se nenhum som for escolhido, a mensagem em vermelho explica as opções." },
     { "version": "v4.43", "changes": "Agenda: corrigido o botão Agendar que parecia não fazer nada. Quando faltava o título ou o som do alerta, o aviso aparecia escondido atrás da tela cheia (ou nem aparecia). Agora a mensagem em vermelho aparece logo acima dos botões, dizendo exatamente o que falta." },
     { "version": "v4.42", "changes": "Preparado o acesso ao microfone no app Android para recursos futuros (gravar áudio, ditado por voz). Nada muda no uso do app por enquanto: o Android só vai pedir a permissão quando algum recurso realmente precisar do microfone. Precisa instalar o APK novo." },
     { "version": "v4.41", "changes": "Corrigida a câmera no app Android: a permissão de câmera não estava declarada, então o Android nunca oferecia o acesso e o app nem aparecia na lista de permissões de câmera do celular (o leitor de QR Code e as fotos das notas ficavam sem câmera). Também declarada a permissão de alarme exato automática do Android 13+, para os lembretes tocarem na hora certa. Atenção: precisa instalar o APK novo (desinstalar o antigo antes, principalmente no Xiaomi)." },

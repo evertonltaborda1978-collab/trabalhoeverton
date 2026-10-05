@@ -43,11 +43,13 @@ export function ReminderModal({ open, onOpenChange, noteTitle, existingDate, exi
 
   const handleSave = () => {
     if (!date) return;
-    if (!sound) {
-      toast({ title: "Escolha um som de alerta", description: "Toque numa das opções antes de salvar.", variant: "destructive" });
+    // "Som do sistema" / "Música do celular" já valem como escolha de som.
+    const effectiveSound: AlertSoundId | null = sound ?? (nativeSound.uri ? "classico" : null);
+    if (!effectiveSound) {
+      toast({ title: "Escolha um som de alerta", description: "Toque numa das opções, ou use Som do sistema / Música do celular.", variant: "destructive" });
       return;
     }
-    onSave(date, time, sound, nativeSound.uri, nativeSound.name);
+    onSave(date, time, effectiveSound, nativeSound.uri, nativeSound.name);
     onOpenChange(false);
   };
 
