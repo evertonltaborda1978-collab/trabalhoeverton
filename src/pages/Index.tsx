@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { lazy, Suspense } from "react";
 import AdminPanel from "./AdminPanel";
-import { scheduleTestAlarm, pickAlarmSound, pickAlarmSoundFile } from "@/lib/nativeAlarm";
 import { BottomNav } from "@/components/BottomNav";
 import { NotesView } from "@/components/NotesView";
 import { SnoozeAlert } from "@/components/SnoozeAlert";
@@ -189,7 +188,7 @@ const Index = () => {
   };
 
   useEffect(() => {
-    const reminders: NativeReminder[] = [];
+    const reminders: NativeAlarmReminder[] = [];
 
     for (const note of notes) {
       if (!note.reminderDate || !note.reminderTime) continue;
@@ -200,6 +199,7 @@ const Index = () => {
         title: "Lembrete de nota",
         body: note.title || "Você tem um lembrete.",
         at,
+        soundUri: note.reminderNativeSoundUri,
       });
     }
 
@@ -214,6 +214,7 @@ const Index = () => {
         title: apt.title || "Compromisso",
         body: apt.description || `Às ${apt.time}`,
         at: d,
+        soundUri: apt.nativeSoundUri,
       });
     }
 
@@ -244,6 +245,7 @@ const Index = () => {
               title: `Remédio: ${med.name}`,
               body: `Horário: ${t}`,
               at,
+              soundUri: med.nativeSoundUri,
             });
           }
         }
@@ -483,59 +485,6 @@ const Index = () => {
                         <ShieldCheck size={15} style={{ color: "#3949AB" }} /> Administração
                       </button>
                     )}
-                    {isAdmin && (
-                      <button
-                        onClick={async () => {
-                          setShowBackupMenu(false);
-                          const result = await scheduleTestAlarm();
-                          if (!result.ok) {
-                            toast({
-                              title: "Não consegui agendar",
-                              description: result.reason === "not-native" ? "Isso só funciona no app instalado (APK), não no navegador." : (result.message || "Erro desconhecido."),
-                              variant: "destructive",
-                            });
-                          } else if (!result.exact) {
-                            toast({
-                              title: "⚠️ Agendado, mas sem hora exata",
-                              description: "O Android não liberou 'Alarmes e lembretes' pra este app — pode demorar bem mais que 10s, ou não disparar. Libere essa permissão e teste de novo.",
-                              variant: "destructive",
-                            });
-                          } else {
-                            toast({ title: "⏰ Alarme de teste agendado", description: "Toca em 10 segundos — pode fechar o app." });
-                          }
-                        }}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
-                        style={{ color: "#1A1A2E" }}
-                      >
-                        <ClipboardList size={15} style={{ color: "#E53935" }} /> Testar alarme nativo (10s)
-                      </button>
-                    )}
-                    {isAdmin && (
-                      <button
-                        onClick={async () => {
-                          setShowBackupMenu(false);
-                          const name = await pickAlarmSound();
-                          if (name) toast({ title: "🔔 Som do alarme alterado", description: name });
-                        }}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
-                        style={{ color: "#1A1A2E" }}
-                      >
-                        <ClipboardList size={15} style={{ color: "#8E24AA" }} /> Escolher som do alarme nativo
-                      </button>
-                    )}
-                    {isAdmin && (
-                      <button
-                        onClick={async () => {
-                          setShowBackupMenu(false);
-                          const name = await pickAlarmSoundFile();
-                          if (name) toast({ title: "🎵 Música do alarme alterada", description: name });
-                        }}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
-                        style={{ color: "#1A1A2E" }}
-                      >
-                        <ClipboardList size={15} style={{ color: "#00897B" }} /> Escolher música do celular
-                      </button>
-                    )}
                     {tab === "notes" && (
                       <>
                         <div className="px-3 pt-1 pb-2 border-b" style={{ borderColor: "#EBEBEB" }}>
@@ -665,7 +614,7 @@ const Index = () => {
             <CalendarView
               appointments={appointments}
               onAdd={addAppointment}
-              onUpdate={(id, title, date, time, desc, alertSound) => updateAppointment(id, title, date, time, desc, alertSound)}
+              onUpdate={(id, title, date, time, desc, alertSound, nativeSoundUri, nativeSoundName) => updateAppointment(id, title, date, time, desc, alertSound, nativeSoundUri, nativeSoundName)}
               onDelete={handleDeleteAppointment}
               trashedAppointments={trashedAppointments}
               onRestoreAppointment={restoreAppointment}

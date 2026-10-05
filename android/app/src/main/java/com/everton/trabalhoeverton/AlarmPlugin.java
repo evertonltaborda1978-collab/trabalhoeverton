@@ -70,12 +70,13 @@ public class AlarmPlugin extends Plugin {
         }
         JSObject ret = new JSObject();
         if (uri == null) {
-            // Cancelou ou escolheu "Nenhum" — mantém o som já salvo (ou o
-            // padrão do sistema, se nunca escolheu nenhum ainda).
+            // Cancelou ou escolheu "Nenhum"
             ret.put("name", (String) null);
+            ret.put("uri", (String) null);
         } else {
             saveAlarmSoundUri(getContext(), uri);
             ret.put("name", resolveSoundDisplayName(uri));
+            ret.put("uri", uri.toString());
         }
         call.resolve(ret);
     }
@@ -113,6 +114,7 @@ public class AlarmPlugin extends Plugin {
         }
         saveAlarmSoundUri(getContext(), uri);
         ret.put("name", resolveSoundDisplayName(uri));
+        ret.put("uri", uri.toString());
         call.resolve(ret);
     }
 
@@ -124,6 +126,7 @@ public class AlarmPlugin extends Plugin {
         Uri uri = getSavedAlarmSoundUri(getContext());
         JSObject ret = new JSObject();
         ret.put("name", uri == null ? null : resolveSoundDisplayName(uri));
+        ret.put("uri", uri == null ? null : uri.toString());
         call.resolve(ret);
     }
 
@@ -163,10 +166,16 @@ public class AlarmPlugin extends Plugin {
             return;
         }
 
+        // Som específico pra ESSE lembrete (nota/compromisso/remédio), se a
+        // pessoa escolheu um — senão fica null e o AlarmService usa o som
+        // padrão do sistema na hora de tocar.
+        String soundUri = call.getString("soundUri");
+
         Intent intent = new Intent(context, AlarmReceiver.class);
         intent.putExtra("alarmId", alarmId);
         intent.putExtra("title", title);
         intent.putExtra("body", body);
+        if (soundUri != null) intent.putExtra("soundUri", soundUri);
 
         PendingIntent pendingIntent = PendingIntent.getBroadcast(
             context,

@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { ALERT_SOUND_OPTIONS, playAlertSoundPreview, type AlertSoundId } from "@/lib/alertSound";
+import { NativeAlarmSoundPicker, type NativeSoundValue } from "./NativeAlarmSoundPicker";
 import { getCurrentPhaseIndex, getDaysElapsed, type MedPhase, type Medication } from "@/lib/medicationTypes";
 export type { Medication } from "@/lib/medicationTypes";
 
@@ -84,6 +85,7 @@ export function MedicationView() {
     { dose: 1, doseUnit: "comprimido", days: 30, timesPerDay: 1, startTime: "08:00", schedules: ["08:00"] },
   ]);
   const [formSound, setFormSound] = useState<AlertSoundId | null>(null);
+  const [formNativeSound, setFormNativeSound] = useState<NativeSoundValue>({ uri: null, name: null });
 
   const STORAGE_KEY = `medications_${user?.id}`;
 
@@ -143,6 +145,8 @@ export function MedicationView() {
       color: formColor,
       takenDates: [],
       alertSound: formSound,
+      nativeSoundUri: formNativeSound.uri,
+      nativeSoundName: formNativeSound.name,
     };
     save([...medications, newMed]);
     setShowForm(false);
@@ -156,6 +160,7 @@ export function MedicationView() {
     setFormStartDate(new Date().toISOString().slice(0, 10));
     setFormPhases([{ dose: 1, doseUnit: "comprimido", days: 30, timesPerDay: 1, startTime: "08:00", schedules: ["08:00"] }]);
     setFormSound(null);
+    setFormNativeSound({ uri: null, name: null });
   };
 
   const takeMed = (id: string) => {
@@ -376,6 +381,10 @@ export function MedicationView() {
               </button>
             ))}
           </div>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <NativeAlarmSoundPicker value={formNativeSound} onChange={setFormNativeSound} />
         </div>
 
         <button onClick={handleSave}

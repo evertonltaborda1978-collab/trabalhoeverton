@@ -47,6 +47,7 @@ public class AlarmService extends Service {
         String title = (intent != null && intent.getStringExtra("title") != null) ? intent.getStringExtra("title") : "Lembrete";
         String body = (intent != null && intent.getStringExtra("body") != null) ? intent.getStringExtra("body") : "";
         int alarmId = intent != null ? intent.getIntExtra("alarmId", 0) : 0;
+        String perAlarmSoundUri = intent != null ? intent.getStringExtra("soundUri") : null;
 
         // A vibração e a notificação vêm ANTES do som de propósito: elas
         // não podem depender do áudio pra acontecer. Se o serviço de mídia
@@ -55,7 +56,7 @@ public class AlarmService extends Service {
         // vibrando e vê a tela, mesmo sem som.
         startForeground(NOTIFICATION_ID, buildNotification(title, body, alarmId));
         startVibrating();
-        startRinging();
+        startRinging(perAlarmSoundUri);
 
         return START_STICKY;
     }
@@ -119,8 +120,16 @@ public class AlarmService extends Service {
     private final android.os.Handler timeoutHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private int preparingGeneration = 0;
 
-    private void startRinging() {
+    private void startRinging(String perAlarmSoundUri) {
         soundQueue = new java.util.ArrayList<>();
+        // Preferência 1: som escolhido especificamente PARA ESSE lembrete
+        // (nota/compromisso/remédio) — vem junto no agendamento.
+        if (perAlarmSoundUri != null) {
+            try { soundQueue.add(Uri.parse(perAlarmSoundUri)); } catch (Exception ignored) {}
+        }
+        // Preferência 2: último som escolhido de forma avulsa (ex.: pelo
+        // botão de teste) — serve de reforço se o lembrete não tiver o seu
+        // próprio som definido.
         Uri chosen = AlarmPlugin.getSavedAlarmSoundUri(this);
         if (chosen != null) soundQueue.add(chosen);
         Uri defaultAlarm = RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM);

@@ -16,6 +16,8 @@ public class AlarmReceiver extends BroadcastReceiver {
         serviceIntent.putExtra("alarmId", intent.getIntExtra("alarmId", 0));
         serviceIntent.putExtra("title", intent.getStringExtra("title"));
         serviceIntent.putExtra("body", intent.getStringExtra("body"));
+        String soundUri = intent.getStringExtra("soundUri");
+        if (soundUri != null) serviceIntent.putExtra("soundUri", soundUri);
         ContextCompat.startForegroundService(context, serviceIntent);
     }
 }

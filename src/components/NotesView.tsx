@@ -27,13 +27,13 @@ interface NotesViewProps {
   onAdd: (title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string, status?: "rascunho" | "publicada") => void;
   onDelete: (id: string) => void;
   onUpdate: (id: string, title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string, status?: "rascunho" | "publicada") => void;
-  onSetReminder: (id: string, date: string | null, time: string | null, sound?: AlertSoundId) => void;
+  onSetReminder: (id: string, date: string | null, time: string | null, sound?: AlertSoundId, nativeSoundUri?: string | null, nativeSoundName?: string | null) => void;
   onTogglePin: (id: string) => void;
   onReorderPin?: (id: string, direction: -1 | 1) => void;
   onLockNote: (id: string, pin: string) => Promise<boolean>;
   onUnlockNote: (id: string, pin: string) => Promise<boolean>;
   onVerifyPin: (id: string, pin: string) => Promise<unknown | null>;
-  onAddAppointment?: (title: string, date: Date, time: string, description: string, alertSound: AlertSoundId) => void;
+  onAddAppointment?: (title: string, date: Date, time: string, description: string, alertSound: AlertSoundId, nativeSoundUri?: string | null, nativeSoundName?: string | null) => void;
   onRefresh?: () => void;
   syncStatus: SyncStatus;
   draftCount: number;
@@ -231,11 +231,11 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
     toast({ title: note.isPinned ? "📌 Nota desafixada" : "📌 Nota fixada" });
   };
 
-  const handleReminderSave = (date: string, time: string, sound: AlertSoundId) => {
+  const handleReminderSave = (date: string, time: string, sound: AlertSoundId, nativeSoundUri: string | null, nativeSoundName: string | null) => {
     if (!reminderNote) return;
-    onSetReminder(reminderNote.id, date, time, sound);
+    onSetReminder(reminderNote.id, date, time, sound, nativeSoundUri, nativeSoundName);
     if (onAddAppointment) {
-      onAddAppointment(reminderNote.title || "Lembrete", new Date(date + "T00:00:00"), time, `Lembrete da nota: ${reminderNote.title}`, sound);
+      onAddAppointment(reminderNote.title || "Lembrete", new Date(date + "T00:00:00"), time, `Lembrete da nota: ${reminderNote.title}`, sound, nativeSoundUri, nativeSoundName);
     }
     toast({ title: "🔔 Lembrete agendado!", description: `${date} às ${time}` });
   };
@@ -466,6 +466,8 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
         existingDate={reminderNote?.reminderDate}
         existingTime={reminderNote?.reminderTime}
         existingSound={reminderNote?.reminderSound}
+        existingNativeSoundUri={reminderNote?.reminderNativeSoundUri}
+        existingNativeSoundName={reminderNote?.reminderNativeSoundName}
         onSave={handleReminderSave}
         onRemove={handleReminderRemove}
       />

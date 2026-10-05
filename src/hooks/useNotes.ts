@@ -20,6 +20,10 @@ export interface Note {
   reminderDate?: string | null;
   reminderTime?: string | null;
   reminderSound?: AlertSoundId;
+  /** Som do alarme NATIVO (toca com o app fechado) escolhido para esse
+   * lembrete em particular — null/undefined usa o padrão do sistema. */
+  reminderNativeSoundUri?: string | null;
+  reminderNativeSoundName?: string | null;
   isLocked: boolean;
   lockSalt?: string | null;
   deletedAt?: Date | null;
@@ -138,6 +142,8 @@ function mapRow(n: any): Note {
     reminderDate: n.reminder_date || null,
     reminderTime: n.reminder_time || null,
     reminderSound: (n.reminder_sound || "classico") as AlertSoundId,
+    reminderNativeSoundUri: n.reminder_native_sound_uri || null,
+    reminderNativeSoundName: n.reminder_native_sound_name || null,
     isLocked: n.is_locked || false,
     lockSalt: n.lock_salt || null,
     deletedAt: n.deleted_at ? new Date(n.deleted_at) : null,
@@ -243,6 +249,8 @@ export function useNotes() {
           reminder_date: note.reminderDate ?? null,
           reminder_time: note.reminderTime ?? null,
           reminder_sound: note.reminderSound ?? "classico",
+          reminder_native_sound_uri: note.reminderNativeSoundUri ?? null,
+          reminder_native_sound_name: note.reminderNativeSoundName ?? null,
           is_locked: note.isLocked,
           lock_salt: note.lockSalt ?? null,
           deleted_at: note.deletedAt ? note.deletedAt.toISOString() : null,
@@ -614,11 +622,26 @@ export function useNotes() {
   );
 
   // Set/remove reminder
-  const setNoteReminder = useCallback(async (id: string, reminderDate: string | null, reminderTime: string | null, reminderSound: AlertSoundId = "classico") => {
+  const setNoteReminder = useCallback(async (
+    id: string,
+    reminderDate: string | null,
+    reminderTime: string | null,
+    reminderSound: AlertSoundId = "classico",
+    reminderNativeSoundUri: string | null = null,
+    reminderNativeSoundName: string | null = null
+  ) => {
     markSelfModified(id, 30000);
-    setNotesAndRef((prev) => prev.map((n) => n.id === id ? { ...n, reminderDate, reminderTime, reminderSound, updatedAt: new Date(), sincronizado: false } : n));
+    setNotesAndRef((prev) => prev.map((n) => n.id === id ? { ...n, reminderDate, reminderTime, reminderSound, reminderNativeSoundUri, reminderNativeSoundName, updatedAt: new Date(), sincronizado: false } : n));
     try {
-      await (supabase.from("notes") as any).update({ reminder_date: reminderDate, reminder_time: reminderTime, reminder_sound: reminderSound, updated_at: new Date().toISOString(), sincronizado: true }).eq("id", id);
+      await (supabase.from("notes") as any).update({
+        reminder_date: reminderDate,
+        reminder_time: reminderTime,
+        reminder_sound: reminderSound,
+        reminder_native_sound_uri: reminderNativeSoundUri,
+        reminder_native_sound_name: reminderNativeSoundName,
+        updated_at: new Date().toISOString(),
+        sincronizado: true,
+      }).eq("id", id);
       setNotesAndRef((prev) => prev.map((n) => n.id === id ? { ...n, sincronizado: true } : n));
     } catch { setSyncStatus("offline"); }
   }, [markSelfModified]);

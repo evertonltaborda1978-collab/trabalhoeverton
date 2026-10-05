@@ -11,6 +11,10 @@ export interface Appointment {
   time: string;
   description: string;
   alertSound: AlertSoundId;
+  /** Som do alarme NATIVO (toca com o app fechado) escolhido para esse
+   * compromisso em particular — null/undefined usa o padrão do sistema. */
+  nativeSoundUri?: string | null;
+  nativeSoundName?: string | null;
   deletedAt?: Date | null;
 }
 
@@ -36,6 +40,8 @@ export function useAppointments() {
           time: a.time,
           description: a.description,
           alertSound: (a.alert_sound || "classico") as AlertSoundId,
+          nativeSoundUri: a.alert_native_sound_uri || null,
+          nativeSoundName: a.alert_native_sound_name || null,
           deletedAt: a.deleted_at ? new Date(a.deleted_at) : null,
         }))
       );
@@ -47,12 +53,29 @@ export function useAppointments() {
   }, [fetchAppointments]);
 
   const addAppointment = useCallback(
-    async (title: string, date: Date, time: string, description: string, alertSound: AlertSoundId) => {
+    async (
+      title: string,
+      date: Date,
+      time: string,
+      description: string,
+      alertSound: AlertSoundId,
+      nativeSoundUri: string | null = null,
+      nativeSoundName: string | null = null
+    ) => {
       if (!user) return;
       const dateStr = date.toISOString().split("T")[0];
       const { data } = await supabase
         .from("appointments")
-        .insert({ user_id: user.id, title, date: dateStr, time, description, alert_sound: alertSound })
+        .insert({
+          user_id: user.id,
+          title,
+          date: dateStr,
+          time,
+          description,
+          alert_sound: alertSound,
+          alert_native_sound_uri: nativeSoundUri,
+          alert_native_sound_name: nativeSoundName,
+        })
         .select()
         .single();
 
@@ -64,6 +87,8 @@ export function useAppointments() {
           time: data.time,
           description: data.description,
           alertSound: (data.alert_sound || "classico") as AlertSoundId,
+          nativeSoundUri: data.alert_native_sound_uri || null,
+          nativeSoundName: data.alert_native_sound_name || null,
         };
         setAppointments((prev) => [...prev, apt]);
         return apt;
@@ -73,14 +98,31 @@ export function useAppointments() {
   );
 
   const updateAppointment = useCallback(
-    async (id: string, title: string, date: Date, time: string, description: string, alertSound: AlertSoundId) => {
+    async (
+      id: string,
+      title: string,
+      date: Date,
+      time: string,
+      description: string,
+      alertSound: AlertSoundId,
+      nativeSoundUri: string | null = null,
+      nativeSoundName: string | null = null
+    ) => {
       const dateStr = date.toISOString().split("T")[0];
       await supabase
         .from("appointments")
-        .update({ title, date: dateStr, time, description, alert_sound: alertSound })
+        .update({
+          title,
+          date: dateStr,
+          time,
+          description,
+          alert_sound: alertSound,
+          alert_native_sound_uri: nativeSoundUri,
+          alert_native_sound_name: nativeSoundName,
+        })
         .eq("id", id);
       setAppointments((prev) =>
-        prev.map((a) => (a.id === id ? { ...a, title, date, time, description, alertSound } : a))
+        prev.map((a) => (a.id === id ? { ...a, title, date, time, description, alertSound, nativeSoundUri, nativeSoundName } : a))
       );
       // Limpa a marcação de "já avisado" — sem isso, editar um compromisso
       // que já tinha disparado alerta antes (mesmo em outro horário) nunca

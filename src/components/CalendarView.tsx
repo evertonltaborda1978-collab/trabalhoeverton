@@ -19,13 +19,14 @@ import { toast } from "@/hooks/use-toast";
 import { TrashView } from "./TrashView";
 import { cn } from "@/lib/utils";
 import { ALERT_SOUND_OPTIONS, playAlertSoundPreview, type AlertSoundId } from "@/lib/alertSound";
+import { NativeAlarmSoundPicker, type NativeSoundValue } from "./NativeAlarmSoundPicker";
 
 type ViewMode = "day" | "week" | "month";
 
 interface CalendarViewProps {
   appointments: Appointment[];
-  onAdd: (title: string, date: Date, time: string, description: string, alertSound: AlertSoundId) => void;
-  onUpdate: (id: string, title: string, date: Date, time: string, description: string, alertSound: AlertSoundId) => void;
+  onAdd: (title: string, date: Date, time: string, description: string, alertSound: AlertSoundId, nativeSoundUri?: string | null, nativeSoundName?: string | null) => void;
+  onUpdate: (id: string, title: string, date: Date, time: string, description: string, alertSound: AlertSoundId, nativeSoundUri?: string | null, nativeSoundName?: string | null) => void;
   onDelete: (id: string) => void;
   trashedAppointments?: Appointment[];
   onRestoreAppointment?: (id: string) => void;
@@ -42,6 +43,7 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
   const [time, setTime] = useState("09:00");
   const [description, setDescription] = useState("");
   const [alertSound, setAlertSound] = useState<AlertSoundId | null>(null);
+  const [nativeSound, setNativeSound] = useState<NativeSoundValue>({ uri: null, name: null });
   const [showTrash, setShowTrash] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteTitle, setConfirmDeleteTitle] = useState("");
@@ -90,10 +92,10 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
       return;
     }
     if (editingId) {
-      onUpdate(editingId, title, selected, time, description, alertSound);
+      onUpdate(editingId, title, selected, time, description, alertSound, nativeSound.uri, nativeSound.name);
       toast({ title: "✅ Compromisso atualizado!" });
     } else {
-      onAdd(title, selected, time, description, alertSound);
+      onAdd(title, selected, time, description, alertSound, nativeSound.uri, nativeSound.name);
       if (connected) {
         const dateStr = format(selected, "yyyy-MM-dd");
         const ok = await pushEvent(title, dateStr, time, description);
@@ -113,6 +115,7 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
     setTime("09:00");
     setDescription("");
     setAlertSound(null);
+    setNativeSound({ uri: null, name: null });
     setDialogOpen(true);
   };
 
@@ -123,6 +126,7 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
     setDescription(apt.description);
     setSelected(apt.date);
     setAlertSound(apt.alertSound);
+    setNativeSound({ uri: apt.nativeSoundUri ?? null, name: apt.nativeSoundName ?? null });
     setDialogOpen(true);
   };
 
@@ -133,6 +137,7 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
     setTime("09:00");
     setDescription("");
     setAlertSound(null);
+    setNativeSound({ uri: null, name: null });
   };
 
   // Registra essa tela cheia no mesmo mecanismo do botão físico de voltar
@@ -559,6 +564,7 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
                   ))}
                 </div>
               </div>
+              <NativeAlarmSoundPicker value={nativeSound} onChange={setNativeSound} />
               {connected && !editingId && (
                 <p className="text-[11px] font-medium flex items-center gap-1" style={{ color: "#4CAF50" }}>
                   ✓ Será sincronizado com Google Agenda

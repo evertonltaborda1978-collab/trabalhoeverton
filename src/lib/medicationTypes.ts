@@ -22,6 +22,9 @@ export interface Medication {
   color: string;
   takenDates: string[];
   alertSound: AlertSoundId;
+  /** Som do alarme NATIVO (toca com o app fechado) — null usa o padrão do sistema */
+  nativeSoundUri?: string | null;
+  nativeSoundName?: string | null;
 }
 
 export function getDaysElapsed(startDate: string): number {

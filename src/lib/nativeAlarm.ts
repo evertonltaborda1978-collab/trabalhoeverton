@@ -1,14 +1,19 @@
 import { registerPlugin } from "@capacitor/core";
 import { isNative } from "./native";
 
+export interface PickedAlarmSound {
+  uri: string | null;
+  name: string | null;
+}
+
 interface AlarmPluginType {
-  scheduleAlarm(options: { id: number; at: number; title: string; body: string }): Promise<{ exact: boolean }>;
+  scheduleAlarm(options: { id: number; at: number; title: string; body: string; soundUri?: string }): Promise<{ exact: boolean }>;
   cancelAlarm(options: { id: number }): Promise<void>;
   canScheduleExactAlarms(): Promise<{ value: boolean }>;
   openExactAlarmSettings(): Promise<void>;
-  pickAlarmSound(): Promise<{ name: string | null }>;
-  pickAlarmSoundFile(): Promise<{ name: string | null }>;
-  getAlarmSoundName(): Promise<{ name: string | null }>;
+  pickAlarmSound(): Promise<PickedAlarmSound>;
+  pickAlarmSoundFile(): Promise<PickedAlarmSound>;
+  getAlarmSoundName(): Promise<PickedAlarmSound>;
 }
 
 // Ponte com o plugin nativo (AlarmPlugin.java) que agenda um alarme de
@@ -17,10 +22,10 @@ interface AlarmPluginType {
 // LocalNotifications), que é mais simples e toca só uma vez.
 const AlarmPlugin = registerPlugin<AlarmPluginType>("AlarmPlugin");
 
-export async function scheduleNativeAlarm(id: number, at: Date, title: string, body: string): Promise<void> {
+export async function scheduleNativeAlarm(id: number, at: Date, title: string, body: string, soundUri?: string | null): Promise<void> {
   if (!isNative()) return;
   try {
-    await AlarmPlugin.scheduleAlarm({ id, at: at.getTime(), title, body });
+    await AlarmPlugin.scheduleAlarm({ id, at: at.getTime(), title, body, ...(soundUri ? { soundUri } : {}) });
   } catch {
     /* silencioso: alarme nativo é um extra, não pode travar o app */
   }
@@ -54,11 +59,10 @@ export async function ensureExactAlarmPermission(): Promise<boolean> {
  * nome do som escolhido, ou null se a pessoa cancelou/escolheu "Nenhum"
  * (nesse caso o som salvo anteriormente continua valendo).
  */
-export async function pickAlarmSound(): Promise<string | null> {
+export async function pickAlarmSound(): Promise<PickedAlarmSound | null> {
   if (!isNative()) return null;
   try {
-    const { name } = await AlarmPlugin.pickAlarmSound();
-    return name;
+    return await AlarmPlugin.pickAlarmSound();
   } catch {
     return null;
   }
@@ -69,22 +73,20 @@ export async function pickAlarmSound(): Promise<string | null> {
  * escolher como som do alarme qualquer música já baixada no aparelho —
  * diferente de pickAlarmSound, que só mostra os sons de alarme do sistema.
  */
-export async function pickAlarmSoundFile(): Promise<string | null> {
+export async function pickAlarmSoundFile(): Promise<PickedAlarmSound | null> {
   if (!isNative()) return null;
   try {
-    const { name } = await AlarmPlugin.pickAlarmSoundFile();
-    return name;
+    return await AlarmPlugin.pickAlarmSoundFile();
   } catch {
     return null;
   }
 }
 
 /** Nome do som de alarme escolhido atualmente (ou null se ainda usa o padrão do sistema). */
-export async function getAlarmSoundName(): Promise<string | null> {
+export async function getAlarmSoundName(): Promise<PickedAlarmSound | null> {
   if (!isNative()) return null;
   try {
-    const { name } = await AlarmPlugin.getAlarmSoundName();
-    return name;
+    return await AlarmPlugin.getAlarmSoundName();
   } catch {
     return null;
   }
@@ -96,6 +98,8 @@ export interface NativeAlarmReminder {
   title: string;
   body: string;
   at: Date;
+  /** Som escolhido especificamente para ESSE lembrete (opcional) */
+  soundUri?: string | null;
 }
 
 const SCHEDULED_IDS_KEY = "native_alarm_scheduled_ids";
@@ -140,7 +144,7 @@ export async function syncNativeAlarms(reminders: NativeAlarmReminder[]): Promis
     const newIds: number[] = [];
     for (const r of future) {
       const id = hashId(r.key);
-      await scheduleNativeAlarm(id, r.at, r.title, r.body);
+      await scheduleNativeAlarm(id, r.at, r.title, r.body, r.soundUri);
       newIds.push(id);
     }
     writeScheduledIds(newIds);

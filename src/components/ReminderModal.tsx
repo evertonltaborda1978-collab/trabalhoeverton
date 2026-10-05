@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Bell, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { ALERT_SOUND_OPTIONS, playAlertSoundPreview, type AlertSoundId } from "@/lib/alertSound";
+import { NativeAlarmSoundPicker, type NativeSoundValue } from "./NativeAlarmSoundPicker";
 import { toast } from "@/hooks/use-toast";
 
 interface ReminderModalProps {
@@ -14,24 +15,31 @@ interface ReminderModalProps {
   existingDate?: string | null;
   existingTime?: string | null;
   existingSound?: AlertSoundId;
-  onSave: (date: string, time: string, sound: AlertSoundId) => void;
+  existingNativeSoundUri?: string | null;
+  existingNativeSoundName?: string | null;
+  onSave: (date: string, time: string, sound: AlertSoundId, nativeSoundUri: string | null, nativeSoundName: string | null) => void;
   onRemove: () => void;
 }
 
-export function ReminderModal({ open, onOpenChange, noteTitle, existingDate, existingTime, existingSound, onSave, onRemove }: ReminderModalProps) {
+export function ReminderModal({ open, onOpenChange, noteTitle, existingDate, existingTime, existingSound, existingNativeSoundUri, existingNativeSoundName, onSave, onRemove }: ReminderModalProps) {
   const hasReminder = !!existingDate;
   const today = format(new Date(), "yyyy-MM-dd");
 
   const [date, setDate] = useState(existingDate || today);
   const [time, setTime] = useState(existingTime || "09:00");
   const [sound, setSound] = useState<AlertSoundId | null>(existingSound || null);
+  const [nativeSound, setNativeSound] = useState<NativeSoundValue>({
+    uri: existingNativeSoundUri || null,
+    name: existingNativeSoundName || null,
+  });
 
   useEffect(() => {
     if (!open) return;
     setDate(existingDate || today);
     setTime(existingTime || "09:00");
     setSound(existingSound || null);
-  }, [open, existingDate, existingTime, existingSound, today]);
+    setNativeSound({ uri: existingNativeSoundUri || null, name: existingNativeSoundName || null });
+  }, [open, existingDate, existingTime, existingSound, existingNativeSoundUri, existingNativeSoundName, today]);
 
   const handleSave = () => {
     if (!date) return;
@@ -39,7 +47,7 @@ export function ReminderModal({ open, onOpenChange, noteTitle, existingDate, exi
       toast({ title: "Escolha um som de alerta", description: "Toque numa das opções antes de salvar.", variant: "destructive" });
       return;
     }
-    onSave(date, time, sound);
+    onSave(date, time, sound, nativeSound.uri, nativeSound.name);
     onOpenChange(false);
   };
 
@@ -103,6 +111,8 @@ export function ReminderModal({ open, onOpenChange, noteTitle, existingDate, exi
               ))}
             </div>
           </div>
+
+          <NativeAlarmSoundPicker value={nativeSound} onChange={setNativeSound} />
 
           {hasReminder && existingDate && existingTime && (
             <div
