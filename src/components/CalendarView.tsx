@@ -45,6 +45,7 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
   const [alertSound, setAlertSound] = useState<AlertSoundId | null>(null);
   const [nativeSound, setNativeSound] = useState<NativeSoundValue>({ uri: null, name: null });
   const [showTrash, setShowTrash] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteTitle, setConfirmDeleteTitle] = useState("");
   const [monthNav, setMonthNav] = useState(new Date());
@@ -86,11 +87,15 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
   };
 
   const handleSave = async () => {
-    if (!title.trim()) return;
-    if (!alertSound) {
-      toast({ title: "Escolha um som de alerta", description: "Toque numa das opções antes de salvar.", variant: "destructive" });
+    if (!title.trim()) {
+      setFormError("Digite um título para o compromisso.");
       return;
     }
+    if (!alertSound) {
+      setFormError("Escolha um som de alerta (toque em uma das opções acima) antes de agendar.");
+      return;
+    }
+    setFormError(null);
     if (editingId) {
       onUpdate(editingId, title, selected, time, description, alertSound, nativeSound.uri, nativeSound.name);
       toast({ title: "✅ Compromisso atualizado!" });
@@ -111,6 +116,7 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
   const openNew = (day?: Date) => {
     if (day) setSelected(day);
     setEditingId(null);
+    setFormError(null);
     setTitle("");
     setTime("09:00");
     setDescription("");
@@ -121,6 +127,7 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
 
   const openEdit = (apt: Appointment) => {
     setEditingId(apt.id);
+    setFormError(null);
     setTitle(apt.title);
     setTime(apt.time);
     setDescription(apt.description);
@@ -132,6 +139,7 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
 
   const closeDialog = () => {
     setDialogOpen(false);
+    setFormError(null);
     setEditingId(null);
     setTitle("");
     setTime("09:00");
@@ -537,7 +545,7 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
 
           <div className="flex-1 overflow-y-auto px-4 py-4">
             <div className="space-y-3 max-w-md mx-auto">
-              <Input placeholder="Título" value={title} onChange={(e) => setTitle(e.target.value)} className="font-semibold" />
+              <Input placeholder="Título" value={title} onChange={(e) => { setTitle(e.target.value); setFormError(null); }} className="font-semibold" />
               <div className="flex items-center gap-2 text-xs font-medium" style={{ color: "#666" }}>
                 <CalendarDays size={14} />
                 <span>{format(selected, "d 'de' MMMM, yyyy", { locale: ptBR })}</span>
@@ -551,7 +559,7 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
                     <button
                       key={opt.id}
                       type="button"
-                      onClick={() => { setAlertSound(opt.id); playAlertSoundPreview(opt.id); }}
+                      onClick={() => { setAlertSound(opt.id); setFormError(null); playAlertSoundPreview(opt.id); }}
                       className="text-left px-2.5 py-2 rounded-lg text-xs font-semibold transition-all"
                       style={
                         alertSound === opt.id
@@ -568,6 +576,15 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
               {connected && !editingId && (
                 <p className="text-[11px] font-medium flex items-center gap-1" style={{ color: "#4CAF50" }}>
                   ✓ Será sincronizado com Google Agenda
+                </p>
+              )}
+              {formError && (
+                <p
+                  role="alert"
+                  className="text-xs font-semibold rounded-lg px-3 py-2"
+                  style={{ background: "#FDECEA", color: "#B3261E", border: "1px solid #F5C2BE" }}
+                >
+                  {formError}
                 </p>
               )}
               <div className="flex gap-2 pt-1 pb-2">
