@@ -22,7 +22,19 @@ interface Parada {
 interface Parametro { id: string; label: string; valor: string; unidade: string; }
 interface Troca { min: number | null; qtd?: number; }
 interface ItemConsumo { label: string; trocas: Troca[]; collapsed: boolean; }
+
+// Itens que já têm troca ficam no topo da lista de Consumidos e os sem troca
+// ficam embaixo. A ordem entre itens do mesmo grupo é preservada (por isso o
+// item que ganha a primeira troca entra logo depois dos que já tinham).
+const ordenarConsumidos = (lista: ItemConsumo[]): ItemConsumo[] => [
+  ...lista.filter(i => i.trocas.length > 0),
+  ...lista.filter(i => i.trocas.length === 0),
+];
 interface FormatoJumbo { id: string; largura: string; diametro: string; }
+// Troca de serra do Core Link: números de identificação das serras (retirada e
+// colocada) e quantos cortes a serra retirada fez. Tudo texto para não perder
+// zeros à esquerda nos números de identificação.
+interface TrocaSerra { id: string; retirada: string; colocada: string; cortes: string; }
 interface Jumbo {
   id: string;
   codigo: string;
@@ -32,6 +44,20 @@ interface Jumbo {
   parametrosCustom: boolean;
   parametrosEspecificos: Parametro[];
 }
+
+const novaTrocaSerra = (): TrocaSerra => ({ id: Math.random().toString(36).slice(2) + Date.now().toString(36), retirada: "", colocada: "", cortes: "" });
+
+// Frase da troca de serra no relatório. Troca totalmente vazia não gera linha.
+const trocaSerraTexto = (t: TrocaSerra): string => {
+  const ret = t.retirada.trim();
+  const col = t.colocada.trim();
+  const cor = t.cortes.trim();
+  if (!ret && !col && !cor) return "";
+  let txt = `Efetuado a troca da serra${ret ? " " + ret : ""}`;
+  if (cor) txt += ` (${cor} ${cor === "1" ? "corte" : "cortes"})`;
+  txt += col ? ` e instalada ${col}.` : ".";
+  return txt;
+};
 
 // ── Defaults ──
 const FORMATOS_BASE: FormatoJumbo[] = [
@@ -378,6 +404,14 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
 
   // ── Core Link ──
   const [clQtd, setClQtd] = useState(saved?.clQtd ?? 0);
+  const [trocasSerra, setTrocasSerra] = useState<TrocaSerra[]>(
+    Array.isArray(saved?.trocasSerra) && saved.trocasSerra.length > 0 ? saved.trocasSerra : [novaTrocaSerra()]
+  );
+  const atualizarTrocaSerra = (id: string, campo: "retirada" | "colocada" | "cortes", valor: string) =>
+    setTrocasSerra(prev => prev.map(t => (t.id === id ? { ...t, [campo]: valor } : t)));
+  const adicionarTrocaSerra = () => setTrocasSerra(prev => [...prev, novaTrocaSerra()]);
+  const removerTrocaSerra = (id: string) =>
+    setTrocasSerra(prev => (prev.length > 1 ? prev.filter(t => t.id !== id) : [novaTrocaSerra()]));
   const [obsCL, setObsCL] = useState(saved?.obsCL ?? "");
   const [paradasCL, setParadasCL] = useState<Parada[]>(saved?.paradasCL ?? []);
 
@@ -416,9 +450,9 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   }, [destinatarios]);
 
   useEffect(() => {
-    const state = { rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, itens, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob, fontSize };
+    const state = { rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, itens, jumbos, clQtd, trocasSerra, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob, fontSize };
     localStorage.setItem(RASCUNHO_KEY, JSON.stringify(state));
-  }, [rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, itens, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob, fontSize]);
+  }, [rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, itens, jumbos, clQtd, trocasSerra, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob, fontSize]);
 
   const onTurnoChange = (v: string) => { setTurno(v); setHorario(HORARIOS[v] || ""); };
 
@@ -571,14 +605,14 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
 
   // ── Consumidos ──
   const calcTotalConsumidos = () => itens.reduce((s, i) => s + i.trocas.reduce((a, t) => a + (t.min || 0), 0), 0);
-  const addTroca = (idx: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: [...item.trocas, { min: null, qtd: 1 }], collapsed: false } : item));
+  const addTroca = (idx: number) => setItens(prev => ordenarConsumidos(prev.map((item, i) => i === idx ? { ...item, trocas: [...item.trocas, { min: null, qtd: 1 }], collapsed: false } : item)));
 
   // Adiciona várias trocas de uma vez (ex: trocou 4 fitas crepe juntas na correria) — vira UM lote, uma linha só
   const addTrocas = (idx: number, qtd: number) => {
     const n = Math.max(1, Math.min(999, qtd));
-    setItens(prev => prev.map((item, i) => i === idx
+    setItens(prev => ordenarConsumidos(prev.map((item, i) => i === idx
       ? { ...item, trocas: [...item.trocas, { min: null, qtd: n }], collapsed: false }
-      : item));
+      : item)));
   };
 
   const addTrocasMultiplas = (idx: number) => {
@@ -587,7 +621,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
       if (!isNaN(n) && n > 0) addTrocas(idx, n);
     });
   };
-  const removeTroca = (idx: number, ti: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.filter((_, j) => j !== ti) } : item));
+  const removeTroca = (idx: number, ti: number) => setItens(prev => ordenarConsumidos(prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.filter((_, j) => j !== ti) } : item)));
   const setTrocaMin = (idx: number, ti: number, val: string) => {
     const n = parseInt(val); const v = isNaN(n) ? null : Math.max(0, n);
     setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.map((t, j) => j === ti ? { ...t, min: v } : t) } : item));
@@ -642,10 +676,12 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
       ? `\n\n✔ Consumidos:\n${consumidosTxt}✔ Total de Tempo de Parada: ${totalConsumidos}.`
       : "";
 
+    const serraLinhas = trocasSerra.map(trocaSerraTexto).filter(Boolean);
     let clSection = "";
-    if (clQtd > 0 || obsCL || paradasCL.length > 0) {
+    if (clQtd > 0 || serraLinhas.length > 0 || obsCL || paradasCL.length > 0) {
       clSection += "\n\nCore Link\n";
       if (clQtd > 0) clSection += ` ${String(clQtd).padStart(2,"0")} Cargas de Tubetes\n`;
+      serraLinhas.forEach(l => { clSection += ` ${l}\n`; });
       if (obsCL) clSection += `Obs: ${obsCL}\n`;
       if (paradasCL.length > 0) {
         const ptxt = paradasCL.map(paradaTexto).filter(Boolean).join("\n");
@@ -673,7 +709,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
     }
 
     return `${getSaudacao()}${dest ? ", " + dest : ""},\nSegue relatório da Rebobinadeira ${rebobNum}.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}${idMaquina ? `\n\nPARÂMETROS DA REBOBINADEIRA: ${idMaquina}` : "\n\nPARÂMETROS DA REBOBINADEIRA:"}${paramsTexto ? "\n" + paramsTexto : ""}${jumbosTexto ? "\n\nPROGRAMAÇÃO:\n" + jumbosTexto : ""}${consumidosSection}${clSection}${rcSection}${obsSection}`.trim();
-  }, [rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, itens, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob]);
+  }, [rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, itens, jumbos, clQtd, trocasSerra, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob]);
 
   const handleSaveNote = () => {
     let text: string;
@@ -686,7 +722,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
     }
     const title = `Relatório Rebobinadeira ${rebobNum} - Letra ${letra}`;
     const stateKey = `rebobinadeira_state_${title.replace(/\s/g, "_")}`;
-    const state = { rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, itens, jumbos, clQtd, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob, fontSize };
+    const state = { rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, itens, jumbos, clQtd, trocasSerra, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob, fontSize };
     try {
       localStorage.setItem(stateKey, JSON.stringify(state));
       if (dest.trim()) localStorage.setItem("rebobinadeira_last_dest", dest.trim());
@@ -1144,6 +1180,50 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
               <button onClick={() => setClQtd(Math.max(0, clQtd-1))} style={btnStyle}>-</button>
               <span style={{ fontSize: 18, fontWeight: 700, minWidth: 32, textAlign: "center", color: theme.text }}>{String(clQtd).padStart(2,"0")}</span>
               <button onClick={() => setClQtd(clQtd+1)} style={btnStyle}>+</button>
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: theme.text }}>Troca de serra</span>
+              {trocasSerra.map((t, i) => (
+                <div key={t.id} style={{ border: `1px solid ${theme.inputBorder}`, borderRadius: 12, padding: "8px 10px", marginTop: 6 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 11, color: theme.textSub }}>Troca {i + 1}</span>
+                    {trocasSerra.length > 1 && (
+                      <button onClick={() => removerTrocaSerra(t.id)} style={sectionBtn}>Remover</button>
+                    )}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 4 }}>
+                    <label style={{ display: "block" }}>
+                      <span style={{ fontSize: 11, color: theme.textSub }}>Serra retirada (nº)</span>
+                      <input
+                        value={t.retirada}
+                        onChange={e => atualizarTrocaSerra(t.id, "retirada", e.target.value)}
+                        placeholder="Ex.: 1234"
+                        style={inputStyle}
+                      />
+                    </label>
+                    <label style={{ display: "block" }}>
+                      <span style={{ fontSize: 11, color: theme.textSub }}>Serra colocada (nº)</span>
+                      <input
+                        value={t.colocada}
+                        onChange={e => atualizarTrocaSerra(t.id, "colocada", e.target.value)}
+                        placeholder="Ex.: 5678"
+                        style={inputStyle}
+                      />
+                    </label>
+                  </div>
+                  <label style={{ display: "block", marginTop: 6 }}>
+                    <span style={{ fontSize: 11, color: theme.textSub }}>Quantidade de cortes (da serra retirada)</span>
+                    <input
+                      value={t.cortes}
+                      inputMode="numeric"
+                      onChange={e => atualizarTrocaSerra(t.id, "cortes", e.target.value.replace(/\D/g, ""))}
+                      placeholder="Ex.: 1250"
+                      style={inputStyle}
+                    />
+                  </label>
+                </div>
+              ))}
+              <button onClick={adicionarTrocaSerra} style={{ ...sectionBtn, marginTop: 8 }}>+ Adicionar outra troca</button>
             </div>
             <textarea value={obsCL} onChange={e => setObsCL(e.target.value)} rows={2} placeholder="Obs. Core Link..." style={{ ...inputStyle, resize: "vertical" }} />
             {renderParadas(paradasCL, setParadasCL, "Paradas Core Link")}

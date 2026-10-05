@@ -51,6 +51,14 @@ const ITENS_BASE = [
 // ── Interfaces ──
 interface Troca { min: number | null; qtd?: number; }
 interface ItemConsumo { label: string; trocas: Troca[]; collapsed: boolean; }
+
+// Itens que já têm troca ficam no topo da lista de Consumidos e os sem troca
+// ficam embaixo. A ordem entre itens do mesmo grupo é preservada (por isso o
+// item que ganha a primeira troca entra logo depois dos que já tinham).
+const ordenarConsumidos = (lista: ItemConsumo[]): ItemConsumo[] => [
+  ...lista.filter(i => i.trocas.length > 0),
+  ...lista.filter(i => i.trocas.length === 0),
+];
 interface Parada {
   desc: string;
   ini: string;
@@ -558,14 +566,14 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   };
   const calcTotalEmb = () => itens.reduce((s, i) => s + i.trocas.reduce((a, t) => a + (t.min || 0), 0), 0);
 
-  const addTroca = (idx: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: [...item.trocas, { min: null, qtd: 1 }], collapsed: false } : item));
+  const addTroca = (idx: number) => setItens(prev => ordenarConsumidos(prev.map((item, i) => i === idx ? { ...item, trocas: [...item.trocas, { min: null, qtd: 1 }], collapsed: false } : item)));
 
   // Adiciona várias trocas de uma vez (ex: trocou 4 fitas crepe juntas na correria) — vira UM lote, uma linha só
   const addTrocas = (idx: number, qtd: number) => {
     const n = Math.max(1, Math.min(999, qtd));
-    setItens(prev => prev.map((item, i) => i === idx
+    setItens(prev => ordenarConsumidos(prev.map((item, i) => i === idx
       ? { ...item, trocas: [...item.trocas, { min: null, qtd: n }], collapsed: false }
-      : item));
+      : item)));
   };
   const addTrocasMultiplas = (idx: number) => {
     setInputModal({
@@ -591,7 +599,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
       }
     });
   };
-  const removeTroca = (idx: number, ti: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.filter((_, j) => j !== ti) } : item));
+  const removeTroca = (idx: number, ti: number) => setItens(prev => ordenarConsumidos(prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.filter((_, j) => j !== ti) } : item)));
   const setTrocaMin = (idx: number, ti: number, val: string) => {
     const n = parseInt(val); const v = isNaN(n) ? null : Math.max(0, n);
     setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.map((t, j) => j === ti ? { ...t, min: v } : t) } : item));
