@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { encryptNote, decryptNote, isEncrypted, LockPayload } from "@/lib/noteCrypto";
 import type { AlertSoundId } from "@/lib/alertSound";
 import { shareOrSaveTextFile } from "@/lib/nativeShare";
+import { toast } from "@/hooks/use-toast";
 
 export interface Note {
   id: string;
@@ -966,7 +967,48 @@ export function useNotes() {
     }
 
     const imported = Array.from(incoming.values());
-    if (imported.length === 0) return 0;
+    // Compromissos da Agenda que vêm junto no backup (campo "agenda").
+    // Só entram os que ainda não existem aqui: nunca sobrescreve o que já
+    // foi editado nesta conta.
+    const importarAgenda = async () => {
+      const lista = Array.isArray(parsed.agenda) ? parsed.agenda : [];
+      if (!user || lista.length === 0) return;
+      try {
+        const rows = lista
+          .filter((a: any) => a && a.id && a.title && a.date)
+          .map((a: any) => ({
+            id: a.id,
+            user_id: user.id,
+            title: a.title,
+            date: String(a.date).slice(0, 10),
+            time: a.time || "09:00",
+            description: a.description || "",
+            alert_sound: a.alert_sound || "classico",
+            alert_native_sound_uri: a.alert_native_sound_uri ?? null,
+            alert_native_sound_name: a.alert_native_sound_name ?? null,
+            deleted_at: a.deleted_at ?? null,
+            ...(a.created_at ? { created_at: a.created_at } : {}),
+            ...(a.updated_at ? { updated_at: a.updated_at } : {}),
+          }));
+        let novos = 0;
+        for (let i = 0; i < rows.length; i += 100) {
+          const { data, error } = await (supabase.from("appointments") as any)
+            .upsert(rows.slice(i, i + 100), { onConflict: "id", ignoreDuplicates: true })
+            .select("id");
+          if (error) throw error;
+          novos += data?.length ?? 0;
+        }
+        window.dispatchEvent(new Event("agenda-importada"));
+        toast({ title: novos > 0 ? `Agenda: ${novos} compromissos importados` : "Agenda: nenhum compromisso novo (já estavam aqui)" });
+      } catch (err: any) {
+        toast({ title: "A Agenda não foi importada", description: err?.message || String(err) });
+      }
+    };
+
+    if (imported.length === 0) {
+      await importarAgenda();
+      return 0;
+    }
 
     // Evita que o aviso em tempo real dispare uma busca a cada nota enviada.
     imported.forEach((n) => markSelfModified(n.id, 120000));
@@ -978,6 +1020,7 @@ export function useNotes() {
       await new Promise((r) => setTimeout(r, 300));
     }
     if (user) await syncToSupabase(merged);
+    await importarAgenda();
     return imported.length;
   }, [user, markSelfModified, setNotesAndRef, syncToSupabase]);
 

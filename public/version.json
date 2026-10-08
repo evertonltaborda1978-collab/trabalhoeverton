@@ -1,6 +1,7 @@
 {
-  "version": "v4.52",
+  "version": "v4.53",
   "history": [
+    { "version": "v4.53", "changes": "Importar backup agora também importa a Agenda: os compromissos que vêm no arquivo de backup entram na conta (só os que ainda não existem, sem sobrescrever o que já foi editado) e a lista da Agenda se atualiza na hora." },
     { "version": "v4.52", "changes": "Importar backup: notas que já aparecem no aparelho mas ainda não estão na conta atual (caso da troca de banco) agora são enviadas ao banco, com as fotos. Antes elas eram puladas por já existirem localmente." },
     { "version": "v4.51", "changes": "Fixar nota: corrigido o problema de a nota fixar e depois voltar sozinha. Duas causas: (1) se o relógio do celular estivesse alguns segundos atrasado em relação ao servidor, a fixação era descartada como \"mais velha\"; (2) fixar uma nota enquanto outra ainda estava sendo enviada podia deixar a fixação marcada como enviada sem ter ido. Também corrigido: fixar uma nota alterava a data de atualização dela no servidor." },
     { "version": "v4.50", "changes": "Relatórios (Embaladeira, Tombador e Rebobinadeira) mais fáceis de ler no celular: letras maiores, textos cinza e verdes com mais contraste, botões e campos maiores para o dedo. O botão A / A+ / A++ do topo agora aumenta todas as letras do relatório (antes só mexia nos campos digitados); o padrão passou a ser o A+. Se algum ponto ficar apertado, toque em A para voltar ao tamanho antigo." },

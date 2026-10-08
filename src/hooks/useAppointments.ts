@@ -52,6 +52,13 @@ export function useAppointments() {
     fetchAppointments();
   }, [fetchAppointments]);
 
+  // Depois de importar um backup com Agenda, recarrega a lista na hora.
+  useEffect(() => {
+    const recarregar = () => { fetchAppointments(); };
+    window.addEventListener("agenda-importada", recarregar);
+    return () => window.removeEventListener("agenda-importada", recarregar);
+  }, [fetchAppointments]);
+
   const addAppointment = useCallback(
     async (
       title: string,
