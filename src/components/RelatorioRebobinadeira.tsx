@@ -390,6 +390,10 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   const [parametros, setParametros] = useState<Parametro[]>(saved?.parametros ?? loadParamsBase());
   const [darkMode, setDarkMode] = useState(false);
   const [fontSize, setFontSize] = useState<"sm"|"md"|"lg">(saved?.fontSize ?? "md");
+  // Escala das letras: acompanha o botão A / A+ / A++ do topo. "A" = tamanho
+  // antigo, "A+" (padrão) = maior e mais fácil de ler no celular, "A++" = maior ainda.
+  const bump = fontSize === "sm" ? 0 : fontSize === "lg" ? 4 : 2;
+  const s = (n: number) => (n >= 17 ? n : n + bump);
 
   // ── Consumidos ──
   const [itens, setItens] = useState<ItemConsumo[]>(saved?.itens ?? ITENS_BASE.map(l => ({ label: l, trocas: [], collapsed: false })));
@@ -763,34 +767,35 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   const confirmarEnvio = () => { setShowSendConfirm(false); handleShare(); };
 
   // ── Tema ──
-  const fz = fontSize === "sm" ? 12 : fontSize === "lg" ? 16 : 14;
+  const fz = fontSize === "sm" ? 13 : fontSize === "lg" ? 18 : 16;
   const theme = {
     bg: darkMode ? "#1A1A2E" : "#F7F5F2",
     card: darkMode ? "#252540" : "#FFF",
     cardBorder: darkMode ? "#333355" : "#F0F0F0",
     text: darkMode ? "#E8E8F0" : "#1A1A2E",
-    textSub: darkMode ? "#9090B0" : "#9E9E9E",
+    textSub: darkMode ? "#B4B4CC" : "#6B6B7B",
+    accent: darkMode ? "#4FC3A1" : "#1F7A61",
     inputBg: darkMode ? "#1E1E38" : "#FAFAFA",
-    inputBorder: darkMode ? "#333355" : "#EBEBEB",
+    inputBorder: darkMode ? "#44446A" : "#D4D4D4",
     sectionBtnBg: darkMode ? "#2A2A45" : "#F5F5F5",
-    sectionBtnBorder: darkMode ? "#333355" : "#EBEBEB",
+    sectionBtnBorder: darkMode ? "#44446A" : "#D4D4D4",
     headerBg: darkMode ? "rgba(26,26,46,0.98)" : "rgba(247,245,242,0.98)",
   };
 
-  const inputStyle: React.CSSProperties = { width: "100%", marginTop: 4, boxSizing: "border-box", fontSize: fz, borderRadius: 8, padding: "6px 10px", border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text };
+  const inputStyle: React.CSSProperties = { width: "100%", marginTop: 4, boxSizing: "border-box", fontSize: fz, borderRadius: 10, padding: "11px 12px", border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text };
   const selectStyle: React.CSSProperties = { ...inputStyle, appearance: "none", WebkitAppearance: "none" };
   const cardStyle: React.CSSProperties = { background: theme.card, border: `1px solid ${theme.cardBorder}`, borderRadius: 16, padding: "14px 16px", marginBottom: 12 };
-  const sectionBtn: React.CSSProperties = { fontSize: 11, padding: "3px 10px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, cursor: "pointer", color: theme.text };
-  const btnStyle: React.CSSProperties = { width: 36, height: 36, padding: 0, fontSize: 18, borderRadius: 10, border: `1px solid ${theme.inputBorder}`, background: theme.sectionBtnBg, cursor: "pointer", color: theme.text };
+  const sectionBtn: React.CSSProperties = { fontSize: s(11), padding: "8px 14px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, cursor: "pointer", color: theme.text };
+  const btnStyle: React.CSSProperties = { width: 44, height: 44, padding: 0, fontSize: 20, borderRadius: 12, border: `1px solid ${theme.inputBorder}`, background: theme.sectionBtnBg, cursor: "pointer", color: theme.text };
 
   // ── Render paradas ──
   const renderParadas = (list: Parada[], setList: React.Dispatch<React.SetStateAction<Parada[]>>, label: string) => (
     <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${theme.cardBorder}` }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: theme.textSub }}>⏱ {label}</span>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
+        <span style={{ fontSize: s(12), fontWeight: 600, color: theme.textSub }}>⏱ {label}</span>
         <div style={{ display: "flex", gap: 6 }}>
           <button onClick={() => addParadaAutomatica(setList)} style={{ ...sectionBtn, color: "#E53935", fontWeight: 600 }}>🔴 Iniciar agora</button>
-          <button onClick={() => addParada(setList)} style={{ ...sectionBtn, color: "#2D9E7F", fontWeight: 600 }}>+ Adicionar</button>
+          <button onClick={() => addParada(setList)} style={{ ...sectionBtn, color: theme.accent, fontWeight: 600 }}>+ Adicionar</button>
         </div>
       </div>
       {list.map((p, i) => {
@@ -802,13 +807,13 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
           return (
             <div key={i} style={{ border: "1.5px solid #E53935", borderRadius: 12, padding: 10, marginBottom: 8, background: "rgba(229,57,53,0.06)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#E53935" }}>🔴 Parada {i + 1} em andamento · desde {p.ini}</span>
+                <span style={{ fontSize: s(12), fontWeight: 700, color: "#E53935" }}>🔴 Parada {i + 1} em andamento · desde {p.ini}</span>
                 <button onClick={() => removeParada(setList, i)} style={{ padding: "0 8px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
               </div>
               <input type="text" placeholder="Motivo da parada (pode preencher depois)" value={p.desc} onChange={e => updateParada(setList, i, "desc", e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
               <div style={{ fontSize: 22, fontWeight: 700, color: "#E53935", textAlign: "center", padding: "6px 0 10px" }}>{formatMin(elapsed)}</div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => finalizarParadaAgora(setList, i)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "#2D9E7F", color: "#FFF", border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✅ Finalizar agora</button>
+                <button onClick={() => finalizarParadaAgora(setList, i)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "#2D9E7F", color: "#FFF", border: "none", fontWeight: 700, fontSize: s(13), cursor: "pointer" }}>✅ Finalizar agora</button>
                 <button
                   onClick={() => setInputModal({
                     title: "Tempo parado",
@@ -820,7 +825,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
                       setInputModal(null);
                     }
                   })}
-                  style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: theme.sectionBtnBg, color: theme.text, border: `1px solid ${theme.inputBorder}`, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                  style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: theme.sectionBtnBg, color: theme.text, border: `1px solid ${theme.inputBorder}`, fontWeight: 700, fontSize: s(13), cursor: "pointer" }}
                 >✏️ Informar tempo</button>
               </div>
             </div>
@@ -829,7 +834,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
 
         if (p.collapsed) return (
           <div key={i} style={{ border: `1px solid ${theme.cardBorder}`, borderRadius: 12, padding: 10, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 13, fontWeight: 500, flex: 1, color: min > 0 ? "#2D9E7F" : theme.text }}>{p.desc || `Parada ${i+1}`}{tl}</span>
+            <span style={{ fontSize: s(13), fontWeight: 500, flex: 1, color: min > 0 ? "#2D9E7F" : theme.text }}>{p.desc || `Parada ${i+1}`}{tl}</span>
             <button onClick={() => toggleParada(setList, i)} style={sectionBtn}>▼</button>
             <button onClick={() => removeParada(setList, i)} style={{ padding: "0 8px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
           </div>
@@ -837,7 +842,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
         return (
           <div key={i} style={{ border: `1px solid ${theme.cardBorder}`, borderRadius: 12, padding: 10, marginBottom: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: theme.textSub }}>Parada {i+1}{tl}</span>
+              <span style={{ fontSize: s(12), fontWeight: 600, color: theme.textSub }}>Parada {i+1}{tl}</span>
               <div style={{ display: "flex", gap: 4 }}>
                 <button onClick={() => toggleParada(setList, i)} style={sectionBtn}>▲</button>
                 <button onClick={() => removeParada(setList, i)} style={{ padding: "0 8px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
@@ -845,11 +850,11 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
             </div>
             <input type="text" placeholder="Descrição" value={p.desc} onChange={e => updateParada(setList, i, "desc", e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-              <div><label style={{ fontSize: 11, color: theme.textSub }}>Início</label><input type="time" value={p.ini} onChange={e => updateParada(setList, i, "ini", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
-              <div><label style={{ fontSize: 11, color: theme.textSub }}>Fim</label><input type="time" value={p.fim} onChange={e => updateParada(setList, i, "fim", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
+              <div><label style={{ fontSize: s(11), color: theme.textSub }}>Início</label><input type="time" value={p.ini} onChange={e => updateParada(setList, i, "ini", e.target.value)} style={{ ...inputStyle, fontSize: s(15), fontWeight: 600 }} /></div>
+              <div><label style={{ fontSize: s(11), color: theme.textSub }}>Fim</label><input type="time" value={p.fim} onChange={e => updateParada(setList, i, "fim", e.target.value)} style={{ ...inputStyle, fontSize: s(15), fontWeight: 600 }} /></div>
             </div>
             {min > 0 && (
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#2D9E7F", padding: "6px 10px", background: "rgba(45,158,127,0.08)", borderRadius: 8, marginBottom: 8 }}>
+              <div style={{ fontSize: s(13), fontWeight: 600, color: theme.accent, padding: "6px 10px", background: "rgba(45,158,127,0.08)", borderRadius: 8, marginBottom: 8 }}>
                 ⏱ {formatMin(min)}{p.ini && p.fim ? ` (das ${p.ini} às ${p.fim})` : p.ini ? ` (iniciada às ${p.ini})` : typeof p.manualMin === "number" ? " (informado manualmente)" : ""}
               </div>
             )}
@@ -857,7 +862,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
           </div>
         );
       })}
-      {list.length > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}><span style={{ fontSize: 12, color: theme.textSub }}>Total</span><span style={{ fontSize: 14, fontWeight: 700, color: theme.text }}>{formatMin(totalParadas(list))}</span></div>}
+      {list.length > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}><span style={{ fontSize: s(12), color: theme.textSub }}>Total</span><span style={{ fontSize: s(14), fontWeight: 700, color: theme.text }}>{formatMin(totalParadas(list))}</span></div>}
     </div>
   );
 
@@ -866,15 +871,15 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
     <div style={{ position: "fixed", inset: 0, zIndex: 160, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end" }} onClick={closeJumboForm}>
       <div style={{ background: theme.card, borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "85vh", overflowY: "auto", padding: "20px 16px 32px" }} onClick={e => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "#2D9E7F" }}>🧻 Jumbo {rascunhoJumbo && rascunhoJumbo.id === j.id ? jumbos.length + 1 : jumbos.findIndex(x => x.id === j.id) + 1}</span>
+          <span style={{ fontSize: s(15), fontWeight: 700, color: theme.accent }}>🧻 Jumbo {rascunhoJumbo && rascunhoJumbo.id === j.id ? jumbos.length + 1 : jumbos.findIndex(x => x.id === j.id) + 1}</span>
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => removeJumbo(j.id)} style={{ fontSize: 12, color: "#E53935", background: "rgba(229,57,53,0.1)", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontWeight: 600 }}>🗑 Remover</button>
+            <button onClick={() => removeJumbo(j.id)} style={{ fontSize: s(12), color: "#E53935", background: "rgba(229,57,53,0.1)", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontWeight: 600 }}>🗑 Remover</button>
             <button onClick={closeJumboForm} style={{ width: 32, height: 32, borderRadius: "50%", background: "#F0F0F0", border: "none", cursor: "pointer" }}>✕</button>
           </div>
         </div>
 
         {/* ID do Jumbo */}
-        <label style={{ fontSize: 11, color: theme.textSub }}>ID do Jumbo</label>
+        <label style={{ fontSize: s(11), color: theme.textSub }}>ID do Jumbo</label>
         <div style={{ display: "flex", gap: 6, marginTop: 4, marginBottom: 12 }}>
           <input type="text" placeholder="Ex: 265H0110" value={j.codigo} onChange={e => updateJumbo(j.id, "codigo", e.target.value)} style={{ ...inputStyle, marginTop: 0, flex: 1, fontWeight: 700, letterSpacing: 1 }} />
           <BarcodeScannerBtn onScan={val => updateJumbo(j.id, "codigo", val)} />
@@ -882,12 +887,12 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
 
         {/* Formato Largura/Diâmetro */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <label style={{ fontSize: 11, color: theme.textSub }}>Formato (Largura/Diâmetro)</label>
-          <button onClick={() => setShowFormatoModal(true)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 14, border: `1px solid ${theme.inputBorder}`, background: theme.card, color: theme.textSub, cursor: "pointer" }}>✎ Gerenciar</button>
+          <label style={{ fontSize: s(11), color: theme.textSub }}>Formato (Largura/Diâmetro)</label>
+          <button onClick={() => setShowFormatoModal(true)} style={{ fontSize: s(10), padding: "2px 8px", borderRadius: 14, border: `1px solid ${theme.inputBorder}`, background: theme.card, color: theme.textSub, cursor: "pointer" }}>✎ Gerenciar</button>
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
           {formatos.map(f => (
-            <button key={f.id} onClick={() => applyFormato(j.id, f)} style={{ fontSize: 12, padding: "6px 12px", borderRadius: 20, border: j.largura === f.largura && j.diametro === f.diametro ? "1.5px solid #2D9E7F" : `1px solid ${theme.inputBorder}`, background: j.largura === f.largura && j.diametro === f.diametro ? "rgba(45,158,127,0.1)" : theme.inputBg, color: j.largura === f.largura && j.diametro === f.diametro ? "#2D9E7F" : theme.text, fontWeight: 600, cursor: "pointer" }}>
+            <button key={f.id} onClick={() => applyFormato(j.id, f)} style={{ fontSize: s(12), padding: "6px 12px", borderRadius: 20, border: j.largura === f.largura && j.diametro === f.diametro ? "1.5px solid #2D9E7F" : `1px solid ${theme.inputBorder}`, background: j.largura === f.largura && j.diametro === f.diametro ? "rgba(45,158,127,0.1)" : theme.inputBg, color: j.largura === f.largura && j.diametro === f.diametro ? "#2D9E7F" : theme.text, fontWeight: 600, cursor: "pointer" }}>
               {f.largura}/{f.diametro}
             </button>
           ))}
@@ -910,13 +915,13 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
                 });
               }
             });
-          }} style={{ fontSize: 12, padding: "6px 12px", borderRadius: 20, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.textSub, cursor: "pointer" }}>Outro</button>
+          }} style={{ fontSize: s(12), padding: "6px 12px", borderRadius: 20, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.textSub, cursor: "pointer" }}>Outro</button>
         </div>
 
         {/* Diâmetro manual se Outro */}
         {j.largura && !formatos.find(f => f.largura === j.largura && f.diametro === j.diametro) && (
           <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 11, color: theme.textSub }}>Diâmetro</label>
+            <label style={{ fontSize: s(11), color: theme.textSub }}>Diâmetro</label>
             <input type="text" placeholder="Ex: 1500" value={j.diametro} onChange={e => updateJumbo(j.id, "diametro", e.target.value)} style={inputStyle} />
           </div>
         )}
@@ -924,36 +929,36 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
         {/* Parâmetros custom */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, padding: "8px 10px", borderRadius: 10, background: theme.inputBg, border: `1px solid ${theme.inputBorder}` }}>
           <input type="checkbox" id={`custom-${j.id}`} checked={j.parametrosCustom} onChange={e => updateJumbo(j.id, "parametrosCustom", e.target.checked)} style={{ width: 16, height: 16 }} />
-          <label htmlFor={`custom-${j.id}`} style={{ fontSize: 13, color: theme.text, cursor: "pointer" }}>Produção especial — parâmetros diferentes</label>
+          <label htmlFor={`custom-${j.id}`} style={{ fontSize: s(13), color: theme.text, cursor: "pointer" }}>Produção especial — parâmetros diferentes</label>
         </div>
 
         {j.parametrosCustom && (
           <div style={{ padding: 12, borderRadius: 12, background: "rgba(245,124,0,0.06)", border: "1px solid rgba(245,124,0,0.2)", marginBottom: 12 }}>
-            <p style={{ fontSize: 12, fontWeight: 700, color: "#F57C00", margin: "0 0 10px" }}>⚙️ Parâmetros específicos</p>
+            <p style={{ fontSize: s(12), fontWeight: 700, color: "#F57C00", margin: "0 0 10px" }}>⚙️ Parâmetros específicos</p>
             {j.parametrosEspecificos.map((p, idx) => (
               <div key={p.id} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
-                  <button onClick={() => moveJumboParam(j.id, p.id, -1)} disabled={idx === 0} style={{ fontSize: 10, width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === 0 ? "default" : "pointer", opacity: idx === 0 ? 0.3 : 1 }}>▲</button>
-                  <button onClick={() => moveJumboParam(j.id, p.id, 1)} disabled={idx === j.parametrosEspecificos.length - 1} style={{ fontSize: 10, width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === j.parametrosEspecificos.length - 1 ? "default" : "pointer", opacity: idx === j.parametrosEspecificos.length - 1 ? 0.3 : 1 }}>▼</button>
+                  <button onClick={() => moveJumboParam(j.id, p.id, -1)} disabled={idx === 0} style={{ fontSize: s(10), width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === 0 ? "default" : "pointer", opacity: idx === 0 ? 0.3 : 1 }}>▲</button>
+                  <button onClick={() => moveJumboParam(j.id, p.id, 1)} disabled={idx === j.parametrosEspecificos.length - 1} style={{ fontSize: s(10), width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === j.parametrosEspecificos.length - 1 ? "default" : "pointer", opacity: idx === j.parametrosEspecificos.length - 1 ? 0.3 : 1 }}>▼</button>
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: 11, color: theme.textSub }}>{p.label}{p.unidade ? ` (${p.unidade})` : ""}</label>
+                  <label style={{ fontSize: s(11), color: theme.textSub }}>{p.label}{p.unidade ? ` (${p.unidade})` : ""}</label>
                   <input type="text" value={p.valor} onChange={e => updateJumboParam(j.id, p.id, "valor", e.target.value)} style={inputStyle} />
                 </div>
-                <button onClick={() => removeJumboParam(j.id, p.id)} style={{ color: "#E53935", background: "none", border: "none", cursor: "pointer", fontSize: 14, flexShrink: 0, alignSelf: "flex-end", marginBottom: 6 }}>✕</button>
+                <button onClick={() => removeJumboParam(j.id, p.id)} style={{ color: "#E53935", background: "none", border: "none", cursor: "pointer", fontSize: s(14), flexShrink: 0, alignSelf: "flex-end", marginBottom: 6 }}>✕</button>
               </div>
             ))}
-            <button onClick={() => addJumboParam(j.id)} style={{ marginTop: 4, fontSize: 12, color: "#F57C00", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar parâmetro</button>
+            <button onClick={() => addJumboParam(j.id)} style={{ marginTop: 4, fontSize: s(12), color: "#F57C00", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar parâmetro</button>
           </div>
         )}
 
         {/* Obs do jumbo */}
-        <label style={{ fontSize: 11, color: theme.textSub }}>Observações</label>
+        <label style={{ fontSize: s(11), color: theme.textSub }}>Observações</label>
         <textarea value={j.obsJumbo} onChange={e => updateJumbo(j.id, "obsJumbo", e.target.value)} rows={2} placeholder="Obs deste jumbo..." style={{ ...inputStyle, resize: "vertical", marginTop: 4, marginBottom: 16 }} />
 
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => removeJumbo(j.id)} style={{ padding: "12px 16px", borderRadius: 12, background: "rgba(229,57,53,0.1)", color: "#E53935", fontWeight: 700, fontSize: 14, border: "1px solid rgba(229,57,53,0.3)", cursor: "pointer" }}>🗑</button>
-          <button onClick={closeJumboForm} style={{ flex: 1, padding: "12px 0", borderRadius: 12, background: "#2D9E7F", color: "#FFF", fontWeight: 700, fontSize: 14, border: "none", cursor: "pointer" }}>✓ Confirmar</button>
+          <button onClick={() => removeJumbo(j.id)} style={{ padding: "12px 16px", borderRadius: 12, background: "rgba(229,57,53,0.1)", color: "#E53935", fontWeight: 700, fontSize: s(14), border: "1px solid rgba(229,57,53,0.3)", cursor: "pointer" }}>🗑</button>
+          <button onClick={closeJumboForm} style={{ flex: 1, padding: "12px 0", borderRadius: 12, background: "#2D9E7F", color: "#FFF", fontWeight: 700, fontSize: s(14), border: "none", cursor: "pointer" }}>✓ Confirmar</button>
         </div>
       </div>
     </div>
@@ -985,12 +990,12 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
       <div style={{ background: theme.headerBg, borderBottom: `1px solid ${theme.cardBorder}`, padding: "12px 16px", paddingTop: "calc(12px + env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", rowGap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
           <span style={{ fontSize: 18, flexShrink: 0 }}>🧻</span>
-          <span style={{ fontWeight: 800, fontSize: 15, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Rebobinadeira</span>
+          <span style={{ fontWeight: 800, fontSize: s(15), color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Rebobinadeira</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
-          <button onClick={handleNovo} style={{ fontSize: 11, padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: "#E53935", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>🗑 Novo</button>
-          <button onClick={() => setDarkMode(!darkMode)} style={{ fontSize: 14, width: 30, height: 30, borderRadius: "50%", border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, cursor: "pointer", flexShrink: 0 }}>{darkMode ? "☀️" : "🌙"}</button>
-          <button onClick={() => setFontSize(f => f === "sm" ? "md" : f === "md" ? "lg" : "sm")} style={{ fontSize: 11, padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>{fontSize === "sm" ? "A" : fontSize === "md" ? "A+" : "A++"}</button>
+          <button onClick={handleNovo} style={{ fontSize: s(11), padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: "#E53935", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>🗑 Novo</button>
+          <button onClick={() => setDarkMode(!darkMode)} style={{ fontSize: s(14), width: 30, height: 30, borderRadius: "50%", border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, cursor: "pointer", flexShrink: 0 }}>{darkMode ? "☀️" : "🌙"}</button>
+          <button onClick={() => setFontSize(f => f === "sm" ? "md" : f === "md" ? "lg" : "sm")} style={{ fontSize: s(11), padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>{fontSize === "sm" ? "A" : fontSize === "md" ? "A+" : "A++"}</button>
           <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: "50%", background: theme.sectionBtnBg, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: theme.text, flexShrink: 0 }}><X size={16} /></button>
         </div>
       </div>
@@ -1011,35 +1016,35 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
             <button onClick={() => setHeaderCollapsed(!headerCollapsed)} style={sectionBtn}>{headerCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
           </div>
           {!headerCollapsed && <>
-            <label style={{ fontSize: 11, color: theme.textSub }}>Destinatário</label>
+            <label style={{ fontSize: s(11), color: theme.textSub }}>Destinatário</label>
             <div style={{ display: "flex", gap: 6, marginTop: 4, marginBottom: 8 }}>
               <input type="text" placeholder="Nome do destinatário" value={dest} onChange={e => setDest(e.target.value)} style={{ ...inputStyle, marginTop: 0, flex: 1 }} />
-              <button onClick={() => setInputModal({ title: "Novo atalho", placeholder: "Ex: William", onConfirm: (v) => { if (!destinatarios.includes(v)) setDestinatarios(prev => [...prev, v]); setDest(v); setInputModal(null); } })} style={{ ...btnStyle, fontSize: 14, color: "#2D9E7F" }} title="Salvar atalho">+</button>
+              <button onClick={() => setInputModal({ title: "Novo atalho", placeholder: "Ex: William", onConfirm: (v) => { if (!destinatarios.includes(v)) setDestinatarios(prev => [...prev, v]); setDest(v); setInputModal(null); } })} style={{ ...btnStyle, fontSize: s(14), color: theme.accent }} title="Salvar atalho">+</button>
             </div>
             {destinatarios.length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
                 {destinatarios.map(d => (
                   <div key={d} style={{ display: "flex", alignItems: "center", borderRadius: 20, border: d === dest ? "1.5px solid #2D9E7F" : `1px solid ${theme.inputBorder}`, background: d === dest ? "rgba(45,158,127,0.1)" : theme.inputBg, overflow: "hidden" }}>
-                    <button onClick={() => setDest(d)} style={{ fontSize: 11, padding: "4px 10px", background: "none", border: "none", color: d === dest ? "#2D9E7F" : theme.textSub, fontWeight: 600, cursor: "pointer" }}>{d}</button>
-                    <button onClick={() => setDestinatarios(prev => prev.filter(x => x !== d))} style={{ fontSize: 11, padding: "4px 8px 4px 0", background: "none", border: "none", color: "#E53935", cursor: "pointer" }}>✕</button>
+                    <button onClick={() => setDest(d)} style={{ fontSize: s(11), padding: "4px 10px", background: "none", border: "none", color: d === dest ? "#2D9E7F" : theme.textSub, fontWeight: 600, cursor: "pointer" }}>{d}</button>
+                    <button onClick={() => setDestinatarios(prev => prev.filter(x => x !== d))} style={{ fontSize: s(11), padding: "4px 8px 4px 0", background: "none", border: "none", color: "#E53935", cursor: "pointer" }}>✕</button>
                   </div>
                 ))}
               </div>
             )}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, margin: "10px 0" }}>
-              <div><label style={{ fontSize: 11, color: theme.textSub }}>Turno</label>
+              <div><label style={{ fontSize: s(11), color: theme.textSub }}>Turno</label>
                 <select value={turno} onChange={e => onTurnoChange(e.target.value)} style={selectStyle}>
                   <option value="1">Turno 1</option><option value="2">Turno 2</option><option value="3">Turno 3</option>
                 </select>
               </div>
-              <div><label style={{ fontSize: 11, color: theme.textSub }}>Letra</label>
+              <div><label style={{ fontSize: s(11), color: theme.textSub }}>Letra</label>
                 <select value={letra} onChange={e => setLetra(e.target.value)} style={selectStyle}>
                   {["A","B","C","D","E"].map(l => <option key={l}>{l}</option>)}
                 </select>
               </div>
-              <div style={{ gridColumn: "span 2" }}><label style={{ fontSize: 11, color: theme.textSub }}>Horário</label><input type="text" value={horario} onChange={e => setHorario(e.target.value)} style={inputStyle} /></div>
+              <div style={{ gridColumn: "span 2" }}><label style={{ fontSize: s(11), color: theme.textSub }}>Horário</label><input type="text" value={horario} onChange={e => setHorario(e.target.value)} style={inputStyle} /></div>
             </div>
-            <label style={{ fontSize: 11, color: theme.textSub }}>Responsáveis</label>
+            <label style={{ fontSize: s(11), color: theme.textSub }}>Responsáveis</label>
             <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6 }}>
               {resps.map((r, i) => (
                 <div key={i} style={{ display: "flex", gap: 6 }}>
@@ -1048,7 +1053,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
                 </div>
               ))}
             </div>
-            <button onClick={() => setResps(prev => [...prev, ""])} style={{ marginTop: 8, fontSize: 12, color: "#2D9E7F", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar responsável</button>
+            <button onClick={() => setResps(prev => [...prev, ""])} style={{ marginTop: 8, fontSize: s(12), color: theme.accent, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar responsável</button>
           </>}
         </div>
 
@@ -1059,26 +1064,26 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
             <button onClick={() => setParamsCollapsed(!paramsCollapsed)} style={sectionBtn}>{paramsCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
           </div>
           {!paramsCollapsed && <>
-            <label style={{ fontSize: 11, color: theme.textSub }}>ID da máquina</label>
+            <label style={{ fontSize: s(11), color: theme.textSub }}>ID da máquina</label>
             <input type="text" placeholder="Ex: 0R30-33220" value={idMaquina} onChange={e => setIdMaquina(e.target.value)} style={inputStyle} />
             <div style={{ marginTop: 12 }}>
               {parametros.map((p, idx) => (
                 <div key={p.id} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
-                    <button onClick={() => moveParam(p.id, -1)} disabled={idx === 0} style={{ fontSize: 10, width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === 0 ? "default" : "pointer", opacity: idx === 0 ? 0.3 : 1 }}>▲</button>
-                    <button onClick={() => moveParam(p.id, 1)} disabled={idx === parametros.length - 1} style={{ fontSize: 10, width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === parametros.length - 1 ? "default" : "pointer", opacity: idx === parametros.length - 1 ? 0.3 : 1 }}>▼</button>
+                    <button onClick={() => moveParam(p.id, -1)} disabled={idx === 0} style={{ fontSize: s(10), width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === 0 ? "default" : "pointer", opacity: idx === 0 ? 0.3 : 1 }}>▲</button>
+                    <button onClick={() => moveParam(p.id, 1)} disabled={idx === parametros.length - 1} style={{ fontSize: s(10), width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === parametros.length - 1 ? "default" : "pointer", opacity: idx === parametros.length - 1 ? 0.3 : 1 }}>▼</button>
                   </div>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: theme.text, minWidth: 100 }}>• {p.label}</span>
+                  <span style={{ fontSize: s(13), fontWeight: 600, color: theme.text, minWidth: 100 }}>• {p.label}</span>
                   <button
                     onClick={() => abrirTeclado(p.label, p.valor, (v) => updateParam(p.id, "valor", v))}
-                    style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${p.valor ? "#2D9E7F" : theme.inputBorder}`, background: theme.inputBg, color: p.valor ? theme.text : theme.textSub, fontSize: 15, fontWeight: p.valor ? 700 : 400, textAlign: "left", cursor: "pointer" }}
+                    style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${p.valor ? "#2D9E7F" : theme.inputBorder}`, background: theme.inputBg, color: p.valor ? theme.text : theme.textSub, fontSize: s(15), fontWeight: p.valor ? 700 : 400, textAlign: "left", cursor: "pointer" }}
                   >{p.valor ? `${p.valor}${p.unidade ? " " + p.unidade : ""}` : "Tocar para digitar"}</button>
-                  <button onClick={() => removeParam(p.id)} style={{ color: "#E53935", background: "none", border: "none", cursor: "pointer", fontSize: 14, flexShrink: 0 }}>✕</button>
+                  <button onClick={() => removeParam(p.id)} style={{ color: "#E53935", background: "none", border: "none", cursor: "pointer", fontSize: s(14), flexShrink: 0 }}>✕</button>
                 </div>
               ))}
             </div>
-            <button onClick={addParam} style={{ marginTop: 4, fontSize: 12, color: "#2D9E7F", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar parâmetro</button>
-            <button onClick={() => { localStorage.setItem(PARAMS_KEY, JSON.stringify(parametros)); toast({ title: "✅ Parâmetros salvos como padrão!" }); }} style={{ marginTop: 4, marginLeft: 16, fontSize: 12, color: "#9E9E9E", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>💾 Salvar como padrão</button>
+            <button onClick={addParam} style={{ marginTop: 4, fontSize: s(12), color: theme.accent, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar parâmetro</button>
+            <button onClick={() => { localStorage.setItem(PARAMS_KEY, JSON.stringify(parametros)); toast({ title: "✅ Parâmetros salvos como padrão!" }); }} style={{ marginTop: 4, marginLeft: 16, fontSize: s(12), color: theme.textSub, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>💾 Salvar como padrão</button>
           </>}
         </div>
 
@@ -1090,19 +1095,19 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
           </div>
           {!jumbosCollapsed && <>
             <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-              <button onClick={addJumbo} style={{ flex: 1, padding: "10px 0", borderRadius: 12, background: "#2D9E7F", color: "#FFF", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer" }}>+ Adicionar Jumbo</button>
+              <button onClick={addJumbo} style={{ flex: 1, padding: "10px 0", borderRadius: 12, background: "#2D9E7F", color: "#FFF", fontWeight: 700, fontSize: s(13), border: "none", cursor: "pointer" }}>+ Adicionar Jumbo</button>
               <BarcodeScannerBtn onScan={val => { const j = newJumbo(); j.codigo = val; setJumbos(prev => [...prev, j]); setEditandoJumbo(j.id); }} />
             </div>
-            {jumbos.length === 0 && <p style={{ fontSize: 12, color: "#BDBDBD", fontStyle: "italic", marginBottom: 8 }}>Nenhum jumbo registrado.</p>}
+            {jumbos.length === 0 && <p style={{ fontSize: s(12), color: theme.textSub, fontStyle: "italic", marginBottom: 8 }}>Nenhum jumbo registrado.</p>}
             {jumbos.map((j, idx) => ({ j, idx })).reverse().map(({ j, idx }) => (
               <div key={j.id} onClick={() => setEditandoJumbo(j.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", marginBottom: 6, borderRadius: 12, background: theme.inputBg, border: `1px solid ${theme.cardBorder}`, cursor: "pointer" }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#BDBDBD", minWidth: 24 }}>{idx+1}.</span>
+                <span style={{ fontSize: s(12), fontWeight: 700, color: theme.textSub, minWidth: 24 }}>{idx+1}.</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: theme.text, letterSpacing: 0.5 }}>{j.codigo || <span style={{ color: "#BDBDBD", fontWeight: 400 }}>Sem código</span>}</div>
-                  {(j.largura || j.diametro) && <div style={{ fontSize: 11, color: theme.textSub, marginTop: 2 }}>{j.largura && `Largura: ${j.largura}`}{j.diametro && ` · Ø${j.diametro}`}</div>}
+                  <div style={{ fontSize: s(13), fontWeight: 700, color: theme.text, letterSpacing: 0.5 }}>{j.codigo || <span style={{ color: theme.textSub, fontWeight: 400 }}>Sem código</span>}</div>
+                  {(j.largura || j.diametro) && <div style={{ fontSize: s(11), color: theme.textSub, marginTop: 2 }}>{j.largura && `Largura: ${j.largura}`}{j.diametro && ` · Ø${j.diametro}`}</div>}
                 </div>
-                {j.codigo && <span style={{ fontSize: 10, fontWeight: 700, color: "#2D9E7F", background: "rgba(45,158,127,0.1)", padding: "2px 8px", borderRadius: 10 }}>✓</span>}
-                <span style={{ fontSize: 12, color: "#BDBDBD" }}>›</span>
+                {j.codigo && <span style={{ fontSize: s(10), fontWeight: 700, color: theme.accent, background: "rgba(45,158,127,0.1)", padding: "2px 8px", borderRadius: 10 }}>✓</span>}
+                <span style={{ fontSize: s(12), color: theme.textSub }}>›</span>
               </div>
             ))}
             {/* Form jumbo */}
@@ -1127,16 +1132,16 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
                 <div key={idx} style={{ padding: 10, marginBottom: 6, borderRadius: 12, background: qtd > 0 ? "rgba(45,158,127,0.07)" : theme.inputBg, border: `1px solid ${qtd > 0 ? "rgba(45,158,127,0.2)" : "transparent"}` }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", rowGap: 6 }}>
                     <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
-                      <button onClick={() => moveItemConsumo(idx, -1)} disabled={idx === 0} style={{ fontSize: 10, width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === 0 ? "default" : "pointer", opacity: idx === 0 ? 0.3 : 1 }}>▲</button>
-                      <button onClick={() => moveItemConsumo(idx, 1)} disabled={idx === itens.length - 1} style={{ fontSize: 10, width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === itens.length - 1 ? "default" : "pointer", opacity: idx === itens.length - 1 ? 0.3 : 1 }}>▼</button>
+                      <button onClick={() => moveItemConsumo(idx, -1)} disabled={idx === 0} style={{ fontSize: s(10), width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === 0 ? "default" : "pointer", opacity: idx === 0 ? 0.3 : 1 }}>▲</button>
+                      <button onClick={() => moveItemConsumo(idx, 1)} disabled={idx === itens.length - 1} style={{ fontSize: s(10), width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === itens.length - 1 ? "default" : "pointer", opacity: idx === itens.length - 1 ? 0.3 : 1 }}>▼</button>
                     </div>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: theme.text, whiteSpace: "nowrap" }}>{item.label}</span>
-                    {qtd > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: "#2D9E7F", background: "rgba(45,158,127,0.12)", padding: "2px 8px", borderRadius: 20, whiteSpace: "nowrap", flexShrink: 0 }}>{String(qtd).padStart(2, "0")} · {totalItem}min</span>}
+                    <span style={{ fontSize: s(13), fontWeight: 500, color: theme.text, whiteSpace: "nowrap" }}>{item.label}</span>
+                    {qtd > 0 && <span style={{ fontSize: s(11), fontWeight: 700, color: theme.accent, background: "rgba(45,158,127,0.12)", padding: "2px 8px", borderRadius: 20, whiteSpace: "nowrap", flexShrink: 0 }}>{String(qtd).padStart(2, "0")} · {totalItem}min</span>}
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
                       {qtd > 0 && <button onClick={() => toggleItemConsumo(idx)} style={sectionBtn}>{item.collapsed ? "▼" : "▲"}</button>}
-                      <button onClick={() => addTrocasMultiplas(idx)} style={{ padding: "5px 8px", fontSize: 11, fontWeight: 600, color: "#2D9E7F", background: "rgba(45,158,127,0.1)", border: "1px solid rgba(45,158,127,0.3)", borderRadius: 8, whiteSpace: "nowrap", cursor: "pointer" }} title="Adicionar várias trocas de uma vez">🔢 Várias</button>
-                      <button onClick={() => addTroca(idx)} style={{ padding: "5px 10px", fontSize: 11, fontWeight: 600, color: "#fff", background: "#2D9E7F", border: "none", borderRadius: 8, whiteSpace: "nowrap", cursor: "pointer" }}>+ Troca</button>
-                      <button onClick={() => setConfirmDeleteItem(idx)} style={{ width: 24, height: 24, padding: 0, fontSize: 13, color: "#E53935", background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>🗑</button>
+                      <button onClick={() => addTrocasMultiplas(idx)} style={{ padding: "5px 8px", fontSize: s(11), fontWeight: 600, color: theme.accent, background: "rgba(45,158,127,0.1)", border: "1px solid rgba(45,158,127,0.3)", borderRadius: 8, whiteSpace: "nowrap", cursor: "pointer" }} title="Adicionar várias trocas de uma vez">🔢 Várias</button>
+                      <button onClick={() => addTroca(idx)} style={{ padding: "5px 10px", fontSize: s(11), fontWeight: 600, color: "#fff", background: "#2D9E7F", border: "none", borderRadius: 8, whiteSpace: "nowrap", cursor: "pointer" }}>+ Troca</button>
+                      <button onClick={() => setConfirmDeleteItem(idx)} style={{ width: 24, height: 24, padding: 0, fontSize: s(13), color: "#E53935", background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>🗑</button>
                     </div>
                   </div>
                   {!item.collapsed && item.trocas.map((t, ti) => (
@@ -1146,23 +1151,23 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
                           const n = parseInt(v.replace(/\D/g, ""), 10);
                           if (!isNaN(n) && n > 0) updateTrocaQtd(idx, ti, n);
                         })}
-                        style={{ fontSize: 12, fontWeight: 700, color: "#2D9E7F", whiteSpace: "nowrap", minWidth: 56, background: "rgba(45,158,127,0.1)", border: "none", borderRadius: 6, padding: "3px 6px", cursor: "pointer" }}
+                        style={{ fontSize: s(12), fontWeight: 700, color: theme.accent, whiteSpace: "nowrap", minWidth: 56, background: "rgba(45,158,127,0.1)", border: "none", borderRadius: 6, padding: "3px 6px", cursor: "pointer" }}
                         title="Toque para corrigir a quantidade"
                       >
                         Troca {t.qtd ?? 1}
                       </button>
-                      <input type="number" min={0} value={t.min !== null ? t.min : ""} placeholder="min" onChange={e => setTrocaMin(idx, ti, e.target.value)} style={{ width: 64, fontSize: 16, fontWeight: 700, textAlign: "center", borderRadius: 8, padding: 5, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text }} />
-                      <span style={{ fontSize: 12, color: theme.textSub }}>min</span>
-                      {t.min !== null && t.min > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: "#2D9E7F", marginLeft: "auto" }}>✓ {t.min}min</span>}
-                      <button onClick={() => removeTroca(idx, ti)} style={{ padding: "0 6px", color: "#E53935", fontSize: 13, marginLeft: t.min ? undefined : "auto", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+                      <input type="number" min={0} value={t.min !== null ? t.min : ""} placeholder="min" onChange={e => setTrocaMin(idx, ti, e.target.value)} style={{ width: 64, fontSize: s(16), fontWeight: 700, textAlign: "center", borderRadius: 8, padding: 5, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text }} />
+                      <span style={{ fontSize: s(12), color: theme.textSub }}>min</span>
+                      {t.min !== null && t.min > 0 && <span style={{ fontSize: s(12), fontWeight: 700, color: theme.accent, marginLeft: "auto" }}>✓ {t.min}min</span>}
+                      <button onClick={() => removeTroca(idx, ti)} style={{ padding: "0 6px", color: "#E53935", fontSize: s(13), marginLeft: t.min ? undefined : "auto", background: "none", border: "none", cursor: "pointer" }}>✕</button>
                     </div>
                   ))}
                 </div>
               );
             })}
-            <button onClick={addItemConsumo} style={{ marginTop: 8, fontSize: 12, color: "#2D9E7F", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar item</button>
+            <button onClick={addItemConsumo} style={{ marginTop: 8, fontSize: s(12), color: theme.accent, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar item</button>
             <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${theme.cardBorder}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 13, color: theme.textSub }}>✔ Total Tempo de Parada</span>
+              <span style={{ fontSize: s(13), color: theme.textSub }}>✔ Total Tempo de Parada</span>
               <span style={{ fontSize: 17, fontWeight: 700, color: theme.text }}>{formatMin(calcTotalConsumidos())}</span>
             </div>
           </>}
@@ -1176,24 +1181,24 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
           </div>
           {!clCollapsed && <>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              <span style={{ fontSize: 13, flex: 1, color: theme.text }}>Cargas de Tubetes</span>
+              <span style={{ fontSize: s(13), flex: 1, color: theme.text }}>Cargas de Tubetes</span>
               <button onClick={() => setClQtd(Math.max(0, clQtd-1))} style={btnStyle}>-</button>
               <span style={{ fontSize: 18, fontWeight: 700, minWidth: 32, textAlign: "center", color: theme.text }}>{String(clQtd).padStart(2,"0")}</span>
               <button onClick={() => setClQtd(clQtd+1)} style={btnStyle}>+</button>
             </div>
             <div style={{ marginBottom: 8 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: theme.text }}>Troca de serra</span>
+              <span style={{ fontSize: s(13), fontWeight: 600, color: theme.text }}>Troca de serra</span>
               {trocasSerra.map((t, i) => (
                 <div key={t.id} style={{ border: `1px solid ${theme.inputBorder}`, borderRadius: 12, padding: "8px 10px", marginTop: 6 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 11, color: theme.textSub }}>Troca {i + 1}</span>
+                    <span style={{ fontSize: s(11), color: theme.textSub }}>Troca {i + 1}</span>
                     {trocasSerra.length > 1 && (
                       <button onClick={() => removerTrocaSerra(t.id)} style={sectionBtn}>Remover</button>
                     )}
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 4 }}>
                     <label style={{ display: "block" }}>
-                      <span style={{ fontSize: 11, color: theme.textSub }}>Serra retirada (nº)</span>
+                      <span style={{ fontSize: s(11), color: theme.textSub }}>Serra retirada (nº)</span>
                       <input
                         value={t.retirada}
                         onChange={e => atualizarTrocaSerra(t.id, "retirada", e.target.value)}
@@ -1202,7 +1207,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
                       />
                     </label>
                     <label style={{ display: "block" }}>
-                      <span style={{ fontSize: 11, color: theme.textSub }}>Serra colocada (nº)</span>
+                      <span style={{ fontSize: s(11), color: theme.textSub }}>Serra colocada (nº)</span>
                       <input
                         value={t.colocada}
                         onChange={e => atualizarTrocaSerra(t.id, "colocada", e.target.value)}
@@ -1212,7 +1217,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
                     </label>
                   </div>
                   <label style={{ display: "block", marginTop: 6 }}>
-                    <span style={{ fontSize: 11, color: theme.textSub }}>Quantidade de cortes (da serra retirada)</span>
+                    <span style={{ fontSize: s(11), color: theme.textSub }}>Quantidade de cortes (da serra retirada)</span>
                     <input
                       value={t.cortes}
                       inputMode="numeric"
@@ -1238,13 +1243,13 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
           </div>
           {!rcCollapsed && <>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              <span style={{ fontSize: 13, flex: 1, color: theme.text }}>Bobinas com id</span>
+              <span style={{ fontSize: s(13), flex: 1, color: theme.text }}>Bobinas com id</span>
               <button onClick={() => setRcId(Math.max(0, rcId-1))} style={btnStyle}>-</button>
               <span style={{ fontSize: 18, fontWeight: 700, minWidth: 32, textAlign: "center", color: theme.text }}>{String(rcId).padStart(2,"0")}</span>
               <button onClick={() => setRcId(rcId+1)} style={btnStyle}>+</button>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              <span style={{ fontSize: 13, flex: 1, color: theme.text }}>Bobinas sem id</span>
+              <span style={{ fontSize: s(13), flex: 1, color: theme.text }}>Bobinas sem id</span>
               <button onClick={() => setRcSid(Math.max(0, rcSid-1))} style={btnStyle}>-</button>
               <span style={{ fontSize: 18, fontWeight: 700, minWidth: 32, textAlign: "center", color: theme.text }}>{String(rcSid).padStart(2,"0")}</span>
               <button onClick={() => setRcSid(rcSid+1)} style={btnStyle}>+</button>
@@ -1269,17 +1274,17 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
         {/* Prévia */}
         {showPrevia && (
           <div style={{ ...cardStyle, marginBottom: 12 }}>
-            <p style={{ fontSize: 11, fontWeight: 600, margin: "0 0 8px", color: theme.textSub }}>PRÉVIA DO RELATÓRIO</p>
-            <pre style={{ fontSize: 12, whiteSpace: "pre-wrap", margin: 0, lineHeight: 1.8, color: theme.text }}>{previa}</pre>
+            <p style={{ fontSize: s(11), fontWeight: 600, margin: "0 0 8px", color: theme.textSub }}>PRÉVIA DO RELATÓRIO</p>
+            <pre style={{ fontSize: s(12), whiteSpace: "pre-wrap", margin: 0, lineHeight: 1.8, color: theme.text }}>{previa}</pre>
           </div>
         )}
       </div>
 
       {/* Rodapé */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: theme.headerBg, borderTop: `1px solid ${theme.cardBorder}`, padding: "12px 16px", paddingBottom: "calc(12px + env(safe-area-inset-bottom))", display: "flex", gap: 8 }}>
-        <button onClick={() => { setPrevia(gerarTexto()); setShowPrevia(true); }} style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 600, borderRadius: 12, background: theme.sectionBtnBg, color: theme.text, border: "none", cursor: "pointer" }}>👁 Prévia</button>
-        <button onClick={handleSaveNote} style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 600, borderRadius: 12, background: "#1A1A2E", color: "#FFF", border: "none", cursor: "pointer" }}>💾 Salvar</button>
-        <button onClick={() => setShowSendConfirm(true)} style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 600, borderRadius: 12, background: "#2D9E7F", color: "#FFF", border: "none", cursor: "pointer" }}>📤 Enviar</button>
+        <button onClick={() => { setPrevia(gerarTexto()); setShowPrevia(true); }} style={{ flex: 1, padding: "11px 0", fontSize: s(13), fontWeight: 600, borderRadius: 12, background: theme.sectionBtnBg, color: theme.text, border: "none", cursor: "pointer" }}>👁 Prévia</button>
+        <button onClick={handleSaveNote} style={{ flex: 1, padding: "11px 0", fontSize: s(13), fontWeight: 600, borderRadius: 12, background: "#1A1A2E", color: "#FFF", border: "none", cursor: "pointer" }}>💾 Salvar</button>
+        <button onClick={() => setShowSendConfirm(true)} style={{ flex: 1, padding: "11px 0", fontSize: s(13), fontWeight: 600, borderRadius: 12, background: "#2D9E7F", color: "#FFF", border: "none", cursor: "pointer" }}>📤 Enviar</button>
       </div>
 
       {/* Modal gerenciar formatos */}
@@ -1287,27 +1292,27 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
         <div style={{ position: "fixed", inset: 0, zIndex: 250, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end" }} onClick={() => setShowFormatoModal(false)}>
           <div style={{ background: "#FFF", borderRadius: "20px 20px 0 0", padding: 20, width: "100%", maxHeight: "70vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <p style={{ fontWeight: 700, fontSize: 15, color: "#1A1A2E", margin: 0 }}>Gerenciar Formatos</p>
+              <p style={{ fontWeight: 700, fontSize: s(15), color: "#1A1A2E", margin: 0 }}>Gerenciar Formatos</p>
               <button onClick={() => setShowFormatoModal(false)} style={{ width: 30, height: 30, borderRadius: "50%", background: "#F0F0F0", border: "none", cursor: "pointer" }}>✕</button>
             </div>
             {formatos.map(f => (
               <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", marginBottom: 6, borderRadius: 10, background: "#FAFAFA", border: "1px solid #F0F0F0" }}>
-                <span style={{ fontSize: 13, flex: 1, fontWeight: 600 }}>{f.largura} / {f.diametro}</span>
+                <span style={{ fontSize: s(13), flex: 1, fontWeight: 600 }}>{f.largura} / {f.diametro}</span>
                 <button onClick={() => removeFormato(f.id)} style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(229,57,53,0.1)", border: "none", color: "#E53935", cursor: "pointer" }}>✕</button>
               </div>
             ))}
-            <p style={{ fontSize: 12, fontWeight: 700, color: "#9E9E9E", margin: "12px 0 8px" }}>Novo formato</p>
+            <p style={{ fontSize: s(12), fontWeight: 700, color: theme.textSub, margin: "12px 0 8px" }}>Novo formato</p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
               <div>
-                <label style={{ fontSize: 11, color: "#9E9E9E" }}>Largura</label>
-                <input type="text" inputMode="numeric" placeholder="Ex: 500" value={novoFormato.largura} onChange={e => setNovoFormato(p => ({ ...p, largura: e.target.value }))} style={{ width: "100%", boxSizing: "border-box", fontSize: 15, borderRadius: 8, padding: "8px 10px", border: "1px solid #EBEBEB", marginTop: 4 }} />
+                <label style={{ fontSize: s(11), color: theme.textSub }}>Largura</label>
+                <input type="text" inputMode="numeric" placeholder="Ex: 500" value={novoFormato.largura} onChange={e => setNovoFormato(p => ({ ...p, largura: e.target.value }))} style={{ width: "100%", boxSizing: "border-box", fontSize: s(15), borderRadius: 8, padding: "8px 10px", border: "1px solid #EBEBEB", marginTop: 4 }} />
               </div>
               <div>
-                <label style={{ fontSize: 11, color: "#9E9E9E" }}>Diâmetro</label>
-                <input type="text" inputMode="numeric" placeholder="Ex: 1480" value={novoFormato.diametro} onChange={e => setNovoFormato(p => ({ ...p, diametro: e.target.value }))} style={{ width: "100%", boxSizing: "border-box", fontSize: 15, borderRadius: 8, padding: "8px 10px", border: "1px solid #EBEBEB", marginTop: 4 }} />
+                <label style={{ fontSize: s(11), color: theme.textSub }}>Diâmetro</label>
+                <input type="text" inputMode="numeric" placeholder="Ex: 1480" value={novoFormato.diametro} onChange={e => setNovoFormato(p => ({ ...p, diametro: e.target.value }))} style={{ width: "100%", boxSizing: "border-box", fontSize: s(15), borderRadius: 8, padding: "8px 10px", border: "1px solid #EBEBEB", marginTop: 4 }} />
               </div>
             </div>
-            <button onClick={addFormato} style={{ width: "100%", padding: "10px 0", borderRadius: 8, background: "#2D9E7F", color: "#FFF", fontWeight: 700, fontSize: 14, border: "none", cursor: "pointer", marginBottom: 12 }}>+ Adicionar formato</button>
+            <button onClick={addFormato} style={{ width: "100%", padding: "10px 0", borderRadius: 8, background: "#2D9E7F", color: "#FFF", fontWeight: 700, fontSize: s(14), border: "none", cursor: "pointer", marginBottom: 12 }}>+ Adicionar formato</button>
           </div>
         </div>
       )}
@@ -1319,10 +1324,10 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
           <div style={{ position: "relative", background: theme.card, borderRadius: 20, padding: "14px 14px 18px", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", width: "min(88vw, 280px)" }}>
             {/* Label e display */}
             <div style={{ marginBottom: 10 }}>
-              <p style={{ fontSize: 12, color: theme.textSub, margin: "0 0 6px", fontWeight: 600, textAlign: "center" }}>{numTeclado.label}</p>
+              <p style={{ fontSize: s(12), color: theme.textSub, margin: "0 0 6px", fontWeight: 600, textAlign: "center" }}>{numTeclado.label}</p>
               <div style={{ background: theme.inputBg, border: `2px solid #2D9E7F`, borderRadius: 10, padding: "8px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 22, fontWeight: 700, color: theme.text, letterSpacing: 2 }}>{numValor || <span style={{ color: theme.textSub, fontSize: 16, fontWeight: 400 }}>0</span>}</span>
-                <button onClick={tecladoApagar} style={{ width: 34, height: 34, borderRadius: 8, background: theme.sectionBtnBg, border: "none", fontSize: 16, cursor: "pointer", color: theme.text }}>⌫</button>
+                <span style={{ fontSize: 22, fontWeight: 700, color: theme.text, letterSpacing: 2 }}>{numValor || <span style={{ color: theme.textSub, fontSize: s(16), fontWeight: 400 }}>0</span>}</span>
+                <button onClick={tecladoApagar} style={{ width: 34, height: 34, borderRadius: 8, background: theme.sectionBtnBg, border: "none", fontSize: s(16), cursor: "pointer", color: theme.text }}>⌫</button>
               </div>
             </div>
             {/* Grid de teclas */}
@@ -1332,8 +1337,8 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
               ))}
               <button onClick={() => tecladoDigito(",")} style={{ height: 42, borderRadius: 10, background: theme.sectionBtnBg, border: `1px solid ${theme.inputBorder}`, fontSize: 17, fontWeight: 600, color: theme.text, cursor: "pointer" }}>,</button>
               <button onClick={() => tecladoDigito("0")} style={{ height: 42, borderRadius: 10, background: theme.sectionBtnBg, border: `1px solid ${theme.inputBorder}`, fontSize: 17, fontWeight: 600, color: theme.text, cursor: "pointer" }}>0</button>
-              <button onClick={() => setNumValor("")} style={{ height: 42, borderRadius: 10, background: "rgba(229,57,53,0.1)", border: "none", fontSize: 12, fontWeight: 600, color: "#E53935", cursor: "pointer" }}>C</button>
-              <button onClick={tecladoConfirmar} style={{ height: 42, borderRadius: 10, background: "#2D9E7F", border: "none", fontSize: 13, fontWeight: 700, color: "#FFF", cursor: "pointer" }}>OK</button>
+              <button onClick={() => setNumValor("")} style={{ height: 42, borderRadius: 10, background: "rgba(229,57,53,0.1)", border: "none", fontSize: s(12), fontWeight: 600, color: "#E53935", cursor: "pointer" }}>C</button>
+              <button onClick={tecladoConfirmar} style={{ height: 42, borderRadius: 10, background: "#2D9E7F", border: "none", fontSize: s(13), fontWeight: 700, color: "#FFF", cursor: "pointer" }}>OK</button>
             </div>
           </div>
         </div>
@@ -1352,24 +1357,24 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
       {showSendConfirm && (
         <div style={{ position: "fixed", inset: 0, zIndex: 260, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => setShowSendConfirm(false)}>
           <div style={{ background: theme.card, borderRadius: 18, padding: 20, width: "min(100%,340px)" }} onClick={e => e.stopPropagation()}>
-            <p style={{ fontWeight: 700, fontSize: 15, color: theme.text, margin: "0 0 12px" }}>Confirmar envio?</p>
+            <p style={{ fontWeight: 700, fontSize: s(15), color: theme.text, margin: "0 0 12px" }}>Confirmar envio?</p>
 
             <div style={{ background: theme.inputBg, border: `1px solid ${theme.inputBorder}`, borderRadius: 12, padding: "10px 12px", marginBottom: 16, display: "flex", flexDirection: "column", gap: 6 }}>
-              <div style={{ fontSize: 13, color: theme.text }}>
+              <div style={{ fontSize: s(13), color: theme.text }}>
                 <span style={{ color: theme.textSub }}>Destinatário: </span>
                 <strong>{dest || "—"}</strong>
               </div>
-              <div style={{ fontSize: 13, color: theme.text }}>
+              <div style={{ fontSize: s(13), color: theme.text }}>
                 <strong>Relatório da Rebobinadeira {rebobNum}</strong>
               </div>
-              <div style={{ fontSize: 13, color: theme.text }}>
+              <div style={{ fontSize: s(13), color: theme.text }}>
                 Turno {turno} - Letra {letra} - {horario}
               </div>
             </div>
 
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => setShowSendConfirm(false)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: theme.sectionBtnBg, color: theme.text, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Voltar</button>
-              <button onClick={confirmarEnvio} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#2D9E7F", color: "#FFF", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Confirmar Envio</button>
+              <button onClick={() => setShowSendConfirm(false)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: theme.sectionBtnBg, color: theme.text, fontWeight: 600, fontSize: s(13), cursor: "pointer" }}>Voltar</button>
+              <button onClick={confirmarEnvio} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#2D9E7F", color: "#FFF", fontWeight: 600, fontSize: s(13), cursor: "pointer" }}>Confirmar Envio</button>
             </div>
           </div>
         </div>

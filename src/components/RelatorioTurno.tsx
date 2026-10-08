@@ -59,6 +59,24 @@ const ordenarConsumidos = (lista: ItemConsumo[]): ItemConsumo[] => [
   ...lista.filter(i => i.trocas.length > 0),
   ...lista.filter(i => i.trocas.length === 0),
 ];
+// Troca de serra do Core Link: números de identificação das serras (retirada e
+// colocada) e quantos cortes a serra retirada fez. Tudo texto para não perder
+// zeros à esquerda nos números de identificação.
+interface TrocaSerra { id: string; retirada: string; colocada: string; cortes: string; }
+const novaTrocaSerra = (): TrocaSerra => ({ id: Math.random().toString(36).slice(2) + Date.now().toString(36), retirada: "", colocada: "", cortes: "" });
+
+// Frase da troca de serra no relatório. Troca totalmente vazia não gera linha.
+const trocaSerraTexto = (t: TrocaSerra): string => {
+  const ret = t.retirada.trim();
+  const col = t.colocada.trim();
+  const cor = t.cortes.trim();
+  if (!ret && !col && !cor) return "";
+  let txt = `Efetuado a troca da serra${ret ? " " + ret : ""}`;
+  if (cor) txt += ` (${cor} ${cor === "1" ? "corte" : "cortes"})`;
+  txt += col ? ` e instalada ${col}.` : ".";
+  return txt;
+};
+
 interface Parada {
   desc: string;
   ini: string;
@@ -383,6 +401,10 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   const [modoTombador, setModoTombador] = useState(saved?.modoTombador ?? false);
   const [darkMode, setDarkMode] = useState(false);
   const [fontSize, setFontSize] = useState<"sm"|"md"|"lg">(saved?.fontSize ?? "md");
+  // Escala das letras: acompanha o botão A / A+ / A++ do topo. "A" = tamanho
+  // antigo, "A+" (padrão) = maior e mais fácil de ler no celular, "A++" = maior ainda.
+  const bump = fontSize === "sm" ? 0 : fontSize === "lg" ? 4 : 2;
+  const s = (n: number) => (n >= 17 ? n : n + bump);
   const [embaladeiraNum, setEmbaladeiraNum] = useState<"1"|"2">(saved?.embaladeiraNum ?? "2");
   const [headerCollapsed, setHeaderCollapsed] = useState(!!saved);
   const [embCollapsed, setEmbCollapsed] = useState(true);
@@ -393,6 +415,14 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   const [obsEmb, setObsEmb] = useState(saved?.obsEmb ?? "");
   const [paradasMap, setParadasMap] = useState<ParadasMap>(saved?.paradasMap ?? { emb: [], cl: [], rc: [] });
   const [clQtd, setClQtd] = useState(saved?.clQtd ?? 0);
+  const [trocasSerra, setTrocasSerra] = useState<TrocaSerra[]>(
+    Array.isArray(saved?.trocasSerra) && saved.trocasSerra.length > 0 ? saved.trocasSerra : [novaTrocaSerra()]
+  );
+  const atualizarTrocaSerra = (id: string, campo: "retirada" | "colocada" | "cortes", valor: string) =>
+    setTrocasSerra(prev => prev.map(t => (t.id === id ? { ...t, [campo]: valor } : t)));
+  const adicionarTrocaSerra = () => setTrocasSerra(prev => [...prev, novaTrocaSerra()]);
+  const removerTrocaSerra = (id: string) =>
+    setTrocasSerra(prev => (prev.length > 1 ? prev.filter(t => t.id !== id) : [novaTrocaSerra()]));
   const [rcId, setRcId] = useState(saved?.rcId ?? 0);
   const [rcSid, setRcSid] = useState(saved?.rcSid ?? 0);
   const [obsCL, setObsCL] = useState(saved?.obsCL ?? "");
@@ -442,9 +472,9 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
 
   // Auto-salvar rascunho
   useEffect(() => {
-    const state = { dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, rcId, rcSid, obsCL, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, modoTombador, embaladeiraNum, fontSize };
+    const state = { dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, trocasSerra, rcId, rcSid, obsCL, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, modoTombador, embaladeiraNum, fontSize };
     localStorage.setItem(RASCUNHO_KEY, JSON.stringify(state));
-  }, [dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, rcId, rcSid, obsCL, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, modoTombador, embaladeiraNum, fontSize]);
+  }, [dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, trocasSerra, rcId, rcSid, obsCL, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, modoTombador, embaladeiraNum, fontSize]);
 
   const addOrigem = () => setInputModal({
     title: "Nova Origem", placeholder: "Ex: Linha de Bobinas 3",
@@ -701,10 +731,12 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
     const totalPCL = formatMin(totalParadas("cl"));
     const paradasRC = buildParadasTxt(paradasMap.rc);
     const totalPRC = formatMin(totalParadas("rc"));
+    const serraLinhas = trocasSerra.map(trocaSerraTexto).filter(Boolean);
     let coreLinkSection = "";
-    if (clQtd > 0 || obsCL || paradasCL) {
+    if (clQtd > 0 || serraLinhas.length > 0 || obsCL || paradasCL) {
       coreLinkSection += "\n•Core Link\n";
       if (clQtd > 0) coreLinkSection += ` ${String(clQtd).padStart(2, "0")} Cargas de Tubetes\n`;
+      serraLinhas.forEach(l => { coreLinkSection += ` ${l}\n`; });
       if (obsCL) coreLinkSection += `Obs: ${obsCL}\n`;
       if (paradasCL) coreLinkSection += `\nObs:\n${paradasCL}Parada total: ${totalPCL}.\n`;
     }
@@ -720,7 +752,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
       return `${getSaudacao()}${dest ? ", " + dest : ""},\nSegue relatório do tombador.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}\n${buildTombadorTxt()}`.trim();
     }
     return `${getSaudacao()}${dest ? ", " + dest : ""},\nSegue Relatório da linha de bobinas.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}\n\n• Embaladeira ${embaladeiraNum}\n✔ Consumidos:\n${consumidos || " (sem consumos)\n"}\n✔ Total de Tempo de Parada: ${totalEmb}.${obsEmb ? "\n\nObs:\n" + obsEmb : ""}${paradasEmb ? "\n\nObs:\n" + paradasEmb + "Parada total: " + totalPEmb + "." : ""}${coreLinkSection}${rollCutterSection}${buildTombadorTxt()}`.trim();
-  }, [dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, obsCL, rcId, rcSid, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, embaladeiraNum, db]);
+  }, [dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, trocasSerra, obsCL, rcId, rcSid, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, embaladeiraNum, db]);
 
   const handlePrevia = () => { setPrevia(gerarTexto()); setShowPrevia(true); };
   const handleShare = async () => {
@@ -754,7 +786,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
     const title = modoTombador
       ? `Relatório Tombador - Letra ${letra}`
       : `Relatório Embaladeira ${embaladeiraNum} - Letra ${letra}`;
-    const state = { dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, rcId, rcSid, obsCL, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, modoTombador, embaladeiraNum, fontSize };
+    const state = { dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, trocasSerra, rcId, rcSid, obsCL, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, modoTombador, embaladeiraNum, fontSize };
     // Salva o estado no localStorage com chave baseada no título
     const stateKey = `relatorio_state_${title.replace(/\s/g, "_")}`;
     try {
@@ -780,36 +812,37 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   };
 
   // ── Tema ──
-  const fz = fontSize === "sm" ? 12 : fontSize === "lg" ? 16 : 14;
+  const fz = fontSize === "sm" ? 13 : fontSize === "lg" ? 18 : 16;
   const theme = {
     bg: darkMode ? "#1A1A2E" : "#F7F5F2",
     card: darkMode ? "#252540" : "#FFF",
     cardBorder: darkMode ? "#333355" : "#F0F0F0",
     text: darkMode ? "#E8E8F0" : "#1A1A2E",
-    textSub: darkMode ? "#9090B0" : "#9E9E9E",
+    textSub: darkMode ? "#B4B4CC" : "#6B6B7B",
+    accent: darkMode ? "#4FC3A1" : "#1F7A61",
     inputBg: darkMode ? "#1E1E38" : "#FAFAFA",
-    inputBorder: darkMode ? "#333355" : "#EBEBEB",
+    inputBorder: darkMode ? "#44446A" : "#D4D4D4",
     sectionBtnBg: darkMode ? "#2A2A45" : "#F5F5F5",
-    sectionBtnBorder: darkMode ? "#333355" : "#EBEBEB",
+    sectionBtnBorder: darkMode ? "#44446A" : "#D4D4D4",
     headerBg: darkMode ? "rgba(26,26,46,0.98)" : "rgba(247,245,242,0.98)",
     footerBg: darkMode ? "rgba(26,26,46,0.98)" : "rgba(247,245,242,0.98)",
   };
 
   // ── Estilos ──
-  const btnStyle: React.CSSProperties = { width: 36, height: 36, padding: 0, fontSize: 18, borderRadius: 10, border: `1px solid ${theme.inputBorder}`, background: theme.sectionBtnBg, cursor: "pointer", color: theme.text };
-  const sectionBtn: React.CSSProperties = { fontSize: 11, padding: "3px 10px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, cursor: "pointer", color: theme.text };
-  const manageBtn: React.CSSProperties = { fontSize: 10, padding: "2px 8px", borderRadius: 14, border: `1px solid ${theme.inputBorder}`, background: theme.card, color: theme.textSub, cursor: "pointer", whiteSpace: "nowrap" };
-  const inputStyle: React.CSSProperties = { width: "100%", marginTop: 4, boxSizing: "border-box", fontSize: fz, borderRadius: 8, padding: "6px 10px", border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text };
+  const btnStyle: React.CSSProperties = { width: 44, height: 44, padding: 0, fontSize: 20, borderRadius: 12, border: `1px solid ${theme.inputBorder}`, background: theme.sectionBtnBg, cursor: "pointer", color: theme.text };
+  const sectionBtn: React.CSSProperties = { fontSize: s(11), padding: "8px 14px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, cursor: "pointer", color: theme.text };
+  const manageBtn: React.CSSProperties = { fontSize: s(10), padding: "6px 12px", borderRadius: 16, border: `1px solid ${theme.inputBorder}`, background: theme.card, color: theme.textSub, cursor: "pointer", whiteSpace: "nowrap" };
+  const inputStyle: React.CSSProperties = { width: "100%", marginTop: 4, boxSizing: "border-box", fontSize: fz, borderRadius: 10, padding: "11px 12px", border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text };
   const cardStyle: React.CSSProperties = { background: theme.card, border: `1px solid ${theme.cardBorder}`, borderRadius: 16, padding: "14px 16px", marginBottom: 12 };
   const selectStyle: React.CSSProperties = { ...inputStyle, appearance: "none", WebkitAppearance: "none" };
 
   const renderParadas = (sec: keyof ParadasMap, label: string) => (
     <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #F0F0F0" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: "#9E9E9E" }}>⏱ {label}</span>
+        <span style={{ fontSize: s(12), fontWeight: 600, color: theme.textSub }}>⏱ {label}</span>
         <div style={{ display: "flex", gap: 6 }}>
           <button onClick={() => addParadaAutomatica(sec)} style={{ ...sectionBtn, color: "#E53935", fontWeight: 600 }}>🔴 Iniciar agora</button>
-          <button onClick={() => addParada(sec)} style={{ ...sectionBtn, color: "#2D9E7F", fontWeight: 600 }}>+ Adicionar</button>
+          <button onClick={() => addParada(sec)} style={{ ...sectionBtn, color: theme.accent, fontWeight: 600 }}>+ Adicionar</button>
         </div>
       </div>
       {paradasMap[sec].map((p, i) => {
@@ -820,13 +853,13 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
           return (
             <div key={i} style={{ border: "1.5px solid #E53935", borderRadius: 12, padding: 10, marginBottom: 8, background: "rgba(229,57,53,0.06)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#E53935" }}>🔴 Parada {i + 1} em andamento · desde {p.ini}</span>
-                <button onClick={() => removeParada(sec, i)} style={{ padding: "0 8px", color: "#E53935", fontSize: 13, background: "none", border: "none", cursor: "pointer" }}>✕</button>
+                <span style={{ fontSize: s(12), fontWeight: 700, color: "#E53935" }}>🔴 Parada {i + 1} em andamento · desde {p.ini}</span>
+                <button onClick={() => removeParada(sec, i)} style={{ padding: "0 8px", color: "#E53935", fontSize: s(13), background: "none", border: "none", cursor: "pointer" }}>✕</button>
               </div>
               <input type="text" placeholder="Descrição da parada (pode preencher depois)" value={p.desc} onChange={e => updateParada(sec, i, "desc", e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
               <div style={{ fontSize: 22, fontWeight: 700, color: "#E53935", textAlign: "center", padding: "6px 0 10px" }}>{formatMin(elapsed)}</div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => finalizarParadaAgora(sec, i)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "#2D9E7F", color: "#FFF", border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✅ Finalizar agora</button>
+                <button onClick={() => finalizarParadaAgora(sec, i)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "#2D9E7F", color: "#FFF", border: "none", fontWeight: 700, fontSize: s(13), cursor: "pointer" }}>✅ Finalizar agora</button>
                 <button
                   onClick={() => setInputModal({
                     title: "Tempo parado", subtitle: "Informe quantos minutos a máquina ficou parada", placeholder: "Ex: 45", inputMode: "numeric",
@@ -836,7 +869,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
                       setInputModal(null);
                     }
                   })}
-                  style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: theme.sectionBtnBg, color: theme.text, border: `1px solid ${theme.inputBorder}`, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                  style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: theme.sectionBtnBg, color: theme.text, border: `1px solid ${theme.inputBorder}`, fontWeight: 700, fontSize: s(13), cursor: "pointer" }}
                 >✏️ Informar tempo</button>
               </div>
             </div>
@@ -845,7 +878,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
 
         if (p.collapsed) return (
           <div key={i} style={{ border: "1px solid #F0F0F0", borderRadius: 12, padding: 10, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 13, fontWeight: 500, flex: 1, color: min > 0 ? "#2D9E7F" : "#1A1A2E" }}>{p.desc || `Parada ${i + 1}`}{tempoLabel}</span>
+            <span style={{ fontSize: s(13), fontWeight: 500, flex: 1, color: min > 0 ? "#2D9E7F" : "#1A1A2E" }}>{p.desc || `Parada ${i + 1}`}{tempoLabel}</span>
             <button onClick={() => toggleParada(sec, i)} style={sectionBtn}>▼ Expandir</button>
             <button onClick={() => removeParada(sec, i)} style={{ padding: "0 8px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
           </div>
@@ -853,7 +886,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
         return (
           <div key={i} style={{ border: "1px solid #F0F0F0", borderRadius: 12, padding: 10, marginBottom: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#9E9E9E" }}>Parada {i + 1}{tempoLabel}</span>
+              <span style={{ fontSize: s(12), fontWeight: 600, color: theme.textSub }}>Parada {i + 1}{tempoLabel}</span>
               <div style={{ display: "flex", gap: 4 }}>
                 <button onClick={() => toggleParada(sec, i)} style={sectionBtn}>▲ Minimizar</button>
                 <button onClick={() => removeParada(sec, i)} style={{ padding: "0 8px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
@@ -861,11 +894,11 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
             </div>
             <input type="text" placeholder="Descrição da parada" value={p.desc} onChange={e => updateParada(sec, i, "desc", e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-              <div><label style={{ fontSize: 11, color: theme.textSub }}>Início</label><input type="time" value={p.ini} onChange={e => updateParada(sec, i, "ini", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
-              <div><label style={{ fontSize: 11, color: theme.textSub }}>Fim</label><input type="time" value={p.fim} onChange={e => updateParada(sec, i, "fim", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
+              <div><label style={{ fontSize: s(11), color: theme.textSub }}>Início</label><input type="time" value={p.ini} onChange={e => updateParada(sec, i, "ini", e.target.value)} style={{ ...inputStyle, fontSize: s(15), fontWeight: 600 }} /></div>
+              <div><label style={{ fontSize: s(11), color: theme.textSub }}>Fim</label><input type="time" value={p.fim} onChange={e => updateParada(sec, i, "fim", e.target.value)} style={{ ...inputStyle, fontSize: s(15), fontWeight: 600 }} /></div>
             </div>
             {min > 0 && (
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#2D9E7F", padding: "6px 10px", background: "rgba(45,158,127,0.08)", borderRadius: 8, marginBottom: 8 }}>
+              <div style={{ fontSize: s(13), fontWeight: 600, color: theme.accent, padding: "6px 10px", background: "rgba(45,158,127,0.08)", borderRadius: 8, marginBottom: 8 }}>
                 ⏱ {formatMin(min)}{p.ini && p.fim ? ` (das ${p.ini} às ${p.fim})` : p.ini ? ` (iniciada às ${p.ini})` : typeof p.manualMin === "number" ? " (informado manualmente)" : ""}
               </div>
             )}
@@ -875,8 +908,8 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
       })}
       {paradasMap[sec].length > 0 && (
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-          <span style={{ fontSize: 12, color: "#9E9E9E" }}>Total</span>
-          <span style={{ fontSize: 14, fontWeight: 700 }}>{formatMin(totalParadas(sec))}</span>
+          <span style={{ fontSize: s(12), color: theme.textSub }}>Total</span>
+          <span style={{ fontSize: s(14), fontWeight: 700 }}>{formatMin(totalParadas(sec))}</span>
         </div>
       )}
     </div>
@@ -890,21 +923,21 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
       <div style={{ position: "fixed", inset: 0, zIndex: 160, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end" }} onClick={() => setEditandoBobina(null)}>
         <div style={{ background: "#FFF", borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "85vh", overflowY: "auto", padding: "20px 16px 32px" }} onClick={e => e.stopPropagation()}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: cor }}>Editar Bobina</span>
+            <span style={{ fontSize: s(15), fontWeight: 700, color: cor }}>Editar Bobina</span>
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => { removeBobina(setLista, b.id); setEditandoBobina(null); }} style={{ fontSize: 12, color: "#E53935", background: "rgba(229,57,53,0.1)", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontWeight: 600 }}>🗑 Remover</button>
+              <button onClick={() => { removeBobina(setLista, b.id); setEditandoBobina(null); }} style={{ fontSize: s(12), color: "#E53935", background: "rgba(229,57,53,0.1)", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontWeight: 600 }}>🗑 Remover</button>
               <button onClick={() => setEditandoBobina(null)} style={{ width: 32, height: 32, borderRadius: "50%", background: "#F0F0F0", border: "none", cursor: "pointer" }}>✕</button>
             </div>
           </div>
 
-          <label style={{ fontSize: 11, color: theme.textSub }}>ID Unit</label>
+          <label style={{ fontSize: s(11), color: theme.textSub }}>ID Unit</label>
           <div style={{ display: "flex", gap: 6, marginTop: 4, marginBottom: 12 }}>
             <input type="text" placeholder="Ex: 266F282614" value={b.idUnit} onChange={e => updateBobina(setLista, b.id, "idUnit", e.target.value)} style={{ ...inputStyle, marginTop: 0, flex: 1, fontWeight: 700, letterSpacing: 1 }} />
             <BarcodeScannerBtn onScan={val => updateBobina(setLista, b.id, "idUnit", val)} />
           </div>
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <label style={{ fontSize: 11, color: theme.textSub }}>Origem</label>
+            <label style={{ fontSize: s(11), color: theme.textSub }}>Origem</label>
             <button onClick={openManageOrigens} style={manageBtn}>✎ Gerenciar</button>
           </div>
           <div style={{ display: "flex", gap: 4, marginTop: 4, marginBottom: 12 }}>
@@ -912,12 +945,12 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
               <option value="">Selecionar origem</option>
               {db.origens.map(o => <option key={o}>{o}</option>)}
             </select>
-            <button onClick={addOrigem} style={{ ...btnStyle, fontSize: 14, color: "#2D9E7F" }}>+</button>
+            <button onClick={addOrigem} style={{ ...btnStyle, fontSize: s(14), color: theme.accent }}>+</button>
           </div>
 
           {b.origem && (<>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <label style={{ fontSize: 11, color: theme.textSub }}>Motivo</label>
+              <label style={{ fontSize: s(11), color: theme.textSub }}>Motivo</label>
               <button onClick={() => openManageMotivos(b.origem)} style={manageBtn}>✎ Gerenciar</button>
             </div>
             <div style={{ display: "flex", gap: 4, marginTop: 4, marginBottom: 12 }}>
@@ -925,13 +958,13 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
                 <option value="">Selecionar motivo</option>
                 {motivosDisponiveis.map(m => <option key={m}>{m}</option>)}
               </select>
-              <button onClick={() => addMotivo(b.origem)} style={{ ...btnStyle, fontSize: 14, color: "#2D9E7F" }}>+</button>
+              <button onClick={() => addMotivo(b.origem)} style={{ ...btnStyle, fontSize: s(14), color: theme.accent }}>+</button>
             </div>
           </>)}
 
           {b.motivo && (<>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <label style={{ fontSize: 11, color: theme.textSub }}>Causa</label>
+              <label style={{ fontSize: s(11), color: theme.textSub }}>Causa</label>
               <button onClick={() => openManageCausas(b.motivo)} style={manageBtn}>✎ Gerenciar</button>
             </div>
             <div style={{ display: "flex", gap: 4, marginTop: 4, marginBottom: 12 }}>
@@ -939,14 +972,14 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
                 <option value="">Selecionar causa</option>
                 {causasDisponiveis.map(c => <option key={c}>{c}</option>)}
               </select>
-              <button onClick={() => addCausa(b.motivo)} style={{ ...btnStyle, fontSize: 14, color: "#2D9E7F" }}>+</button>
+              <button onClick={() => addCausa(b.motivo)} style={{ ...btnStyle, fontSize: s(14), color: theme.accent }}>+</button>
             </div>
           </>)}
 
-          <label style={{ fontSize: 11, color: theme.textSub }}>Observações</label>
+          <label style={{ fontSize: s(11), color: theme.textSub }}>Observações</label>
           <textarea value={b.obs} onChange={e => updateBobina(setLista, b.id, "obs", e.target.value)} rows={2} placeholder="Observações..." style={{ ...inputStyle, resize: "vertical", marginTop: 4, marginBottom: 16 }} />
 
-          <button onClick={() => setEditandoBobina(null)} style={{ width: "100%", padding: "12px 0", borderRadius: 12, background: cor, color: "#FFF", fontWeight: 700, fontSize: 14, border: "none", cursor: "pointer" }}>✓ Confirmar</button>
+          <button onClick={() => setEditandoBobina(null)} style={{ width: "100%", padding: "12px 0", borderRadius: 12, background: cor, color: "#FFF", fontWeight: 700, fontSize: s(14), border: "none", cursor: "pointer" }}>✓ Confirmar</button>
         </div>
       </div>
     );
@@ -955,18 +988,18 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   const renderBobinas = (lista: BobinaTombador[], setLista: React.Dispatch<React.SetStateAction<BobinaTombador[]>>, titulo: string, cor: string, listaKey: "ret"|"rej") => (
     <div style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: cor }}>{titulo}</span>
+        <span style={{ fontSize: s(13), fontWeight: 700, color: cor }}>{titulo}</span>
         <button
           onClick={() => {
             const nova = newBobina();
             setLista(prev => [...prev, nova]);
             setEditandoBobina({ id: nova.id, lista: listaKey });
           }}
-          style={{ fontSize: 12, color: cor, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}
+          style={{ fontSize: s(12), color: cor, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}
         >+ Adicionar bobina</button>
       </div>
 
-      {lista.length === 0 && <p style={{ fontSize: 12, color: "#BDBDBD", fontStyle: "italic", marginBottom: 4 }}>Nenhuma bobina registrada.</p>}
+      {lista.length === 0 && <p style={{ fontSize: s(12), color: theme.textSub, fontStyle: "italic", marginBottom: 4 }}>Nenhuma bobina registrada.</p>}
 
       {/* Lista compacta */}
       {lista.map((b, idx) => (
@@ -975,18 +1008,18 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
           onClick={() => setEditandoBobina({ id: b.id, lista: listaKey })}
           style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", marginBottom: 6, borderRadius: 12, background: "#FAFAFA", border: "1px solid #F0F0F0", cursor: "pointer" }}
         >
-          <span style={{ fontSize: 12, fontWeight: 700, color: "#BDBDBD", minWidth: 20 }}>{idx + 1}.</span>
+          <span style={{ fontSize: s(12), fontWeight: 700, color: theme.textSub, minWidth: 20 }}>{idx + 1}.</span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#1A1A2E", letterSpacing: 0.5 }}>{b.idUnit || <span style={{ color: "#BDBDBD", fontWeight: 400 }}>Sem código</span>}</div>
+            <div style={{ fontSize: s(13), fontWeight: 700, color: "#1A1A2E", letterSpacing: 0.5 }}>{b.idUnit || <span style={{ color: theme.textSub, fontWeight: 400 }}>Sem código</span>}</div>
             {(b.motivo || b.origem) && (
-              <div style={{ fontSize: 11, color: "#9E9E9E", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <div style={{ fontSize: s(11), color: theme.textSub, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {b.motivo}{b.causa ? `/${b.causa}` : ""}{b.origem ? ` · ${b.origem}` : ""}
               </div>
             )}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-            {b.idUnit && <span style={{ fontSize: 10, fontWeight: 700, color: cor, background: `${cor}15`, padding: "2px 8px", borderRadius: 10 }}>✓</span>}
-            <span style={{ fontSize: 12, color: "#BDBDBD" }}>›</span>
+            {b.idUnit && <span style={{ fontSize: s(10), fontWeight: 700, color: cor, background: `${cor}15`, padding: "2px 8px", borderRadius: 10 }}>✓</span>}
+            <span style={{ fontSize: s(12), color: theme.textSub }}>›</span>
           </div>
         </div>
       ))}
@@ -1006,12 +1039,12 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", rowGap: 8 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
             <FileText size={18} style={{ color: "#1A1A2E", flexShrink: 0 }} />
-            <span style={{ fontWeight: 800, fontSize: 16, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Relatório de Turno</span>
+            <span style={{ fontWeight: 800, fontSize: s(16), color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Relatório de Turno</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
-            <button onClick={handleNovoRelatorio} style={{ fontSize: 11, padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: "#E53935", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }} title="Novo relatório">🗑 Novo</button>
-            <button onClick={() => setDarkMode(!darkMode)} style={{ fontSize: 14, width: 30, height: 30, borderRadius: "50%", border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, cursor: "pointer", flexShrink: 0 }} title={darkMode ? "Modo claro" : "Modo escuro"}>{darkMode ? "☀️" : "🌙"}</button>
-            <button onClick={() => setFontSize(f => f === "sm" ? "md" : f === "md" ? "lg" : "sm")} style={{ fontSize: 11, padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, fontWeight: 700, cursor: "pointer", flexShrink: 0 }} title="Tamanho da fonte">{fontSize === "sm" ? "A" : fontSize === "md" ? "A+" : "A++"}</button>
+            <button onClick={handleNovoRelatorio} style={{ fontSize: s(11), padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: "#E53935", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }} title="Novo relatório">🗑 Novo</button>
+            <button onClick={() => setDarkMode(!darkMode)} style={{ fontSize: s(14), width: 30, height: 30, borderRadius: "50%", border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, cursor: "pointer", flexShrink: 0 }} title={darkMode ? "Modo claro" : "Modo escuro"}>{darkMode ? "☀️" : "🌙"}</button>
+            <button onClick={() => setFontSize(f => f === "sm" ? "md" : f === "md" ? "lg" : "sm")} style={{ fontSize: s(11), padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, fontWeight: 700, cursor: "pointer", flexShrink: 0 }} title="Tamanho da fonte">{fontSize === "sm" ? "A" : fontSize === "md" ? "A+" : "A++"}</button>
             <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: "50%", background: theme.sectionBtnBg, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: theme.text, flexShrink: 0 }}>
               <X size={16} />
             </button>
@@ -1023,7 +1056,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
           <button
             onClick={() => setModoTombador(true)}
             style={{
-              fontSize: 12, padding: "6px 14px", borderRadius: 999, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+              fontSize: s(12), padding: "6px 14px", borderRadius: 999, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
               border: modoTombador ? "1.5px solid #F57C00" : `1px solid ${theme.sectionBtnBorder}`,
               background: modoTombador ? "#F57C00" : theme.sectionBtnBg,
               color: modoTombador ? "#FFF" : theme.textSub,
@@ -1034,7 +1067,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
           <button
             onClick={() => setModoTombador(false)}
             style={{
-              fontSize: 12, padding: "6px 14px", borderRadius: 999, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+              fontSize: s(12), padding: "6px 14px", borderRadius: 999, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
               border: !modoTombador ? "1.5px solid #2D9E7F" : `1px solid ${theme.sectionBtnBorder}`,
               background: !modoTombador ? "#2D9E7F" : theme.sectionBtnBg,
               color: !modoTombador ? "#FFF" : theme.textSub,
@@ -1045,7 +1078,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
           <button
             onClick={onOpenRebobinadeira}
             style={{
-              fontSize: 12, padding: "6px 14px", borderRadius: 999, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+              fontSize: s(12), padding: "6px 14px", borderRadius: 999, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
               border: `1px solid ${theme.sectionBtnBorder}`,
               background: theme.sectionBtnBg,
               color: theme.textSub,
@@ -1066,35 +1099,35 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
             <button onClick={() => setHeaderCollapsed(!headerCollapsed)} style={sectionBtn}>{headerCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
           </div>
           {!headerCollapsed && <>
-            <label style={{ fontSize: 11, color: theme.textSub }}>Destinatário</label>
+            <label style={{ fontSize: s(11), color: theme.textSub }}>Destinatário</label>
             <div style={{ display: "flex", gap: 6, marginTop: 4, marginBottom: 8 }}>
               <input type="text" placeholder="Nome do destinatário" value={dest} onChange={e => setDest(e.target.value)} style={{ ...inputStyle, marginTop: 0, flex: 1 }} />
-              <button onClick={addDestinatario} style={{ ...btnStyle, fontSize: 14, color: "#2D9E7F" }} title="Salvar como atalho">+</button>
+              <button onClick={addDestinatario} style={{ ...btnStyle, fontSize: s(14), color: theme.accent }} title="Salvar como atalho">+</button>
             </div>
             {db.destinatarios.length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
                 {db.destinatarios.map(d => (
                   <div key={d} style={{ display: "flex", alignItems: "center", borderRadius: 20, border: d === dest ? "1.5px solid #2D9E7F" : "1px solid #EBEBEB", background: d === dest ? "rgba(45,158,127,0.1)" : "#FAFAFA", overflow: "hidden" }}>
-                    <button onClick={() => setDest(d)} style={{ fontSize: 11, padding: "4px 10px", background: "none", border: "none", color: d === dest ? "#2D9E7F" : "#9E9E9E", fontWeight: 600, cursor: "pointer" }}>{d}</button>
-                    <button onClick={() => setDb(prev => ({ ...prev, destinatarios: prev.destinatarios.filter(x => x !== d) }))} style={{ fontSize: 11, padding: "4px 8px 4px 0", background: "none", border: "none", color: "#E53935", cursor: "pointer" }}>✕</button>
+                    <button onClick={() => setDest(d)} style={{ fontSize: s(11), padding: "4px 10px", background: "none", border: "none", color: d === dest ? "#2D9E7F" : "#9E9E9E", fontWeight: 600, cursor: "pointer" }}>{d}</button>
+                    <button onClick={() => setDb(prev => ({ ...prev, destinatarios: prev.destinatarios.filter(x => x !== d) }))} style={{ fontSize: s(11), padding: "4px 8px 4px 0", background: "none", border: "none", color: "#E53935", cursor: "pointer" }}>✕</button>
                   </div>
                 ))}
               </div>
             )}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-              <div><label style={{ fontSize: 11, color: theme.textSub }}>Turno</label>
+              <div><label style={{ fontSize: s(11), color: theme.textSub }}>Turno</label>
                 <select value={turno} onChange={e => onTurnoChange(e.target.value)} style={selectStyle}>
                   <option value="1">Turno 1</option><option value="2">Turno 2</option><option value="3">Turno 3</option>
                 </select>
               </div>
-              <div><label style={{ fontSize: 11, color: theme.textSub }}>Letra</label>
+              <div><label style={{ fontSize: s(11), color: theme.textSub }}>Letra</label>
                 <select value={letra} onChange={e => setLetra(e.target.value)} style={selectStyle}>
                   <option>A</option><option>B</option><option>C</option><option>D</option><option>E</option>
                 </select>
               </div>
-              <div style={{ gridColumn: "span 2" }}><label style={{ fontSize: 11, color: theme.textSub }}>Horário</label><input type="text" value={horario} onChange={e => setHorario(e.target.value)} style={inputStyle} /></div>
+              <div style={{ gridColumn: "span 2" }}><label style={{ fontSize: s(11), color: theme.textSub }}>Horário</label><input type="text" value={horario} onChange={e => setHorario(e.target.value)} style={inputStyle} /></div>
             </div>
-            <label style={{ fontSize: 11, color: theme.textSub }}>Responsáveis</label>
+            <label style={{ fontSize: s(11), color: theme.textSub }}>Responsáveis</label>
             <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6 }}>
               {resps.map((r, i) => (
                 <div key={i} style={{ display: "flex", gap: 6 }}>
@@ -1103,7 +1136,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
                 </div>
               ))}
             </div>
-            <button onClick={addResp} style={{ marginTop: 8, fontSize: 12, color: "#2D9E7F", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar responsável</button>
+            <button onClick={addResp} style={{ marginTop: 8, fontSize: s(12), color: theme.accent, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar responsável</button>
           </>}
         </div>
 
@@ -1112,7 +1145,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: embCollapsed ? 0 : 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>• Embaladeira</span>
-              <select value={embaladeiraNum} onChange={e => setEmbaladeiraNum(e.target.value as "1"|"2")} style={{ fontSize: 13, fontWeight: 700, border: "1px solid #EBEBEB", borderRadius: 8, padding: "2px 8px", background: "#FAFAFA" }}>
+              <select value={embaladeiraNum} onChange={e => setEmbaladeiraNum(e.target.value as "1"|"2")} style={{ fontSize: s(13), fontWeight: 700, border: "1px solid #EBEBEB", borderRadius: 8, padding: "2px 8px", background: "#FAFAFA" }}>
                 <option value="1">1</option>
                 <option value="2">2</option>
               </select>
@@ -1121,7 +1154,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
           </div>
           {!embCollapsed && <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
-              <p style={{ fontSize: 12, fontWeight: 600, color: "#9E9E9E", margin: 0 }}>Consumidos</p>
+              <p style={{ fontSize: s(12), fontWeight: 600, color: theme.textSub, margin: 0 }}>Consumidos</p>
               <button onClick={collapseAllItens} style={sectionBtn}>🗂 Recolher</button>
             </div>
             {itens.map((item, idx) => {
@@ -1131,43 +1164,43 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
                 <div key={idx} style={{ padding: 10, marginBottom: 6, borderRadius: 12, background: qtd > 0 ? "rgba(45,158,127,0.07)" : "#F9F9F9", border: `1px solid ${qtd > 0 ? "rgba(45,158,127,0.2)" : "transparent"}` }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", rowGap: 6 }}>
                     <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
-                      <button onClick={() => moveItemConsumo(idx, -1)} disabled={idx === 0} style={{ fontSize: 10, width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === 0 ? "default" : "pointer", opacity: idx === 0 ? 0.3 : 1 }}>▲</button>
-                      <button onClick={() => moveItemConsumo(idx, 1)} disabled={idx === itens.length - 1} style={{ fontSize: 10, width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === itens.length - 1 ? "default" : "pointer", opacity: idx === itens.length - 1 ? 0.3 : 1 }}>▼</button>
+                      <button onClick={() => moveItemConsumo(idx, -1)} disabled={idx === 0} style={{ fontSize: s(10), width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === 0 ? "default" : "pointer", opacity: idx === 0 ? 0.3 : 1 }}>▲</button>
+                      <button onClick={() => moveItemConsumo(idx, 1)} disabled={idx === itens.length - 1} style={{ fontSize: s(10), width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === itens.length - 1 ? "default" : "pointer", opacity: idx === itens.length - 1 ? 0.3 : 1 }}>▼</button>
                     </div>
-                    <span style={{ fontSize: 13, fontWeight: 500, whiteSpace: "nowrap" }}>{item.label}</span>
-                    {qtd > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: "#2D9E7F", background: "rgba(45,158,127,0.12)", padding: "2px 8px", borderRadius: 20, whiteSpace: "nowrap", flexShrink: 0 }}>{String(qtd).padStart(2, "0")} · {totalItem}min</span>}
+                    <span style={{ fontSize: s(13), fontWeight: 500, whiteSpace: "nowrap" }}>{item.label}</span>
+                    {qtd > 0 && <span style={{ fontSize: s(11), fontWeight: 700, color: theme.accent, background: "rgba(45,158,127,0.12)", padding: "2px 8px", borderRadius: 20, whiteSpace: "nowrap", flexShrink: 0 }}>{String(qtd).padStart(2, "0")} · {totalItem}min</span>}
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
                       {qtd > 0 && <button onClick={() => toggleItem(idx)} style={sectionBtn}>{item.collapsed ? "▼" : "▲"}</button>}
-                      <button onClick={() => addTrocasMultiplas(idx)} style={{ padding: "5px 8px", fontSize: 11, fontWeight: 600, color: "#2D9E7F", background: "rgba(45,158,127,0.1)", border: "1px solid rgba(45,158,127,0.3)", borderRadius: 8, whiteSpace: "nowrap", cursor: "pointer" }} title="Adicionar várias trocas de uma vez">🔢 Várias</button>
-                      <button onClick={() => addTroca(idx)} style={{ padding: "5px 10px", fontSize: 11, fontWeight: 600, color: "#fff", background: "#2D9E7F", border: "none", borderRadius: 8, whiteSpace: "nowrap", cursor: "pointer" }}>+ Troca</button>
-                      <button onClick={() => removeItem(idx)} style={{ width: 24, height: 24, padding: 0, fontSize: 13, color: "#E53935", background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>🗑</button>
+                      <button onClick={() => addTrocasMultiplas(idx)} style={{ padding: "5px 8px", fontSize: s(11), fontWeight: 600, color: theme.accent, background: "rgba(45,158,127,0.1)", border: "1px solid rgba(45,158,127,0.3)", borderRadius: 8, whiteSpace: "nowrap", cursor: "pointer" }} title="Adicionar várias trocas de uma vez">🔢 Várias</button>
+                      <button onClick={() => addTroca(idx)} style={{ padding: "5px 10px", fontSize: s(11), fontWeight: 600, color: "#fff", background: "#2D9E7F", border: "none", borderRadius: 8, whiteSpace: "nowrap", cursor: "pointer" }}>+ Troca</button>
+                      <button onClick={() => removeItem(idx)} style={{ width: 24, height: 24, padding: 0, fontSize: s(13), color: "#E53935", background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>🗑</button>
                     </div>
                   </div>
                   {!item.collapsed && item.trocas.map((t, ti) => (
                     <div key={ti} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, padding: "8px 10px", background: "#FFF", borderRadius: 8 }}>
                       <button
                         onClick={() => editarQtdTroca(idx, ti, t.qtd ?? 1)}
-                        style={{ fontSize: 12, fontWeight: 700, color: "#2D9E7F", whiteSpace: "nowrap", minWidth: 56, background: "rgba(45,158,127,0.1)", border: "none", borderRadius: 6, padding: "3px 6px", cursor: "pointer" }}
+                        style={{ fontSize: s(12), fontWeight: 700, color: theme.accent, whiteSpace: "nowrap", minWidth: 56, background: "rgba(45,158,127,0.1)", border: "none", borderRadius: 6, padding: "3px 6px", cursor: "pointer" }}
                         title="Toque para corrigir a quantidade"
                       >
                         Troca {t.qtd ?? 1}
                       </button>
-                      <input type="number" min={0} value={t.min !== null ? t.min : ""} placeholder="min" onChange={e => setTrocaMin(idx, ti, e.target.value)} style={{ width: 64, fontSize: 16, fontWeight: 700, textAlign: "center", borderRadius: 8, padding: 5, border: "1px solid #EBEBEB" }} />
-                      <span style={{ fontSize: 12, color: "#9E9E9E" }}>min</span>
-                      {t.min !== null && t.min > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: "#2D9E7F", marginLeft: "auto" }}>✓ {t.min}min</span>}
-                      <button onClick={() => removeTroca(idx, ti)} style={{ padding: "0 6px", color: "#E53935", fontSize: 13, marginLeft: t.min ? undefined : "auto", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+                      <input type="number" min={0} value={t.min !== null ? t.min : ""} placeholder="min" onChange={e => setTrocaMin(idx, ti, e.target.value)} style={{ width: 64, fontSize: s(16), fontWeight: 700, textAlign: "center", borderRadius: 8, padding: 5, border: "1px solid #EBEBEB" }} />
+                      <span style={{ fontSize: s(12), color: theme.textSub }}>min</span>
+                      {t.min !== null && t.min > 0 && <span style={{ fontSize: s(12), fontWeight: 700, color: theme.accent, marginLeft: "auto" }}>✓ {t.min}min</span>}
+                      <button onClick={() => removeTroca(idx, ti)} style={{ padding: "0 6px", color: "#E53935", fontSize: s(13), marginLeft: t.min ? undefined : "auto", background: "none", border: "none", cursor: "pointer" }}>✕</button>
                     </div>
                   ))}
                 </div>
               );
             })}
-            <button onClick={addItem} style={{ marginTop: 8, fontSize: 12, color: "#2D9E7F", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar item</button>
+            <button onClick={addItem} style={{ marginTop: 8, fontSize: s(12), color: theme.accent, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar item</button>
             <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 13, color: "#9E9E9E" }}>✔ Total Tempo de Parada</span>
+              <span style={{ fontSize: s(13), color: theme.textSub }}>✔ Total Tempo de Parada</span>
               <span style={{ fontSize: 17, fontWeight: 700 }}>{formatMin(calcTotalEmb())}</span>
             </div>
             <div style={{ marginTop: 10 }}>
-              <label style={{ fontSize: 11, color: theme.textSub }}>Obs. Embaladeira</label>
+              <label style={{ fontSize: s(11), color: theme.textSub }}>Obs. Embaladeira</label>
               <textarea value={obsEmb} onChange={e => setObsEmb(e.target.value)} rows={2} placeholder="Observações..." style={{ ...inputStyle, resize: "vertical", marginTop: 4 }} />
             </div>
             {renderParadas("emb", "Paradas Embaladeira")}
@@ -1177,15 +1210,59 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
         {/* Core Link */}
         {!modoTombador && <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: clCollapsed ? 0 : 10 }}>
-            <span style={{ fontSize: 13, fontWeight: 700 }}>• Core Link</span>
+            <span style={{ fontSize: s(13), fontWeight: 700 }}>• Core Link</span>
             <button onClick={() => setClCollapsed(!clCollapsed)} style={sectionBtn}>{clCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
           </div>
           {!clCollapsed && <>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              <span style={{ fontSize: 13, flex: 1 }}>Cargas de Tubetes</span>
+              <span style={{ fontSize: s(13), flex: 1 }}>Cargas de Tubetes</span>
               <button onClick={() => setClQtd(Math.max(0, clQtd - 1))} style={btnStyle}>-</button>
               <span style={{ fontSize: 18, fontWeight: 700, minWidth: 32, textAlign: "center" }}>{String(clQtd).padStart(2, "0")}</span>
               <button onClick={() => setClQtd(clQtd + 1)} style={btnStyle}>+</button>
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <span style={{ fontSize: s(13), fontWeight: 600 }}>Troca de serra</span>
+              {trocasSerra.map((t, i) => (
+                <div key={t.id} style={{ border: `1px solid ${theme.inputBorder}`, borderRadius: 12, padding: "8px 10px", marginTop: 6 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: s(11), color: theme.textSub }}>Troca {i + 1}</span>
+                    {trocasSerra.length > 1 && (
+                      <button onClick={() => removerTrocaSerra(t.id)} style={sectionBtn}>Remover</button>
+                    )}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 4 }}>
+                    <label style={{ display: "block" }}>
+                      <span style={{ fontSize: s(11), color: theme.textSub }}>Serra retirada (nº)</span>
+                      <input
+                        value={t.retirada}
+                        onChange={e => atualizarTrocaSerra(t.id, "retirada", e.target.value)}
+                        placeholder="Ex.: 1234"
+                        style={inputStyle}
+                      />
+                    </label>
+                    <label style={{ display: "block" }}>
+                      <span style={{ fontSize: s(11), color: theme.textSub }}>Serra colocada (nº)</span>
+                      <input
+                        value={t.colocada}
+                        onChange={e => atualizarTrocaSerra(t.id, "colocada", e.target.value)}
+                        placeholder="Ex.: 5678"
+                        style={inputStyle}
+                      />
+                    </label>
+                  </div>
+                  <label style={{ display: "block", marginTop: 6 }}>
+                    <span style={{ fontSize: s(11), color: theme.textSub }}>Quantidade de cortes (da serra retirada)</span>
+                    <input
+                      value={t.cortes}
+                      inputMode="numeric"
+                      onChange={e => atualizarTrocaSerra(t.id, "cortes", e.target.value.replace(/\D/g, ""))}
+                      placeholder="Ex.: 1250"
+                      style={inputStyle}
+                    />
+                  </label>
+                </div>
+              ))}
+              <button onClick={adicionarTrocaSerra} style={{ ...sectionBtn, marginTop: 8 }}>+ Adicionar outra troca</button>
             </div>
             <textarea value={obsCL} onChange={e => setObsCL(e.target.value)} rows={2} placeholder="Obs. Core Link..." style={{ ...inputStyle, resize: "vertical" }} />
             {renderParadas("cl", "Paradas Core Link")}
@@ -1200,13 +1277,13 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
           </div>
           {!rcCollapsed && <>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              <span style={{ fontSize: 13, flex: 1 }}>Bobinas com id</span>
+              <span style={{ fontSize: s(13), flex: 1 }}>Bobinas com id</span>
               <button onClick={() => setRcId(Math.max(0, rcId - 1))} style={btnStyle}>-</button>
               <span style={{ fontSize: 18, fontWeight: 700, minWidth: 32, textAlign: "center" }}>{String(rcId).padStart(2, "0")}</span>
               <button onClick={() => setRcId(rcId + 1)} style={btnStyle}>+</button>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              <span style={{ fontSize: 13, flex: 1 }}>Bobinas sem id</span>
+              <span style={{ fontSize: s(13), flex: 1 }}>Bobinas sem id</span>
               <button onClick={() => setRcSid(Math.max(0, rcSid - 1))} style={btnStyle}>-</button>
               <span style={{ fontSize: 18, fontWeight: 700, minWidth: 32, textAlign: "center" }}>{String(rcSid).padStart(2, "0")}</span>
               <button onClick={() => setRcSid(rcSid + 1)} style={btnStyle}>+</button>
@@ -1230,7 +1307,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
 
             {/* Impressão de Label */}
             <div>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#1A6FB0" }}>🏷️ Impressão de Label</span>
+              <span style={{ fontSize: s(13), fontWeight: 700, color: "#1A6FB0" }}>🏷️ Impressão de Label</span>
               <div style={{ display: "flex", gap: 6, marginTop: 8, marginBottom: 10 }}>
                 <input
                   type="text"
@@ -1241,36 +1318,36 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
                   style={{ ...inputStyle, marginTop: 0, flex: 1, fontWeight: 700, letterSpacing: 1 }}
                 />
                 <BarcodeScannerBtn onScan={val => addLabelCodigo(val)} />
-                <button onClick={() => addLabelCodigo(novoLabel)} style={{ ...btnStyle, fontSize: 14, color: "#1A6FB0" }} title="Adicionar">+</button>
+                <button onClick={() => addLabelCodigo(novoLabel)} style={{ ...btnStyle, fontSize: s(14), color: "#1A6FB0" }} title="Adicionar">+</button>
               </div>
 
-              {labels.length === 0 && <p style={{ fontSize: 12, color: "#BDBDBD", fontStyle: "italic" }}>Nenhum label registrado.</p>}
+              {labels.length === 0 && <p style={{ fontSize: s(12), color: theme.textSub, fontStyle: "italic" }}>Nenhum label registrado.</p>}
               {labels.map((l, idx) => (
                 <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", marginBottom: 6, borderRadius: 10, background: "#F5FAFE", border: "1px solid #E1EFFA" }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "#1A6FB0", minWidth: 22 }}>{idx + 1}.</span>
-                  <input type="text" value={l.codigo} onChange={e => updateLabel(l.id, e.target.value)} style={{ flex: 1, fontSize: 13, fontWeight: 700, letterSpacing: 1, border: "none", background: "transparent", outline: "none", color: "#1A1A2E" }} />
-                  <button onClick={() => removeLabel(l.id)} style={{ color: "#E53935", background: "none", border: "none", cursor: "pointer", fontSize: 13 }}>✕</button>
+                  <span style={{ fontSize: s(11), fontWeight: 700, color: "#1A6FB0", minWidth: 22 }}>{idx + 1}.</span>
+                  <input type="text" value={l.codigo} onChange={e => updateLabel(l.id, e.target.value)} style={{ flex: 1, fontSize: s(13), fontWeight: 700, letterSpacing: 1, border: "none", background: "transparent", outline: "none", color: "#1A1A2E" }} />
+                  <button onClick={() => removeLabel(l.id)} style={{ color: "#E53935", background: "none", border: "none", cursor: "pointer", fontSize: s(13) }}>✕</button>
                 </div>
               ))}
               {labels.length > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                  <span style={{ fontSize: 12, color: "#9E9E9E" }}>Total de labels</span>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: "#1A6FB0" }}>{labels.length}</span>
+                  <span style={{ fontSize: s(12), color: theme.textSub }}>Total de labels</span>
+                  <span style={{ fontSize: s(14), fontWeight: 700, color: "#1A6FB0" }}>{labels.length}</span>
                 </div>
               )}
             </div>
 
             {/* Obs e Paradas Tombador */}
             <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #F0F0F0" }}>
-              <label style={{ fontSize: 11, color: theme.textSub }}>Obs. Tombador</label>
+              <label style={{ fontSize: s(11), color: theme.textSub }}>Obs. Tombador</label>
               <textarea value={obsTomb} onChange={e => setObsTomb(e.target.value)} rows={2} placeholder="Observações Tombador..." style={{ ...inputStyle, resize: "vertical", marginTop: 4 }} />
             </div>
             <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #F0F0F0" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: "#9E9E9E" }}>⏱ Paradas Tombador</span>
+                <span style={{ fontSize: s(12), fontWeight: 600, color: theme.textSub }}>⏱ Paradas Tombador</span>
                 <div style={{ display: "flex", gap: 6 }}>
                   <button onClick={addParadaTombAutomatica} style={{ ...sectionBtn, color: "#E53935", fontWeight: 600 }}>🔴 Iniciar agora</button>
-                  <button onClick={addParadaTomb} style={{ ...sectionBtn, color: "#2D9E7F", fontWeight: 600 }}>+ Adicionar</button>
+                  <button onClick={addParadaTomb} style={{ ...sectionBtn, color: theme.accent, fontWeight: 600 }}>+ Adicionar</button>
                 </div>
               </div>
               {paradasTomb.map((p, i) => {
@@ -1281,13 +1358,13 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
                   return (
                     <div key={i} style={{ border: "1.5px solid #E53935", borderRadius: 12, padding: 10, marginBottom: 8, background: "rgba(229,57,53,0.06)" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: "#E53935" }}>🔴 Parada {i + 1} em andamento · desde {p.ini}</span>
-                        <button onClick={() => removeParadaTomb(i)} style={{ padding: "0 8px", color: "#E53935", fontSize: 13, background: "none", border: "none", cursor: "pointer" }}>✕</button>
+                        <span style={{ fontSize: s(12), fontWeight: 700, color: "#E53935" }}>🔴 Parada {i + 1} em andamento · desde {p.ini}</span>
+                        <button onClick={() => removeParadaTomb(i)} style={{ padding: "0 8px", color: "#E53935", fontSize: s(13), background: "none", border: "none", cursor: "pointer" }}>✕</button>
                       </div>
                       <input type="text" placeholder="Descrição da parada (pode preencher depois)" value={p.desc} onChange={e => updateParadaTomb(i, "desc", e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
                       <div style={{ fontSize: 22, fontWeight: 700, color: "#E53935", textAlign: "center", padding: "6px 0 10px" }}>{formatMin(elapsed)}</div>
                       <div style={{ display: "flex", gap: 8 }}>
-                        <button onClick={() => finalizarParadaTombAgora(i)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "#2D9E7F", color: "#FFF", border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✅ Finalizar agora</button>
+                        <button onClick={() => finalizarParadaTombAgora(i)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "#2D9E7F", color: "#FFF", border: "none", fontWeight: 700, fontSize: s(13), cursor: "pointer" }}>✅ Finalizar agora</button>
                         <button
                           onClick={() => setInputModal({
                             title: "Tempo parado", subtitle: "Informe quantos minutos a máquina ficou parada", placeholder: "Ex: 45", inputMode: "numeric",
@@ -1297,7 +1374,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
                               setInputModal(null);
                             }
                           })}
-                          style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: theme.sectionBtnBg, color: theme.text, border: `1px solid ${theme.inputBorder}`, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                          style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: theme.sectionBtnBg, color: theme.text, border: `1px solid ${theme.inputBorder}`, fontWeight: 700, fontSize: s(13), cursor: "pointer" }}
                         >✏️ Informar tempo</button>
                       </div>
                     </div>
@@ -1306,7 +1383,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
 
                 if (p.collapsed) return (
                   <div key={i} style={{ border: "1px solid #F0F0F0", borderRadius: 12, padding: 10, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 500, flex: 1, color: min > 0 ? "#2D9E7F" : "#1A1A2E" }}>{p.desc || `Parada ${i + 1}`}{tempoLabel}</span>
+                    <span style={{ fontSize: s(13), fontWeight: 500, flex: 1, color: min > 0 ? "#2D9E7F" : "#1A1A2E" }}>{p.desc || `Parada ${i + 1}`}{tempoLabel}</span>
                     <button onClick={() => toggleParadaTomb(i)} style={sectionBtn}>▼ Expandir</button>
                     <button onClick={() => removeParadaTomb(i)} style={{ padding: "0 8px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
                   </div>
@@ -1314,7 +1391,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
                 return (
                   <div key={i} style={{ border: "1px solid #F0F0F0", borderRadius: 12, padding: 10, marginBottom: 8 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "#9E9E9E" }}>Parada {i + 1}{tempoLabel}</span>
+                      <span style={{ fontSize: s(12), fontWeight: 600, color: theme.textSub }}>Parada {i + 1}{tempoLabel}</span>
                       <div style={{ display: "flex", gap: 4 }}>
                         <button onClick={() => toggleParadaTomb(i)} style={sectionBtn}>▲ Minimizar</button>
                         <button onClick={() => removeParadaTomb(i)} style={{ padding: "0 8px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
@@ -1322,11 +1399,11 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
                     </div>
                     <input type="text" placeholder="Descrição da parada" value={p.desc} onChange={e => updateParadaTomb(i, "desc", e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-                      <div><label style={{ fontSize: 11, color: theme.textSub }}>Início</label><input type="time" value={p.ini} onChange={e => updateParadaTomb(i, "ini", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
-                      <div><label style={{ fontSize: 11, color: theme.textSub }}>Fim</label><input type="time" value={p.fim} onChange={e => updateParadaTomb(i, "fim", e.target.value)} style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} /></div>
+                      <div><label style={{ fontSize: s(11), color: theme.textSub }}>Início</label><input type="time" value={p.ini} onChange={e => updateParadaTomb(i, "ini", e.target.value)} style={{ ...inputStyle, fontSize: s(15), fontWeight: 600 }} /></div>
+                      <div><label style={{ fontSize: s(11), color: theme.textSub }}>Fim</label><input type="time" value={p.fim} onChange={e => updateParadaTomb(i, "fim", e.target.value)} style={{ ...inputStyle, fontSize: s(15), fontWeight: 600 }} /></div>
                     </div>
                     {min > 0 && (
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#2D9E7F", padding: "6px 10px", background: "rgba(45,158,127,0.08)", borderRadius: 8, marginBottom: 8 }}>
+                      <div style={{ fontSize: s(13), fontWeight: 600, color: theme.accent, padding: "6px 10px", background: "rgba(45,158,127,0.08)", borderRadius: 8, marginBottom: 8 }}>
                         ⏱ {formatMin(min)}{p.ini && p.fim ? ` (das ${p.ini} às ${p.fim})` : p.ini ? ` (iniciada às ${p.ini})` : typeof p.manualMin === "number" ? " (informado manualmente)" : ""}
                       </div>
                     )}
@@ -1336,8 +1413,8 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
               })}
               {paradasTomb.length > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                  <span style={{ fontSize: 12, color: "#9E9E9E" }}>Total</span>
-                  <span style={{ fontSize: 14, fontWeight: 700 }}>{formatMin(totalParadasTomb())}</span>
+                  <span style={{ fontSize: s(12), color: theme.textSub }}>Total</span>
+                  <span style={{ fontSize: s(14), fontWeight: 700 }}>{formatMin(totalParadasTomb())}</span>
                 </div>
               )}
             </div>
@@ -1347,17 +1424,17 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
         {/* Prévia */}
         {showPrevia && (
           <div style={{ background: "#FFF", border: "1px solid #F0F0F0", borderRadius: 16, padding: "14px 16px", marginBottom: 12 }}>
-            <p style={{ fontSize: 11, fontWeight: 600, margin: "0 0 8px", color: "#9E9E9E" }}>PRÉVIA DO RELATÓRIO</p>
-            <pre style={{ fontSize: 12, whiteSpace: "pre-wrap", margin: 0, lineHeight: 1.8, color: "#1A1A2E" }}>{previa}</pre>
+            <p style={{ fontSize: s(11), fontWeight: 600, margin: "0 0 8px", color: theme.textSub }}>PRÉVIA DO RELATÓRIO</p>
+            <pre style={{ fontSize: s(12), whiteSpace: "pre-wrap", margin: 0, lineHeight: 1.8, color: "#1A1A2E" }}>{previa}</pre>
           </div>
         )}
       </div>
 
       {/* Rodapé fixo */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: theme.footerBg, borderTop: `1px solid ${theme.cardBorder}`, padding: "12px 16px", paddingBottom: "calc(12px + env(safe-area-inset-bottom))", display: "flex", gap: 8 }}>
-        <button onClick={handlePrevia} style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 600, borderRadius: 12, background: "#F0F0F0", color: "#1A1A2E", border: "none", cursor: "pointer" }}>👁 Prévia</button>
-        <button onClick={handleSaveNote} style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 600, borderRadius: 12, background: "#1A1A2E", color: "#FFF", border: "none", cursor: "pointer" }}>💾 Salvar nota</button>
-        <button onClick={() => setShowSendConfirm(true)} style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 600, borderRadius: 12, background: "#2D9E7F", color: "#FFF", border: "none", cursor: "pointer" }}>📤 Enviar</button>
+        <button onClick={handlePrevia} style={{ flex: 1, padding: "11px 0", fontSize: s(13), fontWeight: 600, borderRadius: 12, background: "#F0F0F0", color: "#1A1A2E", border: "none", cursor: "pointer" }}>👁 Prévia</button>
+        <button onClick={handleSaveNote} style={{ flex: 1, padding: "11px 0", fontSize: s(13), fontWeight: 600, borderRadius: 12, background: "#1A1A2E", color: "#FFF", border: "none", cursor: "pointer" }}>💾 Salvar nota</button>
+        <button onClick={() => setShowSendConfirm(true)} style={{ flex: 1, padding: "11px 0", fontSize: s(13), fontWeight: 600, borderRadius: 12, background: "#2D9E7F", color: "#FFF", border: "none", cursor: "pointer" }}>📤 Enviar</button>
       </div>
 
       {/* Modais */}
@@ -1386,24 +1463,24 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
       {showSendConfirm && (
         <div style={{ position: "fixed", inset: 0, zIndex: 260, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => setShowSendConfirm(false)}>
           <div style={{ background: theme.card, borderRadius: 18, padding: 20, width: "min(100%,340px)" }} onClick={e => e.stopPropagation()}>
-            <p style={{ fontWeight: 700, fontSize: 15, color: theme.text, margin: "0 0 12px" }}>Confirmar envio?</p>
+            <p style={{ fontWeight: 700, fontSize: s(15), color: theme.text, margin: "0 0 12px" }}>Confirmar envio?</p>
 
             <div style={{ background: theme.inputBg, border: `1px solid ${theme.inputBorder}`, borderRadius: 12, padding: "10px 12px", marginBottom: 16, display: "flex", flexDirection: "column", gap: 6 }}>
-              <div style={{ fontSize: 13, color: theme.text }}>
+              <div style={{ fontSize: s(13), color: theme.text }}>
                 <span style={{ color: theme.textSub }}>Destinatário: </span>
                 <strong>{dest || "—"}</strong>
               </div>
-              <div style={{ fontSize: 13, color: theme.text }}>
+              <div style={{ fontSize: s(13), color: theme.text }}>
                 <strong>{relatorioLabel}</strong>
               </div>
-              <div style={{ fontSize: 13, color: theme.text }}>
+              <div style={{ fontSize: s(13), color: theme.text }}>
                 Turno {turno} - Letra {letra} - {horario}
               </div>
             </div>
 
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => setShowSendConfirm(false)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: theme.sectionBtnBg, color: theme.text, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Voltar</button>
-              <button onClick={confirmarEnvio} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#2D9E7F", color: "#FFF", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Confirmar Envio</button>
+              <button onClick={() => setShowSendConfirm(false)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: theme.sectionBtnBg, color: theme.text, fontWeight: 600, fontSize: s(13), cursor: "pointer" }}>Voltar</button>
+              <button onClick={confirmarEnvio} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#2D9E7F", color: "#FFF", fontWeight: 600, fontSize: s(13), cursor: "pointer" }}>Confirmar Envio</button>
             </div>
           </div>
         </div>
