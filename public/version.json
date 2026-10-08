@@ -1,6 +1,7 @@
 {
-  "version": "v4.51",
+  "version": "v4.52",
   "history": [
+    { "version": "v4.52", "changes": "Importar backup: notas que já aparecem no aparelho mas ainda não estão na conta atual (caso da troca de banco) agora são enviadas ao banco, com as fotos. Antes elas eram puladas por já existirem localmente." },
     { "version": "v4.51", "changes": "Fixar nota: corrigido o problema de a nota fixar e depois voltar sozinha. Duas causas: (1) se o relógio do celular estivesse alguns segundos atrasado em relação ao servidor, a fixação era descartada como \"mais velha\"; (2) fixar uma nota enquanto outra ainda estava sendo enviada podia deixar a fixação marcada como enviada sem ter ido. Também corrigido: fixar uma nota alterava a data de atualização dela no servidor." },
     { "version": "v4.50", "changes": "Relatórios (Embaladeira, Tombador e Rebobinadeira) mais fáceis de ler no celular: letras maiores, textos cinza e verdes com mais contraste, botões e campos maiores para o dedo. O botão A / A+ / A++ do topo agora aumenta todas as letras do relatório (antes só mexia nos campos digitados); o padrão passou a ser o A+. Se algum ponto ficar apertado, toque em A para voltar ao tamanho antigo." },
     { "version": "v4.49", "changes": "Relatório de Turno (linha de bobinas): novo campo \"Troca de serra\" dentro do Core Link — número da serra retirada, número da serra colocada e quantidade de cortes da serra retirada. No relatório sai como: Efetuado a troca da serra 1234 (1250 cortes) e instalada 5678. Dá para registrar mais de uma troca no mesmo turno. (O campo já existia no relatório da Rebobinadeira.)" },

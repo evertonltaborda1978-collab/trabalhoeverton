@@ -932,7 +932,12 @@ export function useNotes() {
       const id = typeof item.id === "string" && item.id ? item.id : crypto.randomUUID();
       const updatedAt = toDate(item.atualizado_em, now);
       const existing = byId.get(id);
-      if (existing && existing.updatedAt.getTime() >= updatedAt.getTime()) continue;
+      // Só pula se a nota que já está aqui for MAIS NOVA que a do backup. Com a
+      // mesma data, o backup vence e é enviado ao banco: a cópia guardada no
+      // aparelho vem sem fotos e pode nem ter chegado à conta atual (ex.: depois
+      // de trocar de banco, o app mostra as notas do aparelho sem elas estarem
+      // no servidor).
+      if (existing && existing.updatedAt.getTime() > updatedAt.getTime()) continue;
       const already = incoming.get(id);
       if (already && already.updatedAt.getTime() >= updatedAt.getTime()) continue;
       incoming.set(id, {
