@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { encryptNote, decryptNote, isEncrypted, LockPayload } from "@/lib/noteCrypto";
 import type { AlertSoundId } from "@/lib/alertSound";
+import { shareOrSaveTextFile } from "@/lib/nativeShare";
 
 export interface Note {
   id: string;
@@ -162,6 +163,9 @@ export function useNotes() {
   // vez de só saber que "tem 1 pendente" sem saber por quê.
   const [lastSyncError, setLastSyncError] = useState<{ title: string; message: string } | null>(null);
   const syncingRef = useRef(false);
+  // O que a pessoa pediu pra fixar/desafixar/reordenar. É uma ação dela e não
+  // pode se perder por diferença de relógio entre o celular e o servidor.
+  const pinIntentRef = useRef<Map<string, { isPinned: boolean; pinOrder: number | null }>>(new Map());
   const notesRef = useRef<Note[]>([]);
 
   // Atualizador único: garante que a "cópia rápida" (notesRef, usada por
@@ -196,10 +200,10 @@ export function useNotes() {
 
 
   // Sync unsynced notes to Supabase
-  const syncToSupabase = useCallback(async (notesToSync: Note[]) => {
+  const syncToSupabase = useCallback(async (notesToSync: Note[], depth = 0) => {
     if (!user || syncingRef.current) return;
-    const unsynced = notesToSync.filter((n) => !n.sincronizado);
-    if (unsynced.length === 0) {
+    let queue = notesToSync.filter((n) => !n.sincronizado);
+    if (queue.length === 0) {
       setSyncStatus("synced");
       return;
     }
@@ -208,7 +212,22 @@ export function useNotes() {
     setSyncStatus("syncing");
 
     let allOk = true;
-    for (const note of unsynced) {
+    // Em rodadas: se a pessoa mexer numa nota (ex: fixar) enquanto o envio
+    // está rodando, essa nota continua pendente e vai de novo na rodada
+    // seguinte — antes, o envio antigo marcava a nota como "sincronizada"
+    // mesmo tendo mandado a versão velha, e a fixação voltava sozinha.
+    for (let round = 0; round < 4 && queue.length > 0; round++) {
+    let again = false;
+    for (const snap of queue) {
+      // Na 1ª rodada usa a nota recebida (a "cópia rápida" ainda pode estar
+      // um passo atrás quando o envio é chamado). Nas rodadas seguintes usa
+      // sempre a versão MAIS ATUAL, e pula a que já foi sincronizada.
+      let note = snap;
+      if (round > 0) {
+        const ref = notesRef.current.find((n) => n.id === snap.id);
+        if (ref && ref.sincronizado) continue;
+        note = ref ?? snap;
+      }
       try {
         // Antes de mandar por cima, confere o que já está no servidor —
         // se outro aparelho (ex: o computador) já salvou uma versão MAIS
@@ -225,6 +244,18 @@ export function useNotes() {
           // O servidor já tem algo mais novo — descarta o envio local dessa
           // nota específica (o próximo fetchNotes traz a versão certa do
           // servidor pra cá) em vez de apagar por cima.
+          // Exceção: fixar/desafixar é uma escolha da pessoa — com o relógio do
+          // celular alguns segundos atrasado em relação ao servidor, a nota
+          // parecia "mais velha" e a fixação era jogada fora (a nota fixava e
+          // depois voltava). Só os campos de fixação são enviados.
+          const intent = pinIntentRef.current.get(note.id);
+          if (intent) {
+            const { error: pinErr } = await (supabase.from("notes") as any)
+              .update({ is_pinned: intent.isPinned, pin_order: intent.isPinned ? intent.pinOrder : null })
+              .eq("id", note.id);
+            if (pinErr) throw pinErr;
+            pinIntentRef.current.delete(note.id);
+          }
           setNotesAndRef((prev) => prev.map((n) => (n.id === note.id ? { ...n, sincronizado: true } : n)));
           continue;
         }
@@ -255,12 +286,22 @@ export function useNotes() {
           lock_salt: note.lockSalt ?? null,
           deleted_at: note.deletedAt ? note.deletedAt.toISOString() : null,
           sincronizado: true,
+          // Só manda a data de criação quando a nota ainda não existe no
+          // servidor (nota nova ou importada). Em nota que já existe, mandar de
+          // novo trunca os microssegundos e o servidor achava que a nota
+          // mudou — alterando a data de atualização a cada fixação.
+          ...(serverRow ? {} : { created_at: note.createdAt.toISOString() }),
         };
         const { error } = await (supabase.from("notes") as any).upsert(payload, { onConflict: "id" });
         if (error) throw error;
-        // Marca essa nota específica como sincronizada já — sem esperar as
-        // outras da fila terminarem.
-        setNotesAndRef((prev) => prev.map((n) => (n.id === note.id ? { ...n, sincronizado: true } : n)));
+        // Só marca como sincronizada se a nota NÃO mudou enquanto era enviada.
+        const cur = notesRef.current.find((n) => n.id === note.id);
+        if (!cur || cur === note) {
+          setNotesAndRef((prev) => prev.map((n) => (n.id === note.id ? { ...n, sincronizado: true } : n)));
+          pinIntentRef.current.delete(note.id);
+        } else if (!cur.sincronizado) {
+          again = true; // mudou durante o envio: fica pendente e vai de novo
+        }
       } catch (err: any) {
         // Essa nota específica não sincronizou (ex: foto grande demais pro
         // limite do banco de uma vez) — mas NÃO pode travar a fila inteira:
@@ -274,10 +315,17 @@ export function useNotes() {
         });
       }
     }
+    queue = again ? notesRef.current.filter((n) => !n.sincronizado) : [];
+    }
 
     if (allOk) setLastSyncError(null);
     setSyncStatus(allOk ? "synced" : "offline");
     syncingRef.current = false;
+
+    // Se a pessoa mexeu em algo bem no fim do envio, manda de novo.
+    if (allOk && depth < 3 && notesRef.current.some((n) => !n.sincronizado)) {
+      await syncToSupabase(notesRef.current, depth + 1);
+    }
   }, [user]);
 
   const pinningSuppressRef = useRef(false);
@@ -675,6 +723,7 @@ export function useNotes() {
       ));
       // Ignora eventos realtime desta nota enquanto a mudança propaga.
       markSelfModified(id, 30000);
+      pinIntentRef.current.set(id, { isPinned: newPinned, pinOrder: newPinOrder });
       pinningSuppressRef.current = true;
       setTimeout(() => { pinningSuppressRef.current = false; }, 30000);
       syncToSupabase(next);
@@ -702,7 +751,10 @@ export function useNotes() {
       const reordered = [...pinned];
       [reordered[idx], reordered[targetIdx]] = [reordered[targetIdx], reordered[idx]];
       const updates = reordered.map((n, i) => ({ id: n.id, pinOrder: i }));
-      updates.forEach((u) => markSelfModified(u.id, 30000));
+      updates.forEach((u) => {
+        markSelfModified(u.id, 30000);
+        pinIntentRef.current.set(u.id, { isPinned: true, pinOrder: u.pinOrder });
+      });
 
       const next = prev.map((n) => {
         const u = updates.find((x) => x.id === n.id);
@@ -801,21 +853,29 @@ export function useNotes() {
       images: n.images,
       fontFamily: n.fontFamily,
       fontSize: n.fontSize,
+      // v2 — o que o backup antigo deixava de fora: lembretes, trancadas
+      // (PIN), lixeira e fixadas.
+      lembrete_data: n.reminderDate ?? null,
+      lembrete_hora: n.reminderTime ?? null,
+      lembrete_som: n.reminderSound ?? "classico",
+      lembrete_som_nativo_uri: n.reminderNativeSoundUri ?? null,
+      lembrete_som_nativo_nome: n.reminderNativeSoundName ?? null,
+      trancada: n.isLocked,
+      sal_tranca: n.lockSalt ?? null,
+      excluida_em: n.deletedAt ? n.deletedAt.toISOString() : null,
+      fixada: n.isPinned,
+      ordem_fixada: n.pinOrder ?? null,
     }));
-    return { app: "minhas_notas", version: 1, notas: data };
+    return { app: "minhas_notas", version: 2, exportado_em: new Date().toISOString(), notas: data };
   }, [notes]);
 
   // Export backup (manual download)
   const exportBackup = useCallback(() => {
     const payload = buildBackupData();
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
     const dateStr = new Date().toISOString().slice(0, 10);
-    a.href = url;
-    a.download = `minhas_notas_backup_${dateStr}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    // No app Android abre o menu de compartilhar (Drive, WhatsApp, e-mail);
+    // no navegador baixa o arquivo.
+    void shareOrSaveTextFile(`minhas_notas_backup_completo_${dateStr}.json`, JSON.stringify(payload, null, 2));
     localStorage.setItem("ultimo_backup", new Date().toISOString());
     return true;
   }, [buildBackupData]);
@@ -854,24 +914,67 @@ export function useNotes() {
       throw new Error("Formato de backup não reconhecido");
     }
 
-    const existingIds = new Set(notes.map((n) => n.id));
-    let imported = 0;
+    // Importa PRESERVANDO tudo (id, datas originais, fixadas, trancadas,
+    // lembretes, lixeira). Se a nota já existe aqui, só troca quando a do
+    // backup for mais nova. Backups antigos (v1) também funcionam: o que não
+    // existir neles fica com o valor padrão.
+    const toDate = (v: any, fallback: Date) => {
+      const d = v ? new Date(v) : null;
+      return d && !isNaN(d.getTime()) ? d : fallback;
+    };
+    const now = new Date();
+    const base = notesRef.current;
+    const byId = new Map(base.map((n) => [n.id, n]));
+    const incoming = new Map<string, Note>();
 
     for (const item of parsed.notas) {
-      if (existingIds.has(item.id)) {
-        // Merge: keep more recent
-        const existing = notes.find((n) => n.id === item.id);
-        if (existing && new Date(item.atualizado_em) > existing.updatedAt) {
-          await updateNote(item.id, item.titulo, item.conteudo, item.images, item.cor, item.fontFamily, item.fontSize, item.status);
-          imported++;
-        }
-      } else {
-        await addNote(item.titulo, item.conteudo, item.images || [], item.cor, item.fontFamily, item.fontSize, item.status || "publicada");
-        imported++;
-      }
+      if (!item || typeof item !== "object") continue;
+      const id = typeof item.id === "string" && item.id ? item.id : crypto.randomUUID();
+      const updatedAt = toDate(item.atualizado_em, now);
+      const existing = byId.get(id);
+      if (existing && existing.updatedAt.getTime() >= updatedAt.getTime()) continue;
+      const already = incoming.get(id);
+      if (already && already.updatedAt.getTime() >= updatedAt.getTime()) continue;
+      incoming.set(id, {
+        id,
+        title: typeof item.titulo === "string" ? item.titulo : "",
+        content: typeof item.conteudo === "string" ? item.conteudo : "",
+        images: Array.isArray(item.images) ? item.images : [],
+        createdAt: toDate(item.criado_em, updatedAt),
+        updatedAt,
+        color: item.cor || COLORS[0],
+        fontFamily: item.fontFamily || "default",
+        fontSize: item.fontSize || "medium",
+        status: item.status === "rascunho" ? "rascunho" : "publicada",
+        sincronizado: false,
+        reminderDate: item.lembrete_data ?? null,
+        reminderTime: item.lembrete_hora ?? null,
+        reminderSound: (item.lembrete_som || "classico") as AlertSoundId,
+        reminderNativeSoundUri: item.lembrete_som_nativo_uri ?? null,
+        reminderNativeSoundName: item.lembrete_som_nativo_nome ?? null,
+        isLocked: !!item.trancada,
+        lockSalt: item.sal_tranca ?? null,
+        deletedAt: item.excluida_em ? toDate(item.excluida_em, now) : null,
+        isPinned: !!item.fixada,
+        pinOrder: item.fixada ? (item.ordem_fixada ?? null) : null,
+      });
     }
-    return imported;
-  }, [notes, addNote, updateNote]);
+
+    const imported = Array.from(incoming.values());
+    if (imported.length === 0) return 0;
+
+    // Evita que o aviso em tempo real dispare uma busca a cada nota enviada.
+    imported.forEach((n) => markSelfModified(n.id, 120000));
+    const merged = [...imported, ...base.filter((n) => !incoming.has(n.id))];
+    setNotesAndRef(merged);
+
+    // Se já tem uma sincronização rodando, espera ela terminar antes de enviar.
+    for (let i = 0; i < 30 && syncingRef.current; i++) {
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    if (user) await syncToSupabase(merged);
+    return imported.length;
+  }, [user, markSelfModified, setNotesAndRef, syncToSupabase]);
 
   // Check if backup reminder needed (weekly) - considers both manual and automatic backups
   const shouldRemindBackup = useCallback(() => {

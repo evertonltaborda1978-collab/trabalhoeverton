@@ -14,7 +14,7 @@
  */
 import { Capacitor } from "@capacitor/core";
 import { Share } from "@capacitor/share";
-import { Filesystem, Directory } from "@capacitor/filesystem";
+import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 
 // Corre uma promessa contra um cronômetro próprio: se ela não resolver nem
 // rejeitar a tempo, desiste sozinha — usado porque o compartilhar nativo às
@@ -96,6 +96,44 @@ export async function shareOrSaveImage(dataUrl: string, filename = "foto-nota.jp
     const a = document.createElement("a");
     a.href = url;
     a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    return "saved";
+  } catch {
+    return "failed";
+  }
+}
+
+// Salva (ou compartilha) um arquivo de texto — usado pelo backup das notas.
+// No app Android instalado, baixar por link/blob não funciona: aqui o arquivo
+// é gravado num lugar temporário do aparelho e abre o menu de compartilhar,
+// de onde dá pra mandar pro Google Drive, WhatsApp, e-mail, etc.
+// No navegador/PWA baixa o arquivo normalmente.
+export async function shareOrSaveTextFile(filename: string, content: string, mime = "application/json"): Promise<"shared" | "saved" | "failed"> {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const written = await Filesystem.writeFile({
+        path: filename,
+        data: content,
+        directory: Directory.Cache,
+        encoding: Encoding.UTF8,
+      });
+      await Share.share({ files: [written.uri], title: "Backup das notas", dialogTitle: "Salvar backup" });
+      return "shared";
+    } catch (err: any) {
+      // A pessoa fechou o menu de compartilhar de propósito — não é erro.
+      if (err?.message?.toLowerCase?.().includes("cancel")) return "shared";
+      return "failed";
+    }
+  }
+  try {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     a.remove();
