@@ -187,6 +187,10 @@ export function useNotes() {
   // vez de só saber que "tem 1 pendente" sem saber por quê.
   const [lastSyncError, setLastSyncError] = useState<{ title: string; message: string } | null>(null);
   const syncingRef = useRef(false);
+  // Notas excluídas de vez nesta sessão. Marcado NA HORA (a cópia rápida das
+  // notas só se atualiza quando a tela redesenha), para um envio que ainda está
+  // em andamento não recriar uma nota que a pessoa acabou de excluir.
+  const deletedIdsRef = useRef<Set<string>>(new Set());
   // O que a pessoa pediu pra fixar/desafixar/reordenar. É uma ação dela e não
   // pode se perder por diferença de relógio entre o celular e o servidor.
   const pinIntentRef = useRef<Map<string, { isPinned: boolean; pinOrder: number | null }>>(new Map());
@@ -259,6 +263,8 @@ export function useNotes() {
         // dados velhos daqui. Isso evita, por exemplo, fixar uma nota no
         // celular e uma sincronização atrasada do computador desfazer sem
         // querer, mandando por cima um estado antigo.
+        // Nota que a pessoa já mandou excluir de vez não pode ser reenviada.
+        if (deletedIdsRef.current.has(note.id) || loadPendingDeletes(user.id).includes(note.id)) continue;
         const { data: serverRow } = await (supabase.from("notes") as any)
           .select("updated_at")
           .eq("id", note.id)
@@ -320,7 +326,18 @@ export function useNotes() {
         if (error) throw error;
         // Só marca como sincronizada se a nota NÃO mudou enquanto era enviada.
         const cur = notesRef.current.find((n) => n.id === note.id);
-        if (!cur || cur === note) {
+        if (deletedIdsRef.current.has(note.id)) {
+          // A nota foi excluída de vez ENQUANTO era enviada (ex.: desafixou e
+          // excluiu logo em seguida, com sinal ruim): o envio pode ter recriado
+          // a nota no servidor depois do pedido de exclusão. Apaga de novo —
+          // e, se falhar, o pedido fica na fila para quando a internet voltar.
+          const pend = loadPendingDeletes(user.id);
+          if (!pend.includes(note.id)) savePendingDeletes(user.id, [...pend, note.id]);
+          try {
+            const { error: delErr } = await supabase.from("notes").delete().eq("id", note.id);
+            if (!delErr) savePendingDeletes(user.id, loadPendingDeletes(user.id).filter((x) => x !== note.id));
+          } catch {}
+        } else if (!cur || cur === note) {
           setNotesAndRef((prev) => prev.map((n) => (n.id === note.id ? { ...n, sincronizado: true } : n)));
           pinIntentRef.current.delete(note.id);
         } else if (!cur.sincronizado) {
@@ -647,6 +664,7 @@ export function useNotes() {
   // Permanent delete
   const permanentDeleteNote = useCallback(async (id: string) => {
     markSelfModified(id, 30000);
+    deletedIdsRef.current.add(id);
     setNotesAndRef((prev) => prev.filter((n) => n.id !== id));
     if (!user) return;
     // Entra na fila ANTES de tentar: se a internet falhar, o pedido de
@@ -658,6 +676,7 @@ export function useNotes() {
   // Empty trash
   const emptyTrash = useCallback(async () => {
     const trashIds = notes.filter((n) => n.deletedAt).map((n) => n.id);
+    trashIds.forEach((id) => deletedIdsRef.current.add(id));
     setNotesAndRef((prev) => prev.filter((n) => !n.deletedAt));
     if (!user || trashIds.length === 0) return;
     savePendingDeletes(user.id, [...loadPendingDeletes(user.id), ...trashIds]);
@@ -1059,6 +1078,9 @@ export function useNotes() {
       return 0;
     }
 
+    // Nota que está sendo restaurada não pode continuar marcada como excluída.
+    imported.forEach((n) => deletedIdsRef.current.delete(n.id));
+    if (user) savePendingDeletes(user.id, loadPendingDeletes(user.id).filter((id) => !incoming.has(id)));
     // Evita que o aviso em tempo real dispare uma busca a cada nota enviada.
     imported.forEach((n) => markSelfModified(n.id, 120000));
     const merged = [...imported, ...base.filter((n) => !incoming.has(n.id))];

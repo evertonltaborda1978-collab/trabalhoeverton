@@ -1,6 +1,7 @@
 {
-  "version": "v4.56",
+  "version": "v4.57",
   "history": [
+    { "version": "v4.57", "changes": "Nota que voltava depois de desafixar e excluir: se a nota era excluída de vez enquanto o envio da fixação ainda estava em andamento (sinal ruim), o envio atrasado recriava a nota no servidor e ela reaparecia. Agora o app apaga de novo no servidor e não deixa a nota voltar." },
     { "version": "v4.56", "changes": "Dois ajustes: (1) Texto repetido nas notas (ex.: \"VeloiVeloi\"): quando a versão formatada de um bloco de texto não bate com o texto simples (o que os contadores de palavras usam), a nota agora mostra o texto simples certo em vez do repetido. (2) Fixar nota: a fixação feita em um aparelho (celular ou computador) agora aparece no outro e deixa de ser desfeita. Também fica guardado no aparelho o pedido de excluir de vez uma nota feito sem internet." },
     { "version": "v4.55", "changes": "Notas excluídas que voltavam: quando a nota era apagada de vez (ou a lixeira esvaziada) sem internet ou com sinal ruim, o pedido de exclusão se perdia e a nota reaparecia na próxima atualização. Agora o pedido de exclusão fica guardado no aparelho e é reenviado quando a internet voltar, mesmo se o app for fechado, e a nota não reaparece nesse meio tempo." },
     { "version": "v4.54", "changes": "Google Agenda: depois de autorizar no navegador do celular, o app agora confere a conexão sozinho ao voltar para ele (antes a tela ficava sem mostrar \"Google Agenda conectada\" até fechar e abrir o app)." },
