@@ -54,7 +54,19 @@ export function useGoogleCalendar() {
       }
     };
     window.addEventListener("message", handler);
-    return () => window.removeEventListener("message", handler);
+    // No app instalado a autorização acontece no navegador do celular e a
+    // janela não consegue avisar o app. Por isso, ao voltar para o app, a
+    // conexão é conferida de novo.
+    const reconferir = () => {
+      if (document.visibilityState === "visible") checkStatus();
+    };
+    document.addEventListener("visibilitychange", reconferir);
+    window.addEventListener("focus", reconferir);
+    return () => {
+      window.removeEventListener("message", handler);
+      document.removeEventListener("visibilitychange", reconferir);
+      window.removeEventListener("focus", reconferir);
+    };
   }, [checkStatus]);
 
   // Connect - open OAuth popup

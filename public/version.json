@@ -1,6 +1,7 @@
 {
-  "version": "v4.53",
+  "version": "v4.54",
   "history": [
+    { "version": "v4.54", "changes": "Google Agenda: depois de autorizar no navegador do celular, o app agora confere a conexão sozinho ao voltar para ele (antes a tela ficava sem mostrar \"Google Agenda conectada\" até fechar e abrir o app)." },
     { "version": "v4.53", "changes": "Importar backup agora também importa a Agenda: os compromissos que vêm no arquivo de backup entram na conta (só os que ainda não existem, sem sobrescrever o que já foi editado) e a lista da Agenda se atualiza na hora." },
     { "version": "v4.52", "changes": "Importar backup: notas que já aparecem no aparelho mas ainda não estão na conta atual (caso da troca de banco) agora são enviadas ao banco, com as fotos. Antes elas eram puladas por já existirem localmente." },
     { "version": "v4.51", "changes": "Fixar nota: corrigido o problema de a nota fixar e depois voltar sozinha. Duas causas: (1) se o relógio do celular estivesse alguns segundos atrasado em relação ao servidor, a fixação era descartada como \"mais velha\"; (2) fixar uma nota enquanto outra ainda estava sendo enviada podia deixar a fixação marcada como enviada sem ter ido. Também corrigido: fixar uma nota alterava a data de atualização dela no servidor." },
