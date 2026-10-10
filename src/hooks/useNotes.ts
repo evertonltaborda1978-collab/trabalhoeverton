@@ -187,6 +187,11 @@ export function useNotes() {
   // vez de só saber que "tem 1 pendente" sem saber por quê.
   const [lastSyncError, setLastSyncError] = useState<{ title: string; message: string } | null>(null);
   const syncingRef = useRef(false);
+  // Último "atualizada em" de cada nota que ESTE aparelho viu no servidor. Serve
+  // para distinguir "alguém mexeu na nota em outro lugar" (aí a cópia daqui é
+  // antiga e não deve sobrescrever) de "o relógio do celular está atrasado em
+  // relação ao servidor" (aí a mudança feita agora é legítima e deve valer).
+  const serverSeenRef = useRef<Map<string, number>>(new Map());
   // Notas excluídas de vez nesta sessão. Marcado NA HORA (a cópia rápida das
   // notas só se atualiza quando a tela redesenha), para um envio que ainda está
   // em andamento não recriar uma nota que a pessoa acabou de excluir.
@@ -270,7 +275,13 @@ export function useNotes() {
           .eq("id", note.id)
           .maybeSingle();
 
-        if (serverRow?.updated_at && new Date(serverRow.updated_at).getTime() > note.updatedAt.getTime()) {
+        const serverTs = serverRow?.updated_at ? new Date(serverRow.updated_at).getTime() : null;
+        const seenTs = serverSeenRef.current.get(note.id);
+        // Mexeram na nota em outro lugar = o servidor tem uma data diferente da que
+        // este aparelho conhecia. Se a data é a mesma que já conhecíamos, o servidor
+        // não mudou: a diferença é só relógio atrasado, e a mudança de agora vale.
+        const changedElsewhere = seenTs === undefined || serverTs !== seenTs;
+        if (serverTs !== null && serverTs > note.updatedAt.getTime() && changedElsewhere) {
           // O servidor já tem algo mais novo — descarta o envio local dessa
           // nota específica (o próximo fetchNotes traz a versão certa do
           // servidor pra cá) em vez de apagar por cima.
@@ -322,8 +333,13 @@ export function useNotes() {
           // mudou — alterando a data de atualização a cada fixação.
           ...(serverRow ? {} : { created_at: note.createdAt.toISOString() }),
         };
-        const { error } = await (supabase.from("notes") as any).upsert(payload, { onConflict: "id" });
+        const { data: saved, error } = await (supabase.from("notes") as any)
+          .upsert(payload, { onConflict: "id" })
+          .select("updated_at");
         if (error) throw error;
+        const novaData = Array.isArray(saved) ? saved[0]?.updated_at : saved?.updated_at;
+        if (novaData) serverSeenRef.current.set(note.id, new Date(novaData).getTime());
+        else serverSeenRef.current.delete(note.id);
         // Só marca como sincronizada se a nota NÃO mudou enquanto era enviada.
         const cur = notesRef.current.find((n) => n.id === note.id);
         if (deletedIdsRef.current.has(note.id)) {
@@ -459,6 +475,7 @@ export function useNotes() {
       // voltar uma nota que a pessoa já apagou de vez.
       const apagadas = new Set(await flushPendingDeletes());
       const remoteNotes = (data ? data.map(mapRow) : []).filter((n) => !apagadas.has(n.id));
+      remoteNotes.forEach((n) => serverSeenRef.current.set(n.id, n.updatedAt.getTime()));
 
       // Mescla contra o estado ATUAL de verdade (via a forma funcional),
       // nunca contra a "localNotes" capturada lá em cima antes de esperar
@@ -700,8 +717,13 @@ export function useNotes() {
     async (id: string, title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string, status?: "rascunho" | "publicada") => {
       const now = new Date();
       markSelfModified(id, 30000);
-      setNotesAndRef((prev) =>
-        prev.map((n) =>
+      // A nota é salva no aparelho e entra na fila de envio. Se não houver
+      // internet (ou o sinal estiver ruim), ela continua marcada como "não
+      // enviada" e é reenviada sozinha quando a conexão voltar. Antes, o envio
+      // direto ignorava o erro de rede e marcava a nota como enviada mesmo sem
+      // ter chegado ao servidor — a edição só existia neste aparelho.
+      setNotesAndRef((prev) => {
+        const next = prev.map((n) =>
           n.id === id
             ? {
                 ...n,
@@ -716,26 +738,12 @@ export function useNotes() {
                 sincronizado: false,
               }
             : n
-        )
-      );
-
-      try {
-        const updates: any = { title, content, updated_at: now.toISOString() };
-        if (images !== undefined) updates.images = images;
-        if (color !== undefined) updates.color = color;
-        if (fontFamily !== undefined) updates.font_family = fontFamily;
-        if (fontSize !== undefined) updates.font_size = fontSize;
-        if (status !== undefined) updates.status = status;
-        updates.sincronizado = true;
-
-        await (supabase.from("notes") as any).update(updates).eq("id", id);
-        setNotesAndRef((prev) => prev.map((n) => (n.id === id ? { ...n, sincronizado: true } : n)));
-        setSyncStatus("synced");
-      } catch {
-        setSyncStatus("offline");
-      }
+        );
+        syncToSupabase(next);
+        return next;
+      });
     },
-    [markSelfModified]
+    [markSelfModified, syncToSupabase]
   );
 
   // Set/remove reminder
@@ -748,20 +756,12 @@ export function useNotes() {
     reminderNativeSoundName: string | null = null
   ) => {
     markSelfModified(id, 30000);
-    setNotesAndRef((prev) => prev.map((n) => n.id === id ? { ...n, reminderDate, reminderTime, reminderSound, reminderNativeSoundUri, reminderNativeSoundName, updatedAt: new Date(), sincronizado: false } : n));
-    try {
-      await (supabase.from("notes") as any).update({
-        reminder_date: reminderDate,
-        reminder_time: reminderTime,
-        reminder_sound: reminderSound,
-        reminder_native_sound_uri: reminderNativeSoundUri,
-        reminder_native_sound_name: reminderNativeSoundName,
-        updated_at: new Date().toISOString(),
-        sincronizado: true,
-      }).eq("id", id);
-      setNotesAndRef((prev) => prev.map((n) => n.id === id ? { ...n, sincronizado: true } : n));
-    } catch { setSyncStatus("offline"); }
-  }, [markSelfModified]);
+    setNotesAndRef((prev) => {
+      const next = prev.map((n) => n.id === id ? { ...n, reminderDate, reminderTime, reminderSound, reminderNativeSoundUri, reminderNativeSoundName, updatedAt: new Date(), sincronizado: false } : n);
+      syncToSupabase(next);
+      return next;
+    });
+  }, [markSelfModified, syncToSupabase]);
 
   // Toggle pinned state for a note
   const togglePinNote = useCallback(async (id: string) => {
@@ -841,23 +841,15 @@ export function useNotes() {
     const payload: LockPayload = { title: note.title, content: note.content, images: note.images };
     const { cipher, salt } = await encryptNote(pin, payload);
     const now = new Date();
-    setNotesAndRef((prev) => prev.map((n) => n.id === id
-      ? { ...n, title: "🔒", content: cipher, images: [], isLocked: true, lockSalt: salt, updatedAt: now, sincronizado: false }
-      : n));
-    try {
-      await (supabase.from("notes") as any).update({
-        title: "🔒",
-        content: cipher,
-        images: [],
-        is_locked: true,
-        lock_salt: salt,
-        updated_at: now.toISOString(),
-        sincronizado: true,
-      }).eq("id", id);
-      setNotesAndRef((prev) => prev.map((n) => n.id === id ? { ...n, sincronizado: true } : n));
-      return true;
-    } catch { setSyncStatus("offline"); return true; }
-  }, [notes]);
+    setNotesAndRef((prev) => {
+      const next = prev.map((n) => n.id === id
+        ? { ...n, title: "🔒", content: cipher, images: [], isLocked: true, lockSalt: salt, updatedAt: now, sincronizado: false }
+        : n);
+      syncToSupabase(next);
+      return next;
+    });
+    return true;
+  }, [notes, syncToSupabase]);
 
   // Verify a PIN against an encrypted note (does not persist or unlock).
   const verifyNotePin = useCallback(async (id: string, pin: string): Promise<LockPayload | null> => {
@@ -873,23 +865,15 @@ export function useNotes() {
     const payload = await decryptNote(pin, note.content, note.lockSalt);
     if (!payload) return false;
     const now = new Date();
-    setNotesAndRef((prev) => prev.map((n) => n.id === id
-      ? { ...n, title: payload.title, content: payload.content, images: payload.images, isLocked: false, lockSalt: null, updatedAt: now, sincronizado: false }
-      : n));
-    try {
-      await (supabase.from("notes") as any).update({
-        title: payload.title,
-        content: payload.content,
-        images: payload.images,
-        is_locked: false,
-        lock_salt: null,
-        updated_at: now.toISOString(),
-        sincronizado: true,
-      }).eq("id", id);
-      setNotesAndRef((prev) => prev.map((n) => n.id === id ? { ...n, sincronizado: true } : n));
-      return true;
-    } catch { setSyncStatus("offline"); return true; }
-  }, [notes]);
+    setNotesAndRef((prev) => {
+      const next = prev.map((n) => n.id === id
+        ? { ...n, title: payload.title, content: payload.content, images: payload.images, isLocked: false, lockSalt: null, updatedAt: now, sincronizado: false }
+        : n);
+      syncToSupabase(next);
+      return next;
+    });
+    return true;
+  }, [notes, syncToSupabase]);
 
   const draftCount = notes.filter((n) => n.status === "rascunho" && !n.deletedAt).length;
   // Notas que só existem no aparelho por enquanto — se os dados do app forem
