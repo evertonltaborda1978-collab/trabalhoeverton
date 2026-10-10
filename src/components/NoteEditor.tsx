@@ -60,6 +60,7 @@ import { ptBR } from "date-fns/locale";
 import { toast } from "@/hooks/use-toast";
 import { ALERT_SOUND_OPTIONS, playAlertSoundPreview, type AlertSoundId } from "@/lib/alertSound";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { consistentHtml } from "@/lib/richTextConsistency";
 
 // ── Types ──────────────────────────────────────────────
 export interface ChecklistItem {
@@ -2855,8 +2856,8 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                           WebkitUserSelect: "text",
                         }}
                       >
-                        {block.contentHtml ? (
-                          <span dangerouslySetInnerHTML={{ __html: linkifyHtml(sanitizeRichHtml(block.contentHtml)) }} />
+                        {consistentHtml(block) ? (
+                          <span dangerouslySetInnerHTML={{ __html: linkifyHtml(sanitizeRichHtml(consistentHtml(block)!)) }} />
                         ) : block.content ? (
                           renderTextWithLinks(block.content, block.style?.color || textColor, editorFontSize)
                         ) : (
@@ -2937,7 +2938,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                       ref={(el) => {
                         richTextRefs.current[idx] = el;
                         if (!el) return;
-                        const desiredHtml = block.contentHtml ?? textToHtml(block.content || "");
+                        const desiredHtml = consistentHtml(block) ?? textToHtml(block.content || "");
                         // Só re-semeia se estiver fora de sincronia (edição externa: desfazer,
                         // dividir bloco, carregar nota) — nunca enquanto a pessoa está digitando,
                         // pra não fazer o cursor pular de lugar.
@@ -4107,7 +4108,7 @@ ${blocksToPlainText(blocks)}`.trim();
                         wordBreak: "break-word",
                       }}
                     >
-                      {b.contentHtml ? <span dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(b.contentHtml) }} /> : b.content}
+                      {consistentHtml(b) ? <span dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(consistentHtml(b)!) }} /> : b.content}
                     </div>
                   );
                 }

@@ -114,6 +114,25 @@ function loadAnyLocal(): Note[] {
 }
 
 
+// Exclusões definitivas que ainda não chegaram ao servidor (internet ruim ou
+// sem sinal). Ficam guardadas no aparelho e são reenviadas quando a internet
+// voltar. Sem isso, a nota era apagada só na tela e o servidor continuava com
+// ela — e ela "voltava" na próxima atualização, mesmo com a lixeira esvaziada.
+const pendingDeletesKey = (uid: string) => `notas_exclusoes_pendentes_${uid}`;
+function loadPendingDeletes(uid: string): string[] {
+  try {
+    const arr = JSON.parse(localStorage.getItem(pendingDeletesKey(uid)) || "[]");
+    return Array.isArray(arr) ? arr.filter((x) => typeof x === "string") : [];
+  } catch { return []; }
+}
+function savePendingDeletes(uid: string, ids: string[]) {
+  try {
+    const unicos = Array.from(new Set(ids));
+    if (unicos.length === 0) localStorage.removeItem(pendingDeletesKey(uid));
+    else localStorage.setItem(pendingDeletesKey(uid), JSON.stringify(unicos));
+  } catch {}
+}
+
 function mergeNotes(local: Note[], remote: Note[]): Note[] {
   const map = new Map<string, Note>();
   for (const n of remote) map.set(n.id, { ...n, sincronizado: true });
@@ -122,7 +141,11 @@ function mergeNotes(local: Note[], remote: Note[]): Note[] {
     if (!existing) {
       map.set(n.id, n);
     } else if (!n.sincronizado || n.updatedAt >= existing.updatedAt) {
-      map.set(n.id, n);
+      // Fixar/desafixar não muda a data de "atualizada em" no servidor. Por isso,
+      // se a nota daqui não tem nenhuma mudança pendente, quem manda na fixação é
+      // o servidor — senão a fixação feita no outro aparelho nunca chegava (a
+      // cópia daqui "parecia" igual ou mais nova) e depois era desfeita.
+      map.set(n.id, n.sincronizado ? { ...n, isPinned: existing.isPinned, pinOrder: existing.pinOrder } : n);
     }
   }
   return Array.from(map.values()).sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
@@ -353,6 +376,27 @@ export function useNotes() {
   }, []);
 
 
+  // Tenta apagar no servidor tudo o que está na fila. O que falhar (sem
+  // internet) continua na fila para a próxima tentativa.
+  // Devolve os ids que estavam na fila, para quem acabou de baixar a lista do
+  // servidor descartar essas notas (a lista foi baixada ANTES da exclusão).
+  const flushPendingDeletes = useCallback(async (): Promise<string[]> => {
+    if (!user) return [];
+    const ids = loadPendingDeletes(user.id);
+    if (ids.length === 0) return [];
+    const restantes: string[] = [];
+    for (const id of ids) {
+      try {
+        const { error } = await supabase.from("notes").delete().eq("id", id);
+        if (error) restantes.push(id);
+      } catch {
+        restantes.push(id);
+      }
+    }
+    savePendingDeletes(user.id, restantes);
+    return ids;
+  }, [user]);
+
   const fetchNotes = useCallback(async () => {
     // Sem usuário ainda: carrega o que houver salvo localmente (chave "anon"
     // ou de um usuário anterior) para não deixar a tela vazia/travada offline.
@@ -394,7 +438,10 @@ export function useNotes() {
 
       if (error) throw error;
 
-      const remoteNotes = data ? data.map(mapRow) : [];
+      // Antes de mesclar: reenvia as exclusões pendentes e nunca deixa
+      // voltar uma nota que a pessoa já apagou de vez.
+      const apagadas = new Set(await flushPendingDeletes());
+      const remoteNotes = (data ? data.map(mapRow) : []).filter((n) => !apagadas.has(n.id));
 
       // Mescla contra o estado ATUAL de verdade (via a forma funcional),
       // nunca contra a "localNotes" capturada lá em cima antes de esperar
@@ -426,7 +473,7 @@ export function useNotes() {
       setSyncStatus("offline");
     }
     setLoading(false);
-  }, [user, syncToSupabase]);
+  }, [user, syncToSupabase, flushPendingDeletes]);
 
   useEffect(() => {
     fetchNotes();
@@ -601,19 +648,21 @@ export function useNotes() {
   const permanentDeleteNote = useCallback(async (id: string) => {
     markSelfModified(id, 30000);
     setNotesAndRef((prev) => prev.filter((n) => n.id !== id));
-    try {
-      await supabase.from("notes").delete().eq("id", id);
-    } catch {}
-  }, [markSelfModified]);
+    if (!user) return;
+    // Entra na fila ANTES de tentar: se a internet falhar, o pedido de
+    // exclusão não se perde e é reenviado depois.
+    savePendingDeletes(user.id, [...loadPendingDeletes(user.id), id]);
+    await flushPendingDeletes();
+  }, [markSelfModified, user, flushPendingDeletes]);
 
   // Empty trash
   const emptyTrash = useCallback(async () => {
     const trashIds = notes.filter((n) => n.deletedAt).map((n) => n.id);
     setNotesAndRef((prev) => prev.filter((n) => !n.deletedAt));
-    for (const id of trashIds) {
-      try { await supabase.from("notes").delete().eq("id", id); } catch {}
-    }
-  }, [notes]);
+    if (!user || trashIds.length === 0) return;
+    savePendingDeletes(user.id, [...loadPendingDeletes(user.id), ...trashIds]);
+    await flushPendingDeletes();
+  }, [notes, user, flushPendingDeletes]);
 
   // Auto-delete notes older than 30 days in trash
   useEffect(() => {
