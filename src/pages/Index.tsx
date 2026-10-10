@@ -462,6 +462,37 @@ const Index = () => {
 
             {/* Lado Direito: Menu ••• (com opções de atualização e backup) + Sair */}
             <div className="flex items-center gap-1.5 shrink-0">
+              {/* Lixeira piscante: só aparece na aba Notas e só quando existe nota na lixeira */}
+              {tab === "notes" && trashedNotes.length > 0 && (
+                <>
+                  <style>{`
+                    @keyframes lixeira-alerta {
+                      0%   { color:#E53935; background:#FDECEA; border-color:#E53935; opacity:1;   transform:scale(1.1);  box-shadow:0 0 0 0 rgba(229,57,53,.55), 0 0 12px 3px rgba(229,57,53,.55); }
+                      12%  { color:#E53935; background:#FDECEA; border-color:#E53935; opacity:.3;  transform:scale(.94);  box-shadow:none; }
+                      24%  { color:#FB8C00; background:#FFF3E0; border-color:#FB8C00; opacity:1;   transform:scale(1.1);  box-shadow:0 0 0 0 rgba(251,140,0,.55), 0 0 12px 3px rgba(251,140,0,.55); }
+                      36%  { color:#FB8C00; background:#FFF3E0; border-color:#FB8C00; opacity:.3;  transform:scale(.94);  box-shadow:none; }
+                      48%  { color:#8E24AA; background:#F3E5F5; border-color:#8E24AA; opacity:1;   transform:scale(1.1);  box-shadow:0 0 0 0 rgba(142,36,170,.55), 0 0 12px 3px rgba(142,36,170,.55); }
+                      60%  { color:#8E24AA; background:#F3E5F5; border-color:#8E24AA; opacity:.3;  transform:scale(.94);  box-shadow:none; }
+                      72%  { color:#1E88E5; background:#E3F2FD; border-color:#1E88E5; opacity:1;   transform:scale(1.1);  box-shadow:0 0 0 0 rgba(30,136,229,.55), 0 0 12px 3px rgba(30,136,229,.55); }
+                      84%  { color:#1E88E5; background:#E3F2FD; border-color:#1E88E5; opacity:.3;  transform:scale(.94);  box-shadow:none; }
+                      100% { color:#E53935; background:#FDECEA; border-color:#E53935; opacity:1;   transform:scale(1.1);  box-shadow:0 0 0 0 rgba(229,57,53,.55), 0 0 12px 3px rgba(229,57,53,.55); }
+                    }
+                    .lixeira-alerta { animation: lixeira-alerta 2.8s ease-in-out infinite; }
+                    @media (prefers-reduced-motion: reduce) {
+                      .lixeira-alerta { animation: none; color:#E53935; background:#FDECEA; border-color:#E53935; }
+                    }
+                  `}</style>
+                  <button
+                    onClick={() => window.dispatchEvent(new Event("notes-menu:trash"))}
+                    className="lixeira-alerta flex items-center justify-center rounded-full"
+                    style={{ width: 32, height: 32, border: "1.5px solid #E53935" }}
+                    title={`Lixeira (${trashedNotes.length})`}
+                    aria-label={`Abrir a lixeira, ${trashedNotes.length} ${trashedNotes.length === 1 ? "nota" : "notas"}`}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </>
+              )}
               <div className="relative">
                 <button
                   onClick={() => setShowBackupMenu((v) => !v)}
