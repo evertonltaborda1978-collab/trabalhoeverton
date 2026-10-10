@@ -304,9 +304,14 @@ function serializeBlocks(blocks: ContentBlock[]): string {
   // Garante que links fiquem vermelhos/sublinhados ao salvar, mesmo se o
   // "sair do campo" (blur) não tiver disparado certinho em algum teclado
   // Android — rede de segurança extra além do onBlur de cada campo.
-  const withLinks = blocks.map((b) =>
-    b.contentHtml ? { ...b, contentHtml: linkifyHtml(b.contentHtml) } : b
-  );
+  // Também não grava a versão formatada quando ela não bate com o texto simples
+  // (ex.: texto repetido por causa do teclado): assim a repetição nunca é salva
+  // e não aparece ao abrir a nota em outro aparelho.
+  const withLinks = blocks.map((b) => {
+    if (!b.contentHtml) return b;
+    const ok = consistentHtml(b);
+    return ok ? { ...b, contentHtml: linkifyHtml(ok) } : { ...b, contentHtml: undefined };
+  });
   return serializeBlocksRaw(withLinks);
 }
 function serializeBlocksRaw(blocks: ContentBlock[]): string {
