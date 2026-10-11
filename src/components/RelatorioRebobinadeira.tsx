@@ -957,15 +957,15 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
         </div>
       </div>
 
+      {/* Máquina selecionada: faixa fixa, não rola junto com o conteúdo */}
+      <div style={{ background: theme.headerBg, borderBottom: `1px solid ${theme.cardBorder}`, padding: "6px 16px 8px", textAlign: "center" }}>
+        <span style={{ display: "inline-block", fontSize: s(14), fontWeight: 800, letterSpacing: 1, color: "#FFF", background: "#2D9E7F", padding: "5px 22px", borderRadius: 999 }}>
+          REBOBINADEIRA {rebobNum}
+        </span>
+      </div>
+
       {/* Conteúdo */}
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 100px" }}>
-
-        {/* Máquina selecionada em destaque */}
-        <div style={{ textAlign: "center", marginBottom: 12 }}>
-          <span style={{ display: "inline-block", fontSize: s(16), fontWeight: 800, letterSpacing: 1, color: "#FFF", background: "#2D9E7F", padding: "8px 24px", borderRadius: 999 }}>
-            REBOBINADEIRA {rebobNum}
-          </span>
-        </div>
 
         {/* Cabeçalho */}
         <div style={cardStyle}>

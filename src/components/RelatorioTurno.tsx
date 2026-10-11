@@ -1056,19 +1056,19 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
             Rebobinadeira
           </button>
         </div>
-      </div>
 
-      {/* Conteúdo rolável */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 100px" }}>
-
-        {/* Máquina selecionada em destaque */}
+        {/* Máquina selecionada: fica fixa no cabeçalho, não rola junto com o conteúdo */}
         {!modoTombador && (
-          <div style={{ textAlign: "center", marginBottom: 12 }}>
-            <span style={{ display: "inline-block", fontSize: s(16), fontWeight: 800, letterSpacing: 1, color: "#FFF", background: "#2D9E7F", padding: "8px 24px", borderRadius: 999 }}>
+          <div style={{ textAlign: "center" }}>
+            <span style={{ display: "inline-block", fontSize: s(14), fontWeight: 800, letterSpacing: 1, color: "#FFF", background: "#2D9E7F", padding: "5px 22px", borderRadius: 999 }}>
               EMBALADEIRA {embaladeiraNum}
             </span>
           </div>
         )}
+      </div>
+
+      {/* Conteúdo rolável */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 100px" }}>
 
         {/* Cabeçalho do turno */}
         <div style={cardStyle}>
