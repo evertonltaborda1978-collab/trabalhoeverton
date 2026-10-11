@@ -29,13 +29,38 @@ interface Props {
   theme: ConsumidosTheme;
   s: (n: number) => number;
   fz: number;
+  /** Chave do localStorage onde fica a contagem de uso de cada item (um por relatório). */
+  usoKey: string;
 }
 
 const NOVO_ITEM = "__novo_item__";
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const somaQtd = (item: ItemConsumo) => item.trocas.reduce((a, t) => a + (t.qtd ?? 1), 0);
 
-export function ConsumidosEditor({ itens, setItens, theme, s, fz }: Props) {
+const lerUso = (key: string): Record<string, number> => {
+  try {
+    const raw = localStorage.getItem(key);
+    const obj = raw ? JSON.parse(raw) : {};
+    return obj && typeof obj === "object" ? obj : {};
+  } catch { return {}; }
+};
+
+export function ConsumidosEditor({ itens, setItens, theme, s, fz, usoKey }: Props) {
+  // Contagem de quantas vezes cada item foi lançado (guardada no aparelho)
+  const [uso, setUso] = useState<Record<string, number>>(() => lerUso(usoKey));
+  const [okMsg, setOkMsg] = useState<string>("");
+  const registrarUso = (label: string) => {
+    setUso(prev => {
+      const novo = { ...prev, [label]: (prev[label] ?? 0) + 1 };
+      try { localStorage.setItem(usoKey, JSON.stringify(novo)); } catch { /* sem espaço/privado: ignora */ }
+      return novo;
+    });
+  };
+  const maisUsados = Object.entries(uso)
+    .filter(([label, n]) => n > 0 && itens.some(i => i.label === label))
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([label]) => label);
   // Formulário "Adicionar troca"
   const [sel, setSel] = useState<string>("");
   const [qtd, setQtd] = useState<number>(1);
@@ -77,7 +102,21 @@ export function ConsumidosEditor({ itens, setItens, theme, s, fz }: Props) {
     if (idx < 0) { setAviso("Escolha o item primeiro."); return; }
     const nova: Troca = { min: parseMin(min), qtd: clampQtd(qtd) };
     setItens(prev => ordenarConsumidos(prev.map((item, i) => i === idx ? { ...item, trocas: [...item.trocas, nova], collapsed: false } : item)));
-    setSel(""); setQtd(1); setMin(""); setAviso("");
+    registrarUso(sel);
+    setSel(""); setQtd(1); setMin(""); setAviso(""); setOkMsg("");
+  };
+
+  // Toque único num item mais usado: lança 1 unidade e já abre a linha para ajustar o tempo
+  const adicionarRapido = (label: string) => {
+    const idx = itens.findIndex(i => i.label === label);
+    if (idx < 0) return;
+    const proximo = ordenarConsumidos(itens.map((item, i) => i === idx ? { ...item, trocas: [...item.trocas, { min: null, qtd: 1 }], collapsed: false } : item));
+    setItens(proximo);
+    const novoIdx = proximo.findIndex(i => i.label === label);
+    if (novoIdx >= 0) setEdit({ idx: novoIdx, ti: proximo[novoIdx].trocas.length - 1 });
+    registrarUso(label);
+    setAviso("");
+    setOkMsg(`+1 ${label} lançado. Ajuste o tempo na lista abaixo, se precisar.`);
   };
 
   const confirmarNovoItem = () => {
@@ -130,6 +169,24 @@ export function ConsumidosEditor({ itens, setItens, theme, s, fz }: Props) {
 
   return (
     <div>
+      {/* ── Mais usados (toque único) ── */}
+      {maisUsados.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <p style={{ fontSize: s(11), color: theme.textSub, margin: "0 0 6px" }}>Mais usados (toque para lançar 1)</p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {maisUsados.map(label => (
+              <button
+                key={label} type="button" onClick={() => adicionarRapido(label)}
+                style={{ minHeight: 44, padding: "8px 14px", fontSize: s(12), fontWeight: 600, color: theme.accent, background: "rgba(45,158,127,0.1)", border: "1px solid rgba(45,158,127,0.35)", borderRadius: 22, cursor: "pointer" }}
+              >
+                + {label}
+              </button>
+            ))}
+          </div>
+          {okMsg && <p style={{ fontSize: s(12), color: theme.accent, margin: "8px 0 0" }}>{okMsg}</p>}
+        </div>
+      )}
+
       {/* ── Adicionar troca ── */}
       <div style={{ padding: 12, borderRadius: 12, background: theme.inputBg, border: `1px solid ${theme.cardBorder}` }}>
         <label style={{ fontSize: s(11), color: theme.textSub }}>Item consumido</label>

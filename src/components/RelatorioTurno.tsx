@@ -45,6 +45,15 @@ const HORARIOS: Record<string, string> = {
   "3": "16:20 x 00:20 hr",
 };
 
+// Turno pela hora do celular: T1 00:20–08:20 · T2 08:20–16:20 · T3 16:20–00:20
+function turnoAtual(): string {
+  const d = new Date();
+  const m = d.getHours() * 60 + d.getMinutes();
+  if (m >= 20 && m < 500) return "1";
+  if (m >= 500 && m < 980) return "2";
+  return "3";
+}
+
 const ITENS_BASE = [
   "Rep. de P.O 1175","Rep. de P.O 1220","Rep. de P.O 1350","Rep. de P.O 1450",
   "Trocas de Stretch","Pallet de Stretch","Reposição de Cola","Troca de Ribon","Troca de Label",
@@ -386,9 +395,9 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   const saved = initialState || (() => { try { const raw = localStorage.getItem(RASCUNHO_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } })();
 
   const [dest, setDest] = useState(saved?.dest ?? (() => { try { return localStorage.getItem("turno_last_dest") ?? ""; } catch { return ""; } })());
-  const [turno, setTurno] = useState(saved?.turno ?? "2");
+  const [turno, setTurno] = useState(saved?.turno ?? turnoAtual());
   const [letra, setLetra] = useState(saved?.letra ?? "D");
-  const [horario, setHorario] = useState(saved?.horario ?? "08:20 x 16:20 hr");
+  const [horario, setHorario] = useState(saved?.horario ?? HORARIOS[turnoAtual()]);
   const [resps, setResps] = useState<string[]>(saved?.resps ?? loadDB().responsaveis);
   const [modoTombador, setModoTombador] = useState(saved?.modoTombador ?? false);
   const [darkMode, setDarkMode] = useState(false);
@@ -536,9 +545,10 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   const handleNovoRelatorio = () => {
     localStorage.removeItem(RASCUNHO_KEY);
     setDest((() => { try { return localStorage.getItem("turno_last_dest") ?? ""; } catch { return ""; } })());
-    setTurno("2");
+    const turnoNovo = turnoAtual();
+    setTurno(turnoNovo);
     setLetra("D");
-    setHorario("08:20 x 16:20 hr");
+    setHorario(HORARIOS[turnoNovo]);
     setResps(loadDB().responsaveis);
     setItens(ITENS_BASE.map(l => ({ label: l, trocas: [], collapsed: false })));
     setObsEmb("");
@@ -717,6 +727,21 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   };
   const [showSendConfirm, setShowSendConfirm] = useState(false);
   const confirmarEnvio = () => { setShowSendConfirm(false); handleShare(); };
+  // Avisos de conferência (não bloqueiam o envio, só chamam atenção)
+  const avisosEnvio = (): string[] => {
+    const a: string[] = [];
+    if (!dest.trim()) a.push("Destinatário vazio.");
+    if (resps.filter(r => r.trim()).length === 0) a.push("Nenhum responsável informado.");
+    if (HORARIOS[turno] && horario.trim() !== HORARIOS[turno]) a.push(`O horário não é o padrão do Turno ${turno} (${HORARIOS[turno]}).`);
+    if (!modoTombador) {
+      const semTempo = itens.reduce((n, it) => n + it.trocas.filter(tr => !tr.min).length, 0);
+      if (semTempo > 0) a.push(`${semTempo} ${semTempo === 1 ? "troca" : "trocas"} sem tempo informado.`);
+    }
+    const emAndamento = [...paradasMap.emb, ...paradasMap.cl, ...paradasMap.rc, ...paradasTomb].filter(p => p.emAndamento).length;
+    if (emAndamento > 0) a.push(`${emAndamento} ${emAndamento === 1 ? "parada ainda em andamento" : "paradas ainda em andamento"} (sem horário final).`);
+    return a;
+  };
+  const avisos = showSendConfirm ? avisosEnvio() : [];
   const relatorioLabel = modoTombador ? "Relatório do Tombador" : `Relatório da Embaladeira ${embaladeiraNum}`;
   const handleSaveNote = () => {
     let text: string;
@@ -1107,7 +1132,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
           </div>
           {!embCollapsed && <>
             <p style={{ fontSize: s(12), fontWeight: 600, color: theme.textSub, margin: "0 0 8px" }}>Consumidos</p>
-            <ConsumidosEditor itens={itens} setItens={setItens} theme={theme} s={s} fz={fz} />
+            <ConsumidosEditor itens={itens} setItens={setItens} theme={theme} s={s} fz={fz} usoKey="consumidos_uso_embaladeira" />
             <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: s(13), color: theme.textSub }}>✔ Total Tempo de Parada</span>
               <span style={{ fontSize: 17, fontWeight: 700 }}>{formatMin(calcTotalEmb())}</span>
@@ -1391,9 +1416,18 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
               </div>
             </div>
 
+            {avisos.length > 0 && (
+              <div style={{ background: "rgba(245,124,0,0.12)", border: "1px solid rgba(245,124,0,0.45)", borderRadius: 12, padding: "10px 12px", marginBottom: 16 }}>
+                <p style={{ fontSize: s(12), fontWeight: 700, color: "#F57C00", margin: "0 0 6px" }}>⚠ Confira antes de enviar</p>
+                {avisos.map((a, i) => (
+                  <div key={i} style={{ fontSize: s(12), color: theme.text, marginTop: 3 }}>• {a}</div>
+                ))}
+              </div>
+            )}
+
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={() => setShowSendConfirm(false)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: theme.sectionBtnBg, color: theme.text, fontWeight: 600, fontSize: s(13), cursor: "pointer" }}>Voltar</button>
-              <button onClick={confirmarEnvio} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#2D9E7F", color: "#FFF", fontWeight: 600, fontSize: s(13), cursor: "pointer" }}>Confirmar Envio</button>
+              <button onClick={confirmarEnvio} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#2D9E7F", color: "#FFF", fontWeight: 600, fontSize: s(13), cursor: "pointer" }}>{avisos.length > 0 ? "Enviar mesmo assim" : "Confirmar Envio"}</button>
             </div>
           </div>
         </div>
