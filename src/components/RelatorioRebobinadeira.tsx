@@ -2,6 +2,8 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { X, Camera, Pencil } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { shareText } from "@/lib/nativeShare";
+import { ConsumidosEditor } from "./ConsumidosEditor";
+import type { ItemConsumo } from "./ConsumidosEditor";
 
 // ── Chaves localStorage ──
 const RASCUNHO_KEY = "rebobinadeira_rascunho";
@@ -20,16 +22,7 @@ interface Parada {
   iniciadaEm?: number; // timestamp (Date.now()) de quando a parada foi iniciada automaticamente
 }
 interface Parametro { id: string; label: string; valor: string; unidade: string; }
-interface Troca { min: number | null; qtd?: number; }
-interface ItemConsumo { label: string; trocas: Troca[]; collapsed: boolean; }
 
-// Itens que já têm troca ficam no topo da lista de Consumidos e os sem troca
-// ficam embaixo. A ordem entre itens do mesmo grupo é preservada (por isso o
-// item que ganha a primeira troca entra logo depois dos que já tinham).
-const ordenarConsumidos = (lista: ItemConsumo[]): ItemConsumo[] => [
-  ...lista.filter(i => i.trocas.length > 0),
-  ...lista.filter(i => i.trocas.length === 0),
-];
 interface FormatoJumbo { id: string; largura: string; diametro: string; }
 // Troca de serra do Core Link: números de identificação das serras (retirada e
 // colocada) e quantos cortes a serra retirada fez. Tudo texto para não perder
@@ -165,25 +158,6 @@ function InputModal({ open, title, subtitle, placeholder, initialValue = "", inp
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={onCancel} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#F0F0F0", color: "#1A1A2E", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Cancelar</button>
           <button onClick={confirm} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#2D9E7F", color: "#FFF", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>OK</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── ConfirmModal ──
-function ConfirmModal({ open, title, subtitle, onConfirm, onCancel }: {
-  open: boolean; title: string; subtitle?: string; onConfirm: () => void; onCancel: () => void;
-}) {
-  if (!open) return null;
-  return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 260, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onCancel}>
-      <div style={{ background: "#FFF", borderRadius: 18, padding: 20, width: "min(100%,340px)" }} onClick={e => e.stopPropagation()}>
-        <p style={{ fontWeight: 700, fontSize: 15, color: "#1A1A2E", margin: "0 0 4px" }}>{title}</p>
-        {subtitle && <p style={{ fontSize: 12, color: "#9E9E9E", margin: "0 0 14px" }}>{subtitle}</p>}
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={onCancel} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#F0F0F0", color: "#1A1A2E", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Cancelar</button>
-          <button onClick={onConfirm} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#E53935", color: "#FFF", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Excluir</button>
         </div>
       </div>
     </div>
@@ -431,7 +405,6 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
 
   // ── Modais ──
   const [inputModal, setInputModal] = useState<{ title: string; subtitle?: string; placeholder?: string; inputMode?: "text" | "numeric" | "decimal"; onConfirm: (v: string) => void } | null>(null);
-  const [confirmDeleteItem, setConfirmDeleteItem] = useState<number | null>(null);
   const [numTeclado, setNumTeclado] = useState<{ label: string; valor: string; onConfirm: (v: string) => void } | null>(null);
   const [numValor, setNumValor] = useState("");
   const [showPrevia, setShowPrevia] = useState(false);
@@ -609,45 +582,6 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
 
   // ── Consumidos ──
   const calcTotalConsumidos = () => itens.reduce((s, i) => s + i.trocas.reduce((a, t) => a + (t.min || 0), 0), 0);
-  const addTroca = (idx: number) => setItens(prev => ordenarConsumidos(prev.map((item, i) => i === idx ? { ...item, trocas: [...item.trocas, { min: null, qtd: 1 }], collapsed: false } : item)));
-
-  // Adiciona várias trocas de uma vez (ex: trocou 4 fitas crepe juntas na correria) — vira UM lote, uma linha só
-  const addTrocas = (idx: number, qtd: number) => {
-    const n = Math.max(1, Math.min(999, qtd));
-    setItens(prev => ordenarConsumidos(prev.map((item, i) => i === idx
-      ? { ...item, trocas: [...item.trocas, { min: null, qtd: n }], collapsed: false }
-      : item)));
-  };
-
-  const addTrocasMultiplas = (idx: number) => {
-    abrirTeclado("Quantas trocas de uma vez?", "", (v) => {
-      const n = parseInt(v.replace(/\D/g, ""), 10);
-      if (!isNaN(n) && n > 0) addTrocas(idx, n);
-    });
-  };
-  const removeTroca = (idx: number, ti: number) => setItens(prev => ordenarConsumidos(prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.filter((_, j) => j !== ti) } : item)));
-  const setTrocaMin = (idx: number, ti: number, val: string) => {
-    const n = parseInt(val); const v = isNaN(n) ? null : Math.max(0, n);
-    setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.map((t, j) => j === ti ? { ...t, min: v } : t) } : item));
-  };
-  const updateTrocaQtd = (idx: number, ti: number, qtd: number) => {
-    const n = Math.max(1, Math.min(999, qtd));
-    setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.map((t, j) => j === ti ? { ...t, qtd: n } : t) } : item));
-  };
-  const toggleItemConsumo = (idx: number) => setItens(prev => prev.map((item, i) => i === idx ? { ...item, collapsed: !item.collapsed } : item));
-  const collapseAllItens = () => setItens(prev => prev.map(it => ({ ...it, collapsed: true })));
-  const addItemConsumo = () => setInputModal({ title: "Novo item", placeholder: "Nome do item", onConfirm: (val) => { setItens(prev => [...prev, { label: val, trocas: [], collapsed: false }]); setInputModal(null); } });
-  const removeItemConsumo = (idx: number) => setItens(prev => prev.filter((_, i) => i !== idx));
-  const moveItemConsumo = (idx: number, dir: -1 | 1) => {
-    setItens(prev => {
-      const newIdx = idx + dir;
-      if (newIdx < 0 || newIdx >= prev.length) return prev;
-      const arr = [...prev];
-      [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
-      return arr;
-    });
-  };
-
   // ── Novo relatório ──
   const handleNovo = () => {
     localStorage.removeItem(RASCUNHO_KEY);
@@ -755,7 +689,8 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
       toast({ title: "Não foi possível montar o relatório", description: "Tente fechar e abrir a nota de novo.", variant: "destructive" });
       return;
     }
-    const result = await shareText(`Relatório Rebobinadeira ${rebobNum}`, text);
+    const assunto = `Relatório Rebobinadeira ${String(rebobNum).padStart(2, "0")} - Turno ${String(turno).padStart(2, "0")}`;
+    const result = await shareText(assunto, text);
     if (result === "copied") {
       toast({ title: "✅ Copiado!", description: "Relatório copiado para a área de transferência." });
     } else if (result === "failed") {
@@ -1003,6 +938,13 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
       {/* Conteúdo */}
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 100px" }}>
 
+        {/* Máquina selecionada em destaque */}
+        <div style={{ textAlign: "center", marginBottom: 12 }}>
+          <span style={{ display: "inline-block", fontSize: s(16), fontWeight: 800, letterSpacing: 1, color: "#FFF", background: "#2D9E7F", padding: "8px 24px", borderRadius: 999 }}>
+            REBOBINADEIRA {rebobNum}
+          </span>
+        </div>
+
         {/* Cabeçalho */}
         <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: headerCollapsed ? 0 : 12 }}>
@@ -1120,52 +1062,11 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: consumidosCollapsed ? 0 : 12, flexWrap: "wrap", gap: 6 }}>
             <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>✔ Consumidos</span>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              <button onClick={collapseAllItens} style={sectionBtn}>🗂 Recolher</button>
               <button onClick={() => setConsumidosCollapsed(!consumidosCollapsed)} style={sectionBtn}>{consumidosCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
             </div>
           </div>
           {!consumidosCollapsed && <>
-            {itens.map((item, idx) => {
-              const qtd = item.trocas.reduce((a, t) => a + (t.qtd ?? 1), 0);
-              const totalItem = item.trocas.reduce((a, t) => a + (t.min || 0), 0);
-              return (
-                <div key={idx} style={{ padding: 10, marginBottom: 6, borderRadius: 12, background: qtd > 0 ? "rgba(45,158,127,0.07)" : theme.inputBg, border: `1px solid ${qtd > 0 ? "rgba(45,158,127,0.2)" : "transparent"}` }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", rowGap: 6 }}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
-                      <button onClick={() => moveItemConsumo(idx, -1)} disabled={idx === 0} style={{ fontSize: s(10), width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === 0 ? "default" : "pointer", opacity: idx === 0 ? 0.3 : 1 }}>▲</button>
-                      <button onClick={() => moveItemConsumo(idx, 1)} disabled={idx === itens.length - 1} style={{ fontSize: s(10), width: 22, height: 18, borderRadius: 4, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text, cursor: idx === itens.length - 1 ? "default" : "pointer", opacity: idx === itens.length - 1 ? 0.3 : 1 }}>▼</button>
-                    </div>
-                    <span style={{ fontSize: s(13), fontWeight: 500, color: theme.text, whiteSpace: "nowrap" }}>{item.label}</span>
-                    {qtd > 0 && <span style={{ fontSize: s(11), fontWeight: 700, color: theme.accent, background: "rgba(45,158,127,0.12)", padding: "2px 8px", borderRadius: 20, whiteSpace: "nowrap", flexShrink: 0 }}>{String(qtd).padStart(2, "0")} · {totalItem}min</span>}
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
-                      {qtd > 0 && <button onClick={() => toggleItemConsumo(idx)} style={sectionBtn}>{item.collapsed ? "▼" : "▲"}</button>}
-                      <button onClick={() => addTrocasMultiplas(idx)} style={{ padding: "5px 8px", fontSize: s(11), fontWeight: 600, color: theme.accent, background: "rgba(45,158,127,0.1)", border: "1px solid rgba(45,158,127,0.3)", borderRadius: 8, whiteSpace: "nowrap", cursor: "pointer" }} title="Adicionar várias trocas de uma vez">🔢 Várias</button>
-                      <button onClick={() => addTroca(idx)} style={{ padding: "5px 10px", fontSize: s(11), fontWeight: 600, color: "#fff", background: "#2D9E7F", border: "none", borderRadius: 8, whiteSpace: "nowrap", cursor: "pointer" }}>+ Troca</button>
-                      <button onClick={() => setConfirmDeleteItem(idx)} style={{ width: 24, height: 24, padding: 0, fontSize: s(13), color: "#E53935", background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>🗑</button>
-                    </div>
-                  </div>
-                  {!item.collapsed && item.trocas.map((t, ti) => (
-                    <div key={ti} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, padding: "8px 10px", background: theme.card, borderRadius: 8 }}>
-                      <button
-                        onClick={() => abrirTeclado("Quantidade dessa troca", String(t.qtd ?? 1), (v) => {
-                          const n = parseInt(v.replace(/\D/g, ""), 10);
-                          if (!isNaN(n) && n > 0) updateTrocaQtd(idx, ti, n);
-                        })}
-                        style={{ fontSize: s(12), fontWeight: 700, color: theme.accent, whiteSpace: "nowrap", minWidth: 56, background: "rgba(45,158,127,0.1)", border: "none", borderRadius: 6, padding: "3px 6px", cursor: "pointer" }}
-                        title="Toque para corrigir a quantidade"
-                      >
-                        Troca {t.qtd ?? 1}
-                      </button>
-                      <input type="number" min={0} value={t.min !== null ? t.min : ""} placeholder="min" onChange={e => setTrocaMin(idx, ti, e.target.value)} style={{ width: 64, fontSize: s(16), fontWeight: 700, textAlign: "center", borderRadius: 8, padding: 5, border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text }} />
-                      <span style={{ fontSize: s(12), color: theme.textSub }}>min</span>
-                      {t.min !== null && t.min > 0 && <span style={{ fontSize: s(12), fontWeight: 700, color: theme.accent, marginLeft: "auto" }}>✓ {t.min}min</span>}
-                      <button onClick={() => removeTroca(idx, ti)} style={{ padding: "0 6px", color: "#E53935", fontSize: s(13), marginLeft: t.min ? undefined : "auto", background: "none", border: "none", cursor: "pointer" }}>✕</button>
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
-            <button onClick={addItemConsumo} style={{ marginTop: 8, fontSize: s(12), color: theme.accent, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar item</button>
+            <ConsumidosEditor itens={itens} setItens={setItens} theme={theme} s={s} fz={fz} />
             <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${theme.cardBorder}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: s(13), color: theme.textSub }}>✔ Total Tempo de Parada</span>
               <span style={{ fontSize: 17, fontWeight: 700, color: theme.text }}>{formatMin(calcTotalConsumidos())}</span>
@@ -1345,13 +1246,6 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
       )}
 
       <InputModal open={!!inputModal} title={inputModal?.title || ""} subtitle={inputModal?.subtitle} placeholder={inputModal?.placeholder} inputMode={inputModal?.inputMode} onConfirm={v => inputModal?.onConfirm(v)} onCancel={() => setInputModal(null)} />
-      <ConfirmModal
-        open={confirmDeleteItem !== null}
-        title="Excluir item?"
-        subtitle={confirmDeleteItem !== null ? `Tem certeza que quer excluir "${itens[confirmDeleteItem]?.label}"? Essa ação não pode ser desfeita.` : undefined}
-        onConfirm={() => { if (confirmDeleteItem !== null) removeItemConsumo(confirmDeleteItem); setConfirmDeleteItem(null); }}
-        onCancel={() => setConfirmDeleteItem(null)}
-      />
 
       {/* Confirmação antes de enviar o relatório */}
       {showSendConfirm && (

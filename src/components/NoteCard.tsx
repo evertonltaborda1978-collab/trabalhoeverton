@@ -110,8 +110,18 @@ export function NoteCard({ note, onDelete, onClick, onBellClick, onLockClick, on
             <HighlightText
               text={note.title || "Sem título"}
               highlight={searchQuery}
-              className="block flex-1 min-w-0 font-bold leading-tight truncate"
-              style={{ color: "#1A1A2E", fontSize: fontSize }}
+              className="block flex-1 min-w-0 font-bold leading-tight"
+              style={{
+                color: "#1A1A2E",
+                fontSize: fontSize,
+                // Título em até 2 linhas (antes era cortado com "..." numa linha só)
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical" as const,
+                overflow: "hidden",
+                whiteSpace: "normal",
+                overflowWrap: "anywhere" as const,
+              }}
             />
             {note.isLocked && (
               <Lock size={11} style={{ color: "#F9A825" }} className="shrink-0" />
