@@ -55,8 +55,10 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
   const [showTrash, setShowTrash] = useState(false);
   const [showRelatorio, setShowRelatorio] = useState(false);
   const [relatorioInitialState, setRelatorioInitialState] = useState<any>(null);
+  const [relatorioNovo, setRelatorioNovo] = useState(false);
   const [showRebobinadeira, setShowRebobinadeira] = useState(false);
   const [rebobInitialState, setRebobInitialState] = useState<any>(null);
+  const [rebobNovo, setRebobNovo] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteTitle, setConfirmDeleteTitle] = useState("");
 
@@ -90,7 +92,8 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
 
   // Comandos vindos do menu ••• do topo da página (Index.tsx)
   useEffect(() => {
-    const onRelatorio = () => setShowRelatorio(true);
+    // Menu •••: abre um relatório de Turno NOVO (turno e horário automáticos), sem reaproveitar rascunho antigo
+    const onRelatorio = () => { setRelatorioInitialState(null); setRelatorioNovo(true); setShowRelatorio(true); };
     const onTrash = () => setShowTrash(true);
     const onFont = (e: Event) => changeFontSize((e as CustomEvent).detail);
     window.addEventListener("notes-menu:relatorio", onRelatorio);
@@ -191,6 +194,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
       try {
         const state = JSON.parse(turnoMatch[1]);
         setRelatorioInitialState(state);
+        setRelatorioNovo(false);
         setShowRelatorio(true);
         return;
       } catch (e) {
@@ -204,6 +208,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
       try {
         const state = JSON.parse(rebobMatch[1]);
         setRebobInitialState(state);
+        setRebobNovo(false);
         setShowRebobinadeira(true);
         return;
       } catch (e) {
@@ -507,8 +512,9 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
       {showRelatorio && (
         <RelatorioTurno
           initialState={relatorioInitialState}
-          onOpenRebobinadeira={() => { setShowRelatorio(false); setShowRebobinadeira(true); }}
-          onClose={() => { setShowRelatorio(false); setRelatorioInitialState(null); }}
+          iniciarNovo={relatorioNovo}
+          onOpenRebobinadeira={() => { setShowRelatorio(false); setRebobInitialState(null); setRebobNovo(relatorioNovo); setShowRebobinadeira(true); }}
+          onClose={() => { setShowRelatorio(false); setRelatorioInitialState(null); setRelatorioNovo(false); }}
           onSaveAsNote={(title, content) => {
             const existing = notes.find(n => n.title === title);
             if (existing) {
@@ -518,6 +524,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
             }
             setShowRelatorio(false);
             setRelatorioInitialState(null);
+            setRelatorioNovo(false);
           }}
         />
       )}
@@ -525,7 +532,8 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
       {showRebobinadeira && (
         <RelatorioRebobinadeira
           initialState={rebobInitialState}
-          onClose={() => { setShowRebobinadeira(false); setRebobInitialState(null); }}
+          iniciarNovo={rebobNovo}
+          onClose={() => { setShowRebobinadeira(false); setRebobInitialState(null); setRebobNovo(false); }}
           onSaveAsNote={(title, content) => {
             const existing = notes.find(n => n.title === title);
             if (existing) {
@@ -535,6 +543,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
             }
             setShowRebobinadeira(false);
             setRebobInitialState(null);
+            setRebobNovo(false);
           }}
         />
       )}

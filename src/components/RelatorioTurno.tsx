@@ -388,11 +388,16 @@ interface Props {
   onClose: () => void;
   onSaveAsNote: (title: string, content: string) => void;
   initialState?: any;
+  /** true quando aberto pelo menu •••: começa um relatório novo, ignorando o rascunho antigo. */
+  iniciarNovo?: boolean;
   onOpenRebobinadeira?: () => void;
 }
 
-export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebobinadeira }: Props) {
-  const saved = initialState || (() => { try { const raw = localStorage.getItem(RASCUNHO_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } })();
+export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebobinadeira, iniciarNovo }: Props) {
+  const lerRascunho = () => { try { const raw = localStorage.getItem(RASCUNHO_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } };
+  // Aberto pelo menu •••: ignora o rascunho antigo (turno/horário saem pela hora do celular).
+  // O tamanho da fonte escolhido (A / A+ / A++) continua sendo lembrado.
+  const saved = initialState || (iniciarNovo ? null : lerRascunho());
 
   const [dest, setDest] = useState(saved?.dest ?? (() => { try { return localStorage.getItem("turno_last_dest") ?? ""; } catch { return ""; } })());
   const [turno, setTurno] = useState(saved?.turno ?? turnoAtual());
@@ -401,7 +406,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   const [resps, setResps] = useState<string[]>(saved?.resps ?? loadDB().responsaveis);
   const [modoTombador, setModoTombador] = useState(saved?.modoTombador ?? false);
   const [darkMode, setDarkMode] = useState(false);
-  const [fontSize, setFontSize] = useState<"sm"|"md"|"lg">(saved?.fontSize ?? "md");
+  const [fontSize, setFontSize] = useState<"sm"|"md"|"lg">(saved?.fontSize ?? (iniciarNovo ? lerRascunho()?.fontSize : undefined) ?? "md");
   // Escala das letras: acompanha o botão A / A+ / A++ do topo. "A" = tamanho
   // antigo, "A+" (padrão) = maior e mais fácil de ler no celular, "A++" = maior ainda.
   const bump = fontSize === "sm" ? 0 : fontSize === "lg" ? 4 : 2;
@@ -733,6 +738,8 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
     if (!dest.trim()) a.push("Destinatário vazio.");
     if (resps.filter(r => r.trim()).length === 0) a.push("Nenhum responsável informado.");
     if (HORARIOS[turno] && horario.trim() !== HORARIOS[turno]) a.push(`O horário não é o padrão do Turno ${turno} (${HORARIOS[turno]}).`);
+    const turnoRelogio = turnoAtual();
+    if (turno !== turnoRelogio) a.push(`O relatório está no Turno ${turno}, mas pelo horário do celular agora é o Turno ${turnoRelogio}. Confira se está certo.`);
     if (!modoTombador) {
       const semTempo = itens.reduce((n, it) => n + it.trocas.filter(tr => !tr.min).length, 0);
       if (semTempo > 0) a.push(`${semTempo} ${semTempo === 1 ? "troca" : "trocas"} sem tempo informado.`);
@@ -1004,7 +1011,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   return (
     <div className="fixed inset-0 z-[110] flex flex-col" style={{ background: theme.bg }}>
       {/* Header fixo */}
-      <div style={{ background: theme.headerBg, borderBottom: `1px solid ${theme.cardBorder}`, padding: "12px 16px 10px", paddingTop: "calc(12px + env(safe-area-inset-top))", display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ background: theme.headerBg, borderBottom: `1px solid ${theme.cardBorder}`, padding: "8px 16px 8px", paddingTop: "calc(8px + env(safe-area-inset-top))", display: "flex", flexDirection: "column", gap: 6 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", rowGap: 8 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
             <FileText size={18} style={{ color: "#1A1A2E", flexShrink: 0 }} />
@@ -1021,11 +1028,11 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
         </div>
 
         {/* Navegação: Tombador / Embaladeiras / Rebobinadeira — pílula preenchida quando selecionada */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", rowGap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "nowrap" }}>
           <button
             onClick={() => setModoTombador(true)}
             style={{
-              fontSize: s(12), padding: "6px 14px", borderRadius: 999, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+              fontSize: s(11), padding: "7px 4px", flex: 1, minWidth: 0, textAlign: "center", borderRadius: 999, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
               border: modoTombador ? "1.5px solid #F57C00" : `1px solid ${theme.sectionBtnBorder}`,
               background: modoTombador ? "#F57C00" : theme.sectionBtnBg,
               color: modoTombador ? "#FFF" : theme.textSub,
@@ -1036,7 +1043,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
           <button
             onClick={() => setModoTombador(false)}
             style={{
-              fontSize: s(12), padding: "6px 14px", borderRadius: 999, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+              fontSize: s(11), padding: "7px 4px", flex: 1, minWidth: 0, textAlign: "center", borderRadius: 999, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
               border: !modoTombador ? "1.5px solid #2D9E7F" : `1px solid ${theme.sectionBtnBorder}`,
               background: !modoTombador ? "#2D9E7F" : theme.sectionBtnBg,
               color: !modoTombador ? "#FFF" : theme.textSub,
@@ -1047,7 +1054,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
           <button
             onClick={onOpenRebobinadeira}
             style={{
-              fontSize: s(12), padding: "6px 14px", borderRadius: 999, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+              fontSize: s(11), padding: "7px 4px", flex: 1, minWidth: 0, textAlign: "center", borderRadius: 999, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
               border: `1px solid ${theme.sectionBtnBorder}`,
               background: theme.sectionBtnBg,
               color: theme.textSub,
@@ -1060,7 +1067,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
         {/* Máquina selecionada: fica fixa no cabeçalho, não rola junto com o conteúdo */}
         {!modoTombador && (
           <div style={{ textAlign: "center" }}>
-            <span style={{ display: "inline-block", fontSize: s(14), fontWeight: 800, letterSpacing: 1, color: "#FFF", background: "#2D9E7F", padding: "5px 22px", borderRadius: 999 }}>
+            <span style={{ display: "inline-block", fontSize: s(12), fontWeight: 800, letterSpacing: 0.5, color: "#FFF", background: "#2D9E7F", padding: "3px 18px", borderRadius: 999 }}>
               EMBALADEIRA {embaladeiraNum}
             </span>
           </div>

@@ -327,10 +327,15 @@ interface Props {
   onClose: () => void;
   onSaveAsNote: (title: string, content: string) => void;
   initialState?: any;
+  /** true quando o relatório foi aberto a partir de um relatório de Turno novo (menu •••): começa limpo, ignorando o rascunho antigo. */
+  iniciarNovo?: boolean;
 }
 
-export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: Props) {
-  const saved = initialState || (() => { try { const r = localStorage.getItem(RASCUNHO_KEY); return r ? JSON.parse(r) : null; } catch { return null; } })();
+export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, iniciarNovo }: Props) {
+  const lerRascunho = () => { try { const r = localStorage.getItem(RASCUNHO_KEY); return r ? JSON.parse(r) : null; } catch { return null; } };
+  // Aberto a partir de um Turno novo: ignora o rascunho antigo (turno/horário saem pela hora do celular).
+  // O tamanho da fonte escolhido (A / A+ / A++) continua sendo lembrado.
+  const saved = initialState || (iniciarNovo ? null : lerRascunho());
 
   // ── Estado geral ──
   const [rebobNum, setRebobNum] = useState<"1"|"2">(saved?.rebobNum ?? "1");
@@ -372,7 +377,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
   const [idMaquina, setIdMaquina] = useState(saved?.idMaquina ?? "");
   const [parametros, setParametros] = useState<Parametro[]>(saved?.parametros ?? loadParamsBase());
   const [darkMode, setDarkMode] = useState(false);
-  const [fontSize, setFontSize] = useState<"sm"|"md"|"lg">(saved?.fontSize ?? "md");
+  const [fontSize, setFontSize] = useState<"sm"|"md"|"lg">(saved?.fontSize ?? (iniciarNovo ? lerRascunho()?.fontSize : undefined) ?? "md");
   // Escala das letras: acompanha o botão A / A+ / A++ do topo. "A" = tamanho
   // antigo, "A+" (padrão) = maior e mais fácil de ler no celular, "A++" = maior ainda.
   const bump = fontSize === "sm" ? 0 : fontSize === "lg" ? 4 : 2;
@@ -715,6 +720,8 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
     if (!dest.trim()) a.push("Destinatário vazio.");
     if (resps.filter(r => r.trim()).length === 0) a.push("Nenhum responsável informado.");
     if (HORARIOS[turno] && horario.trim() !== HORARIOS[turno]) a.push(`O horário não é o padrão do Turno ${turno} (${HORARIOS[turno]}).`);
+    const turnoRelogio = turnoAtual();
+    if (turno !== turnoRelogio) a.push(`O relatório está no Turno ${turno}, mas pelo horário do celular agora é o Turno ${turnoRelogio}. Confira se está certo.`);
     const semTempo = itens.reduce((n, it) => n + it.trocas.filter(tr => !tr.min).length, 0);
     if (semTempo > 0) a.push(`${semTempo} ${semTempo === 1 ? "troca" : "trocas"} sem tempo informado.`);
     const emAndamento = [...paradasCL, ...paradasRC, ...paradasRebob].filter(p => p.emAndamento).length;
@@ -958,8 +965,8 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState }: 
       </div>
 
       {/* Máquina selecionada: faixa fixa, não rola junto com o conteúdo */}
-      <div style={{ background: theme.headerBg, borderBottom: `1px solid ${theme.cardBorder}`, padding: "6px 16px 8px", textAlign: "center" }}>
-        <span style={{ display: "inline-block", fontSize: s(14), fontWeight: 800, letterSpacing: 1, color: "#FFF", background: "#2D9E7F", padding: "5px 22px", borderRadius: 999 }}>
+      <div style={{ background: theme.headerBg, borderBottom: `1px solid ${theme.cardBorder}`, padding: "3px 16px 5px", textAlign: "center" }}>
+        <span style={{ display: "inline-block", fontSize: s(12), fontWeight: 800, letterSpacing: 0.5, color: "#FFF", background: "#2D9E7F", padding: "3px 18px", borderRadius: 999 }}>
           REBOBINADEIRA {rebobNum}
         </span>
       </div>
