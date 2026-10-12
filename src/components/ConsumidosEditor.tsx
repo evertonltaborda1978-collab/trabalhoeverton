@@ -34,8 +34,14 @@ interface Props {
 }
 
 const NOVO_ITEM = "__novo_item__";
+const LIMITE_NOME = 24; // nomes maiores que isso usam fonte menor (só eles)
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const somaQtd = (item: ItemConsumo) => item.trocas.reduce((a, t) => a + (t.qtd ?? 1), 0);
+const clampQtd = (n: number) => Math.max(1, Math.min(999, n));
+const parseMin = (v: string): number | null => {
+  const n = parseInt(v, 10);
+  return isNaN(n) ? null : Math.max(0, n);
+};
 
 const lerUso = (key: string): Record<string, number> => {
   try {
@@ -45,10 +51,33 @@ const lerUso = (key: string): Record<string, number> => {
   } catch { return {}; }
 };
 
+// Botões − e + com o número no meio (dá para tocar no número e digitar também)
+function Stepper({ value, onChange, min, theme, fz, label }: {
+  value: string; onChange: (v: string) => void; min: number; theme: ConsumidosTheme; fz: number; label: string;
+}) {
+  const n = parseInt(value, 10);
+  const atual = isNaN(n) ? min : n;
+  const btn: React.CSSProperties = {
+    width: 36, height: 40, padding: 0, fontSize: 20, fontWeight: 700, border: "none",
+    background: "transparent", color: theme.text, cursor: "pointer", flexShrink: 0,
+  };
+  return (
+    <div style={{ display: "flex", alignItems: "center", border: `1px solid ${theme.inputBorder}`, borderRadius: 10, background: theme.card, overflow: "hidden" }}>
+      <button type="button" aria-label={`Diminuir ${label}`} onClick={() => onChange(String(Math.max(min, atual - 1)))} style={btn}>−</button>
+      <input
+        type="text" inputMode="numeric" aria-label={label} value={value}
+        onChange={e => onChange(e.target.value.replace(/\D/g, "").slice(0, 3))}
+        onFocus={e => e.target.select()}
+        style={{ width: 38, height: 40, boxSizing: "border-box", textAlign: "center", border: "none", background: "transparent", color: theme.text, fontSize: fz, fontWeight: 700, padding: 0 }}
+      />
+      <button type="button" aria-label={`Aumentar ${label}`} onClick={() => onChange(String(Math.min(999, atual + 1)))} style={btn}>+</button>
+    </div>
+  );
+}
+
 export function ConsumidosEditor({ itens, setItens, theme, s, fz, usoKey }: Props) {
   // Contagem de quantas vezes cada item foi lançado (guardada no aparelho)
   const [uso, setUso] = useState<Record<string, number>>(() => lerUso(usoKey));
-  const [okMsg, setOkMsg] = useState<string>("");
   const registrarUso = (label: string) => {
     setUso(prev => {
       const novo = { ...prev, [label]: (prev[label] ?? 0) + 1 };
@@ -61,12 +90,18 @@ export function ConsumidosEditor({ itens, setItens, theme, s, fz, usoKey }: Prop
     .sort((a, b) => b[1] - a[1])
     .slice(0, 4)
     .map(([label]) => label);
-  // Formulário "Adicionar troca"
+
+  // Formulário "Adicionar troca" — quantidade começa em 1 e minutos em 0 (linha parada = 0 min)
   const [sel, setSel] = useState<string>("");
-  const [qtd, setQtd] = useState<number>(1);
-  const [min, setMin] = useState<string>("");
+  const [qtd, setQtd] = useState<string>("1");
+  const [min, setMin] = useState<string>("0");
   const [novoNome, setNovoNome] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string>("");
+
+  // Box dos "mais usados"
+  const [chipAtivo, setChipAtivo] = useState<string | null>(null);
+  const [chipQtd, setChipQtd] = useState<string>("1");
+  const [chipMin, setChipMin] = useState<string>("0");
 
   // Edição de uma troca já lançada
   const [edit, setEdit] = useState<{ idx: number; ti: number } | null>(null);
@@ -77,46 +112,29 @@ export function ConsumidosEditor({ itens, setItens, theme, s, fz, usoKey }: Prop
   const [confirmaExcluir, setConfirmaExcluir] = useState<number | null>(null);
 
   const inputBase: React.CSSProperties = {
-    boxSizing: "border-box", fontSize: fz, borderRadius: 10, padding: "11px 12px",
-    border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text,
-  };
-  const stepBtn: React.CSSProperties = {
-    width: 44, height: 44, padding: 0, fontSize: 22, fontWeight: 700, borderRadius: 12,
-    border: `1px solid ${theme.inputBorder}`, background: theme.sectionBtnBg, color: theme.text, cursor: "pointer", flexShrink: 0,
+    boxSizing: "border-box", fontSize: fz, borderRadius: 10, padding: "9px 10px",
+    border: `1px solid ${theme.inputBorder}`, background: theme.card, color: theme.text,
   };
   const smallBtn: React.CSSProperties = {
     fontSize: s(11), padding: "8px 14px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`,
     background: theme.sectionBtnBg, color: theme.text, cursor: "pointer",
   };
-
-  const clampQtd = (n: number) => Math.max(1, Math.min(999, n));
-  const parseMin = (v: string): number | null => {
-    const n = parseInt(v, 10);
-    return isNaN(n) ? null : Math.max(0, n);
+  const miniLabel: React.CSSProperties = { fontSize: s(11), color: theme.textSub, marginBottom: 3 };
+  const fonteNome = (nome: string) => (nome.length > LIMITE_NOME ? s(11) : s(13));
+  const addTrocaEm = (label: string, nova: Troca) => {
+    const idx = itens.findIndex(i => i.label === label);
+    if (idx < 0) return false;
+    setItens(prev => ordenarConsumidos(prev.map(item => item.label === label ? { ...item, trocas: [...item.trocas, nova], collapsed: false } : item)));
+    registrarUso(label);
+    return true;
   };
 
   // ── Adicionar troca ──
   const adicionar = () => {
     if (!sel || sel === NOVO_ITEM) { setAviso("Escolha o item primeiro."); return; }
-    const idx = itens.findIndex(i => i.label === sel);
-    if (idx < 0) { setAviso("Escolha o item primeiro."); return; }
-    const nova: Troca = { min: parseMin(min), qtd: clampQtd(qtd) };
-    setItens(prev => ordenarConsumidos(prev.map((item, i) => i === idx ? { ...item, trocas: [...item.trocas, nova], collapsed: false } : item)));
-    registrarUso(sel);
-    setSel(""); setQtd(1); setMin(""); setAviso(""); setOkMsg("");
-  };
-
-  // Toque único num item mais usado: lança 1 unidade e já abre a linha para ajustar o tempo
-  const adicionarRapido = (label: string) => {
-    const idx = itens.findIndex(i => i.label === label);
-    if (idx < 0) return;
-    const proximo = ordenarConsumidos(itens.map((item, i) => i === idx ? { ...item, trocas: [...item.trocas, { min: null, qtd: 1 }], collapsed: false } : item));
-    setItens(proximo);
-    const novoIdx = proximo.findIndex(i => i.label === label);
-    if (novoIdx >= 0) setEdit({ idx: novoIdx, ti: proximo[novoIdx].trocas.length - 1 });
-    registrarUso(label);
-    setAviso("");
-    setOkMsg(`+1 ${label} lançado. Ajuste o tempo na lista abaixo, se precisar.`);
+    const ok = addTrocaEm(sel, { min: parseMin(min), qtd: clampQtd(parseInt(qtd, 10) || 1) });
+    if (!ok) { setAviso("Escolha o item primeiro."); return; }
+    setSel(""); setQtd("1"); setMin("0"); setAviso("");
   };
 
   const confirmarNovoItem = () => {
@@ -131,6 +149,17 @@ export function ConsumidosEditor({ itens, setItens, theme, s, fz, usoKey }: Prop
     }
     setNovoNome(null);
     setAviso("");
+  };
+
+  // ── Mais usados: toque abre o box de quantidade e minutos ──
+  const abrirChip = (label: string) => {
+    if (chipAtivo === label) { setChipAtivo(null); return; }
+    setChipAtivo(label); setChipQtd("1"); setChipMin("0");
+  };
+  const lancarChip = () => {
+    if (!chipAtivo) return;
+    addTrocaEm(chipAtivo, { min: parseMin(chipMin), qtd: clampQtd(parseInt(chipQtd, 10) || 1) });
+    setChipAtivo(null);
   };
 
   // ── Trocas lançadas ──
@@ -167,38 +196,57 @@ export function ConsumidosEditor({ itens, setItens, theme, s, fz, usoKey }: Prop
   const linhas: { idx: number; ti: number; label: string; t: Troca }[] = [];
   itens.forEach((item, idx) => item.trocas.forEach((t, ti) => linhas.push({ idx, ti, label: item.label, t })));
 
+  const iconBtn: React.CSSProperties = { width: 36, height: 36, fontSize: 16, borderRadius: 10, border: "none", background: "transparent", cursor: "pointer", flexShrink: 0, padding: 0 };
+
   return (
     <div>
-      {/* ── Mais usados (toque único) ── */}
+      {/* ── Mais usados (toque abre o box) ── */}
       {maisUsados.length > 0 && (
-        <div style={{ marginBottom: 10 }}>
-          <p style={{ fontSize: s(11), color: theme.textSub, margin: "0 0 6px" }}>Mais usados (toque para lançar 1)</p>
+        <div style={{ marginBottom: 8 }}>
+          <p style={{ fontSize: s(11), color: theme.textSub, margin: "0 0 5px" }}>Mais usados</p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {maisUsados.map(label => (
               <button
-                key={label} type="button" onClick={() => adicionarRapido(label)}
-                style={{ minHeight: 44, padding: "8px 14px", fontSize: s(12), fontWeight: 600, color: theme.accent, background: "rgba(45,158,127,0.1)", border: "1px solid rgba(45,158,127,0.35)", borderRadius: 22, cursor: "pointer" }}
+                key={label} type="button" onClick={() => abrirChip(label)}
+                style={{
+                  minHeight: 40, padding: "6px 12px", fontSize: fonteNome(label), fontWeight: 600, color: theme.accent,
+                  background: chipAtivo === label ? "rgba(45,158,127,0.22)" : "rgba(45,158,127,0.1)",
+                  border: chipAtivo === label ? "1.5px solid #2D9E7F" : "1px solid rgba(45,158,127,0.35)",
+                  borderRadius: 22, cursor: "pointer",
+                }}
               >
                 + {label}
               </button>
             ))}
           </div>
-          {okMsg && <p style={{ fontSize: s(12), color: theme.accent, margin: "8px 0 0" }}>{okMsg}</p>}
+          {chipAtivo && (
+            <div style={{ marginTop: 8, padding: 10, borderRadius: 12, background: theme.inputBg, border: "1.5px solid #2D9E7F" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <span style={{ fontSize: fonteNome(chipAtivo), fontWeight: 700, color: theme.text, minWidth: 0, wordBreak: "break-word" }}>{chipAtivo}</span>
+                <button type="button" onClick={() => setChipAtivo(null)} style={{ ...iconBtn, fontSize: 14, color: theme.textSub }} aria-label="Fechar">✕</button>
+              </div>
+              <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
+                <div><div style={miniLabel}>Qtd</div><Stepper value={chipQtd} onChange={setChipQtd} min={1} theme={theme} fz={fz} label="quantidade" /></div>
+                <div><div style={miniLabel}>Min</div><Stepper value={chipMin} onChange={setChipMin} min={0} theme={theme} fz={fz} label="minutos" /></div>
+                <button type="button" onClick={lancarChip} style={{ flex: 1, minWidth: 0, height: 42, fontSize: s(13), fontWeight: 700, color: "#fff", background: "#2D9E7F", border: "none", borderRadius: 10, cursor: "pointer" }}>Lançar</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* ── Adicionar troca ── */}
-      <div style={{ padding: 12, borderRadius: 12, background: theme.inputBg, border: `1px solid ${theme.cardBorder}` }}>
-        <label style={{ fontSize: s(11), color: theme.textSub }}>Item consumido</label>
+      <div style={{ padding: 10, borderRadius: 12, background: theme.inputBg, border: `1px solid ${theme.cardBorder}` }}>
         <select
           value={novoNome !== null ? NOVO_ITEM : sel}
+          aria-label="Item consumido"
           onChange={e => {
             const v = e.target.value;
             setAviso("");
             if (v === NOVO_ITEM) { setNovoNome(""); setSel(NOVO_ITEM); }
             else { setNovoNome(null); setSel(v); }
           }}
-          style={{ ...inputBase, width: "100%", marginTop: 4 }}
+          style={{ ...inputBase, width: "100%", fontSize: sel && sel !== NOVO_ITEM ? fonteNome(sel) : fz }}
         >
           <option value="">Escolha o item…</option>
           {itens.map((item, idx) => {
@@ -221,86 +269,55 @@ export function ConsumidosEditor({ itens, setItens, theme, s, fz, usoKey }: Prop
           </div>
         )}
 
-        <div style={{ display: "flex", gap: 12, marginTop: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
-          <div>
-            <label style={{ fontSize: s(11), color: theme.textSub }}>Quantidade</label>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
-              <button type="button" onClick={() => setQtd(q => clampQtd(q - 1))} style={stepBtn} aria-label="Diminuir quantidade">−</button>
-              <input
-                type="number" inputMode="numeric" min={1} value={qtd}
-                onChange={e => { const n = parseInt(e.target.value, 10); setQtd(isNaN(n) ? 1 : clampQtd(n)); }}
-                style={{ ...inputBase, width: 64, textAlign: "center", fontWeight: 700, padding: "11px 4px" }}
-              />
-              <button type="button" onClick={() => setQtd(q => clampQtd(q + 1))} style={stepBtn} aria-label="Aumentar quantidade">+</button>
-            </div>
-          </div>
-          <div>
-            <label style={{ fontSize: s(11), color: theme.textSub }}>Tempo (min)</label>
-            <div style={{ marginTop: 4 }}>
-              <input
-                type="number" inputMode="numeric" min={0} value={min} placeholder="min"
-                onChange={e => setMin(e.target.value)}
-                style={{ ...inputBase, width: 84, textAlign: "center", fontWeight: 700 }}
-              />
-            </div>
-          </div>
+        <div style={{ display: "flex", gap: 6, alignItems: "flex-end", marginTop: 8 }}>
+          <div><div style={miniLabel}>Qtd</div><Stepper value={qtd} onChange={setQtd} min={1} theme={theme} fz={fz} label="quantidade" /></div>
+          <div><div style={miniLabel}>Min</div><Stepper value={min} onChange={setMin} min={0} theme={theme} fz={fz} label="minutos" /></div>
+          <button
+            type="button" onClick={adicionar}
+            style={{ flex: 1, minWidth: 0, height: 42, fontSize: s(13), fontWeight: 700, color: "#fff", background: "#2D9E7F", border: "none", borderRadius: 10, cursor: "pointer" }}
+          >
+            + Adicionar
+          </button>
         </div>
-
         {aviso && <p style={{ fontSize: s(12), color: "#E53935", margin: "8px 0 0" }}>{aviso}</p>}
-
-        <button
-          type="button" onClick={adicionar}
-          style={{ marginTop: 12, width: "100%", minHeight: 46, fontSize: fz, fontWeight: 700, color: "#fff", background: "#2D9E7F", border: "none", borderRadius: 12, cursor: "pointer" }}
-        >
-          + Adicionar
-        </button>
       </div>
 
-      {/* ── Trocas lançadas ── */}
-      <p style={{ fontSize: s(12), fontWeight: 600, color: theme.textSub, margin: "14px 0 6px" }}>
+      {/* ── Trocas lançadas (uma linha cada) ── */}
+      <p style={{ fontSize: s(11), fontWeight: 600, color: theme.textSub, margin: "10px 0 5px" }}>
         Trocas lançadas {linhas.length > 0 && `(${linhas.length})`}
       </p>
-      {linhas.length === 0 && (
+      {linhas.length === 0 ? (
         <p style={{ fontSize: s(12), color: theme.textSub, fontStyle: "italic", margin: "0 0 4px" }}>Nenhuma troca lançada ainda.</p>
+      ) : (
+        <div style={{ border: "1px solid rgba(45,158,127,0.25)", borderRadius: 10, overflow: "hidden", background: "rgba(45,158,127,0.05)" }}>
+          {linhas.map(({ idx, ti, label, t }, pos) => {
+            const editando = edit?.idx === idx && edit?.ti === ti;
+            const q = t.qtd ?? 1;
+            const ultima = pos === linhas.length - 1;
+            const borda = ultima ? "none" : "1px solid rgba(45,158,127,0.2)";
+            if (!editando) {
+              return (
+                <div key={`${idx}-${ti}`} style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 4px 0 10px", minHeight: 40, borderBottom: borda }}>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: fonteNome(label), fontWeight: 600, color: theme.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{pad2(q)} {label}</span>
+                  <span style={{ fontSize: s(12), color: theme.textSub, whiteSpace: "nowrap" }}>{t.min === null ? "—" : `${t.min} min`}</span>
+                  <button type="button" onClick={() => setEdit({ idx, ti })} style={iconBtn} aria-label="Editar troca">✏️</button>
+                  <button type="button" onClick={() => removerTroca(idx, ti)} style={iconBtn} aria-label="Excluir troca">🗑</button>
+                </div>
+              );
+            }
+            return (
+              <div key={`${idx}-${ti}`} style={{ padding: "8px 10px", borderBottom: borda, background: theme.inputBg }}>
+                <div style={{ fontSize: fonteNome(label), fontWeight: 700, color: theme.text, marginBottom: 6, wordBreak: "break-word" }}>{label}</div>
+                <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
+                  <div><div style={miniLabel}>Qtd</div><Stepper value={String(q)} onChange={v => atualizarTroca(idx, ti, { qtd: clampQtd(parseInt(v, 10) || 1) })} min={1} theme={theme} fz={fz} label="quantidade" /></div>
+                  <div><div style={miniLabel}>Min</div><Stepper value={t.min !== null ? String(t.min) : ""} onChange={v => atualizarTroca(idx, ti, { min: parseMin(v) })} min={0} theme={theme} fz={fz} label="minutos" /></div>
+                  <button type="button" onClick={() => setEdit(null)} style={{ flex: 1, minWidth: 0, height: 42, fontSize: s(13), fontWeight: 700, color: "#fff", background: "#2D9E7F", border: "none", borderRadius: 10, cursor: "pointer" }}>OK</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
-      {linhas.map(({ idx, ti, label, t }) => {
-        const editando = edit?.idx === idx && edit?.ti === ti;
-        const q = t.qtd ?? 1;
-        return (
-          <div key={`${idx}-${ti}`} style={{ marginBottom: 6, padding: "10px 12px", borderRadius: 12, background: "rgba(45,158,127,0.07)", border: "1px solid rgba(45,158,127,0.2)" }}>
-            {!editando ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: s(13), fontWeight: 700, color: theme.text, wordBreak: "break-word" }}>{pad2(q)} {label}</div>
-                  <div style={{ fontSize: s(11), color: theme.textSub, marginTop: 2 }}>{t.min !== null && t.min > 0 ? `${t.min} min` : "sem tempo informado"}</div>
-                </div>
-                <button type="button" onClick={() => setEdit({ idx, ti })} style={{ width: 44, height: 44, fontSize: 18, borderRadius: 12, border: `1px solid ${theme.inputBorder}`, background: theme.sectionBtnBg, cursor: "pointer", flexShrink: 0 }} aria-label="Editar troca">✏️</button>
-                <button type="button" onClick={() => removerTroca(idx, ti)} style={{ width: 44, height: 44, fontSize: 18, borderRadius: 12, border: `1px solid ${theme.inputBorder}`, background: theme.sectionBtnBg, cursor: "pointer", flexShrink: 0 }} aria-label="Excluir troca">🗑</button>
-              </div>
-            ) : (
-              <div>
-                <div style={{ fontSize: s(13), fontWeight: 700, color: theme.text, marginBottom: 8, wordBreak: "break-word" }}>{label}</div>
-                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <button type="button" onClick={() => atualizarTroca(idx, ti, { qtd: clampQtd(q - 1) })} style={stepBtn} aria-label="Diminuir quantidade">−</button>
-                    <span style={{ minWidth: 34, textAlign: "center", fontSize: fz, fontWeight: 700, color: theme.text }}>{pad2(q)}</span>
-                    <button type="button" onClick={() => atualizarTroca(idx, ti, { qtd: clampQtd(q + 1) })} style={stepBtn} aria-label="Aumentar quantidade">+</button>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <input
-                      type="number" inputMode="numeric" min={0} value={t.min !== null ? t.min : ""} placeholder="min"
-                      onChange={e => atualizarTroca(idx, ti, { min: parseMin(e.target.value) })}
-                      style={{ ...inputBase, width: 84, textAlign: "center", fontWeight: 700 }}
-                    />
-                    <span style={{ fontSize: s(12), color: theme.textSub }}>min</span>
-                  </div>
-                  <button type="button" onClick={() => setEdit(null)} style={{ ...smallBtn, background: "#2D9E7F", color: "#fff", border: "none", fontWeight: 700 }}>OK</button>
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
 
       {/* ── Gerenciar itens ── */}
       <div style={{ marginTop: 10 }}>

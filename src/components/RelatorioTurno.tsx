@@ -1,9 +1,29 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useLayoutEffect } from "react";
 import { X, FileText, Camera, Pencil } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { shareText } from "@/lib/nativeShare";
 import { ConsumidosEditor } from "./ConsumidosEditor";
 import type { ItemConsumo } from "./ConsumidosEditor";
+
+// Caixa de texto que cresce sozinha conforme você digita (altura mínima confortável, ~3 linhas)
+function AutoTextarea({ value, onChange, placeholder, style, minHeight = 84 }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; style?: React.CSSProperties; minHeight?: number;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.max(minHeight, el.scrollHeight + 2) + "px";
+  }, [value, minHeight]);
+  return (
+    <textarea
+      ref={ref} value={value} placeholder={placeholder} rows={3}
+      onChange={e => onChange(e.target.value)}
+      style={{ ...style, minHeight, overflow: "hidden", resize: "none" }}
+    />
+  );
+}
 
 // ── Tipos ──
 interface TombadorDB {
@@ -413,10 +433,21 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   const s = (n: number) => (n >= 17 ? n : n + bump);
   const [embaladeiraNum, setEmbaladeiraNum] = useState<"1"|"2">(saved?.embaladeiraNum ?? "2");
   const [headerCollapsed, setHeaderCollapsed] = useState(!!saved);
-  const [embCollapsed, setEmbCollapsed] = useState(true);
+  const [embCollapsed, setEmbCollapsed] = useState(false);
   const [clCollapsed, setClCollapsed] = useState(true);
   const [rcCollapsed, setRcCollapsed] = useState(true);
   const [tombCollapsed, setTombCollapsed] = useState(true);
+  // Core Link, Roll Cutter e Tombador só aparecem quando têm dados ou quando você toca em "+ ..."
+  const [secCL, setSecCL] = useState(false);
+  const [secRC, setSecRC] = useState(false);
+  const [secTomb, setSecTomb] = useState(false);
+  // Relatório novo com destinatário e responsáveis já preenchidos: o card Turno começa recolhido (resumo no topo)
+  useEffect(() => {
+    if (!saved && dest.trim() && resps.some(r => r.trim())) setHeaderCollapsed(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Na aba Tombador, o card do Tombador abre sozinho
+  useEffect(() => { if (modoTombador) setTombCollapsed(false); }, [modoTombador]);
   const [itens, setItens] = useState<ItemConsumo[]>(saved?.itens ?? ITENS_BASE.map(l => ({ label: l, trocas: [], collapsed: false })));
   const [obsEmb, setObsEmb] = useState(saved?.obsEmb ?? "");
   const [paradasMap, setParadasMap] = useState<ParadasMap>(saved?.paradasMap ?? { emb: [], cl: [], rc: [] });
@@ -572,10 +603,13 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
     setEmbaladeiraNum("2");
     setShowPrevia(false);
     setHeaderCollapsed(false);
+    setSecCL(false);
+    setSecRC(false);
+    setSecTomb(false);
     setEmbCollapsed(false);
-    setClCollapsed(false);
-    setRcCollapsed(false);
-    setTombCollapsed(false);
+    setClCollapsed(true);
+    setRcCollapsed(true);
+    setTombCollapsed(true);
     toast({ title: "✅ Novo relatório iniciado!" });
   };
 
@@ -741,7 +775,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
     const turnoRelogio = turnoAtual();
     if (turno !== turnoRelogio) a.push(`O relatório está no Turno ${turno}, mas pelo horário do celular agora é o Turno ${turnoRelogio}. Confira se está certo.`);
     if (!modoTombador) {
-      const semTempo = itens.reduce((n, it) => n + it.trocas.filter(tr => !tr.min).length, 0);
+      const semTempo = itens.reduce((n, it) => n + it.trocas.filter(tr => tr.min === null).length, 0);
       if (semTempo > 0) a.push(`${semTempo} ${semTempo === 1 ? "troca" : "trocas"} sem tempo informado.`);
     }
     const emAndamento = [...paradasMap.emb, ...paradasMap.cl, ...paradasMap.rc, ...paradasTomb].filter(p => p.emAndamento).length;
@@ -787,6 +821,21 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
     onClose();
   };
 
+  // ── Seções opcionais: aparecem se tiverem dados ou se você adicionou ──
+  const temDadosCL = clQtd > 0 || !!obsCL.trim() || paradasMap.cl.length > 0 || trocasSerra.some(x => x.retirada.trim() || x.colocada.trim() || x.cortes.trim());
+  const temDadosRC = rcId > 0 || rcSid > 0 || !!obsRC.trim() || paradasMap.rc.length > 0;
+  const temDadosTomb = retrabalhadas.length > 0 || rejeitadas.length > 0 || labels.length > 0 || !!obsTomb.trim() || paradasTomb.length > 0;
+  const mostraCL = !modoTombador && (secCL || temDadosCL);
+  const mostraRC = !modoTombador && (secRC || temDadosRC);
+  const mostraTomb = modoTombador || secTomb || temDadosTomb;
+  // Uma seção aberta por vez: abrir uma recolhe as outras (menos rolagem)
+  const focarSecao = (k: "emb" | "cl" | "rc" | "tomb") => {
+    setEmbCollapsed(k !== "emb");
+    setClCollapsed(k !== "cl");
+    setRcCollapsed(k !== "rc");
+    setTombCollapsed(k !== "tomb");
+  };
+
   // ── Tema ──
   const fz = fontSize === "sm" ? 13 : fontSize === "lg" ? 18 : 16;
   const theme = {
@@ -814,12 +863,10 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
 
   const renderParadas = (sec: keyof ParadasMap, label: string) => (
     <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #F0F0F0" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
-        <span style={{ fontSize: s(12), fontWeight: 600, color: theme.textSub }}>⏱ {label}</span>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button onClick={() => addParadaAutomatica(sec)} style={{ ...sectionBtn, color: "#E53935", fontWeight: 600 }}>🔴 Iniciar agora</button>
-          <button onClick={() => addParada(sec)} style={{ ...sectionBtn, color: theme.accent, fontWeight: 600 }}>+ Adicionar</button>
-        </div>
+      <div style={{ fontSize: s(12), fontWeight: 600, color: theme.textSub, marginBottom: 6 }}>⏱ {label}</div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+        <button onClick={() => addParadaAutomatica(sec)} style={{ ...sectionBtn, flex: 1, minHeight: 40, padding: "8px 6px", color: "#E53935", fontWeight: 600 }}>🔴 Iniciar agora</button>
+        <button onClick={() => addParada(sec)} style={{ ...sectionBtn, flex: 1, minHeight: 40, padding: "8px 6px", color: theme.accent, fontWeight: 600 }}>+ Adicionar</button>
       </div>
       {paradasMap[sec].map((p, i) => {
         const min = getMin(p); const tempoLabel = min > 0 ? ` · ${formatMin(min)}` : "";
@@ -853,7 +900,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
         }
 
         if (p.collapsed) return (
-          <div key={i} style={{ border: "1px solid #F0F0F0", borderRadius: 12, padding: 10, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+          <div key={i} style={{ border: "1px solid #F0F0F0", borderRadius: 12, padding: "5px 10px", marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: s(13), fontWeight: 500, flex: 1, color: min > 0 ? "#2D9E7F" : "#1A1A2E" }}>{p.desc || `Parada ${i + 1}`}{tempoLabel}</span>
             <button onClick={() => toggleParada(sec, i)} style={sectionBtn}>▼ Expandir</button>
             <button onClick={() => removeParada(sec, i)} style={{ padding: "0 8px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
@@ -1064,21 +1111,46 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
           </button>
         </div>
 
-        {/* Máquina selecionada: fica fixa no cabeçalho, não rola junto com o conteúdo */}
-        {!modoTombador && (
-          <div style={{ textAlign: "center" }}>
-            <span style={{ display: "inline-block", fontSize: s(12), fontWeight: 800, letterSpacing: 0.5, color: "#FFF", background: "#2D9E7F", padding: "3px 18px", borderRadius: 999 }}>
-              EMBALADEIRA {embaladeiraNum}
+        {/* Linha fixa: resumo do turno (toque para editar) + parada total + Embaladeira 1 | 2 */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <button
+            onClick={() => setHeaderCollapsed(c => !c)}
+            style={{ flex: 1, minWidth: 0, minHeight: 36, display: "flex", alignItems: "center", gap: 6, textAlign: "left", padding: "4px 10px", borderRadius: 10, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, fontSize: s(12), fontWeight: 600, cursor: "pointer" }}
+            aria-label={headerCollapsed ? "Editar dados do turno" : "Recolher dados do turno"}
+          >
+            <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              Turno {turno} · {letra}{dest.trim() ? ` · ${dest.trim()}` : ""}
             </span>
-          </div>
-        )}
+            <span aria-hidden style={{ fontSize: s(12), flexShrink: 0 }}>{headerCollapsed ? "✏️" : "▲"}</span>
+          </button>
+          {!modoTombador && (
+            <>
+              <span style={{ fontSize: s(11), fontWeight: 700, color: theme.textSub, whiteSpace: "nowrap" }} title="Total de tempo de parada">⏱ {formatMin(calcTotalEmb())}</span>
+              <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                {(["1", "2"] as const).map(n => (
+                  <button
+                    key={n}
+                    onClick={() => setEmbaladeiraNum(n)}
+                    aria-pressed={embaladeiraNum === n}
+                    style={{ minHeight: 36, padding: "4px 9px", borderRadius: 999, fontSize: s(12), fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
+                      border: embaladeiraNum === n ? "none" : `1px solid ${theme.sectionBtnBorder}`,
+                      background: embaladeiraNum === n ? "#2D9E7F" : theme.sectionBtnBg,
+                      color: embaladeiraNum === n ? "#FFF" : theme.textSub }}
+                  >
+                    Emb. {n}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Conteúdo rolável */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 100px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "10px 16px 100px" }}>
 
-        {/* Cabeçalho do turno */}
-        <div style={cardStyle}>
+        {/* Cabeçalho do turno: some quando recolhido (o resumo fica na linha fixa do topo) */}
+        {!headerCollapsed && <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: headerCollapsed ? 0 : 12 }}>
             <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>📋 Turno</span>
             <button onClick={() => setHeaderCollapsed(!headerCollapsed)} style={sectionBtn}>{headerCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
@@ -1123,40 +1195,44 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
             </div>
             <button onClick={addResp} style={{ marginTop: 8, fontSize: s(12), color: theme.accent, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar responsável</button>
           </>}
-        </div>
+        </div>}
 
         {/* Embaladeira */}
         {!modoTombador && <div style={cardStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: embCollapsed ? 0 : 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>• Embaladeira</span>
-              <select value={embaladeiraNum} onChange={e => setEmbaladeiraNum(e.target.value as "1"|"2")} style={{ fontSize: s(13), fontWeight: 700, border: "1px solid #EBEBEB", borderRadius: 8, padding: "2px 8px", background: "#FAFAFA" }}>
-                <option value="1">1</option>
-                <option value="2">2</option>
-              </select>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: embCollapsed ? 0 : 10 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
+              <span style={{ fontSize: fz, fontWeight: 700, color: theme.text, whiteSpace: "nowrap" }}>• Embaladeira {embaladeiraNum}</span>
+              {embCollapsed && (
+                <span style={{ fontSize: s(11), color: theme.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {itens.reduce((n, i) => n + i.trocas.length, 0)} trocas · {formatMin(calcTotalEmb())}
+                </span>
+              )}
             </div>
-            <button onClick={() => setEmbCollapsed(!embCollapsed)} style={sectionBtn}>{embCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
+            <button onClick={() => (embCollapsed ? focarSecao("emb") : setEmbCollapsed(true))} style={sectionBtn}>{embCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
           </div>
           {!embCollapsed && <>
-            <p style={{ fontSize: s(12), fontWeight: 600, color: theme.textSub, margin: "0 0 8px" }}>Consumidos</p>
+            <p style={{ fontSize: s(12), fontWeight: 600, color: theme.textSub, margin: "0 0 6px" }}>Consumidos</p>
             <ConsumidosEditor itens={itens} setItens={setItens} theme={theme} s={s} fz={fz} usoKey="consumidos_uso_embaladeira" />
-            <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: s(13), color: theme.textSub }}>✔ Total Tempo de Parada</span>
               <span style={{ fontSize: 17, fontWeight: 700 }}>{formatMin(calcTotalEmb())}</span>
             </div>
-            <div style={{ marginTop: 10 }}>
-              <label style={{ fontSize: s(11), color: theme.textSub }}>Obs. Embaladeira</label>
-              <textarea value={obsEmb} onChange={e => setObsEmb(e.target.value)} rows={2} placeholder="Observações..." style={{ ...inputStyle, resize: "vertical", marginTop: 4 }} />
-            </div>
             {renderParadas("emb", "Paradas Embaladeira")}
+            <div style={{ marginTop: 12 }}>
+              <label style={{ fontSize: s(11), color: theme.textSub }}>Obs. Embaladeira</label>
+              <AutoTextarea value={obsEmb} onChange={setObsEmb} placeholder="Observações..." style={{ ...inputStyle, marginTop: 4 }} />
+            </div>
           </>}
         </div>}
 
         {/* Core Link */}
-        {!modoTombador && <div style={cardStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: clCollapsed ? 0 : 10 }}>
+        {mostraCL && <div style={cardStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, marginBottom: clCollapsed ? 0 : 10 }}>
             <span style={{ fontSize: s(13), fontWeight: 700 }}>• Core Link</span>
-            <button onClick={() => setClCollapsed(!clCollapsed)} style={sectionBtn}>{clCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
+            <div style={{ display: "flex", gap: 6 }}>
+              {!temDadosCL && <button onClick={() => setSecCL(false)} style={{ ...sectionBtn, color: "#E53935" }} aria-label="Tirar Core Link do relatório">✕ Tirar</button>}
+              <button onClick={() => (clCollapsed ? focarSecao("cl") : setClCollapsed(true))} style={sectionBtn}>{clCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
+            </div>
           </div>
           {!clCollapsed && <>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
@@ -1215,10 +1291,13 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
         </div>}
 
         {/* Roll Cutter */}
-        {!modoTombador && <div style={cardStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: rcCollapsed ? 0 : 10 }}>
+        {mostraRC && <div style={cardStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, marginBottom: rcCollapsed ? 0 : 10 }}>
             <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>• Roll Cutter</span>
-            <button onClick={() => setRcCollapsed(!rcCollapsed)} style={sectionBtn}>{rcCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
+            <div style={{ display: "flex", gap: 6 }}>
+              {!temDadosRC && <button onClick={() => setSecRC(false)} style={{ ...sectionBtn, color: "#E53935" }} aria-label="Tirar Roll Cutter do relatório">✕ Tirar</button>}
+              <button onClick={() => (rcCollapsed ? focarSecao("rc") : setRcCollapsed(true))} style={sectionBtn}>{rcCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
+            </div>
           </div>
           {!rcCollapsed && <>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
@@ -1239,10 +1318,13 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
         </div>}
 
         {/* Tombador */}
-        <div style={cardStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tombCollapsed ? 0 : 12 }}>
+        {mostraTomb && <div style={cardStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, marginBottom: tombCollapsed ? 0 : 12 }}>
             <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>🔁 Tombador</span>
-            <button onClick={() => setTombCollapsed(!tombCollapsed)} style={sectionBtn}>{tombCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
+            <div style={{ display: "flex", gap: 6 }}>
+              {!modoTombador && !temDadosTomb && <button onClick={() => setSecTomb(false)} style={{ ...sectionBtn, color: "#E53935" }} aria-label="Tirar Tombador do relatório">✕ Tirar</button>}
+              <button onClick={() => (tombCollapsed ? focarSecao("tomb") : setTombCollapsed(true))} style={sectionBtn}>{tombCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
+            </div>
           </div>
           {!tombCollapsed && <>
             {renderBobinas(retrabalhadas, setRetrabalhadas, "♻️ Bobinas Retrabalhadas", "#F57C00", "ret")}
@@ -1327,7 +1409,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
                 }
 
                 if (p.collapsed) return (
-                  <div key={i} style={{ border: "1px solid #F0F0F0", borderRadius: 12, padding: 10, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                  <div key={i} style={{ border: "1px solid #F0F0F0", borderRadius: 12, padding: "5px 10px", marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: s(13), fontWeight: 500, flex: 1, color: min > 0 ? "#2D9E7F" : "#1A1A2E" }}>{p.desc || `Parada ${i + 1}`}{tempoLabel}</span>
                     <button onClick={() => toggleParadaTomb(i)} style={sectionBtn}>▼ Expandir</button>
                     <button onClick={() => removeParadaTomb(i)} style={{ padding: "0 8px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
@@ -1364,7 +1446,19 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
               )}
             </div>
           </>}
-        </div>
+        </div>}
+
+        {/* Botões para adicionar só o que precisar ao relatório */}
+        {!modoTombador && (!mostraCL || !mostraRC || !mostraTomb) && (
+          <div style={{ marginBottom: 12 }}>
+            <p style={{ fontSize: s(11), color: theme.textSub, margin: "0 0 5px" }}>Adicionar ao relatório</p>
+            <div style={{ display: "flex", gap: 6 }}>
+              {!mostraCL && <button onClick={() => { setSecCL(true); focarSecao("cl"); }} style={{ flex: 1, minHeight: 42, fontSize: s(12), fontWeight: 600, color: theme.textSub, background: "transparent", border: `1px dashed ${theme.sectionBtnBorder}`, borderRadius: 10, cursor: "pointer" }}>+ Core Link</button>}
+              {!mostraRC && <button onClick={() => { setSecRC(true); focarSecao("rc"); }} style={{ flex: 1, minHeight: 42, fontSize: s(12), fontWeight: 600, color: theme.textSub, background: "transparent", border: `1px dashed ${theme.sectionBtnBorder}`, borderRadius: 10, cursor: "pointer" }}>+ Roll Cutter</button>}
+              {!mostraTomb && <button onClick={() => { setSecTomb(true); focarSecao("tomb"); }} style={{ flex: 1, minHeight: 42, fontSize: s(12), fontWeight: 600, color: theme.textSub, background: "transparent", border: `1px dashed ${theme.sectionBtnBorder}`, borderRadius: 10, cursor: "pointer" }}>+ Tombador</button>}
+            </div>
+          </div>
+        )}
 
         {/* Prévia */}
         {showPrevia && (

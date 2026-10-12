@@ -722,7 +722,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
     if (HORARIOS[turno] && horario.trim() !== HORARIOS[turno]) a.push(`O horário não é o padrão do Turno ${turno} (${HORARIOS[turno]}).`);
     const turnoRelogio = turnoAtual();
     if (turno !== turnoRelogio) a.push(`O relatório está no Turno ${turno}, mas pelo horário do celular agora é o Turno ${turnoRelogio}. Confira se está certo.`);
-    const semTempo = itens.reduce((n, it) => n + it.trocas.filter(tr => !tr.min).length, 0);
+    const semTempo = itens.reduce((n, it) => n + it.trocas.filter(tr => tr.min === null).length, 0);
     if (semTempo > 0) a.push(`${semTempo} ${semTempo === 1 ? "troca" : "trocas"} sem tempo informado.`);
     const emAndamento = [...paradasCL, ...paradasRC, ...paradasRebob].filter(p => p.emAndamento).length;
     if (emAndamento > 0) a.push(`${emAndamento} ${emAndamento === 1 ? "parada ainda em andamento" : "paradas ainda em andamento"} (sem horário final).`);
