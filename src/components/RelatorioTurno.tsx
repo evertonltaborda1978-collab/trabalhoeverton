@@ -3,6 +3,7 @@ import { X, FileText, Camera, Pencil } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { shareText } from "@/lib/nativeShare";
 import { ConsumidosEditor } from "./ConsumidosEditor";
+import { emailDe, salvarEmail, emailValido, abrirEmail } from "@/lib/destinatarioEmail";
 import type { ItemConsumo } from "./ConsumidosEditor";
 
 // Caixa de texto que cresce sozinha conforme você digita (altura mínima confortável, ~3 linhas)
@@ -448,6 +449,20 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   }, []);
   // Na aba Tombador, o card do Tombador abre sozinho
   useEffect(() => { if (modoTombador) setTombCollapsed(false); }, [modoTombador]);
+  // E-mail do destinatário (guardado no aparelho, vale para todos os relatórios)
+  const [emailDest, setEmailDest] = useState<string>(() => emailDe(dest));
+  useEffect(() => { setEmailDest(emailDe(dest)); }, [dest]);
+  const atualizarEmailDest = (v: string) => { setEmailDest(v); if (dest.trim()) salvarEmail(dest, v); };
+  // Relógio para o aviso de parada esquecida aberta (confere ao abrir, a cada minuto e ao voltar para o app)
+  const [agora, setAgora] = useState(() => Date.now());
+  const [paradasDescartadas, setParadasDescartadas] = useState<string[]>([]);
+  useEffect(() => {
+    const tick = () => setAgora(Date.now());
+    const id = setInterval(tick, 60000);
+    const vis = () => { if (document.visibilityState === "visible") tick(); };
+    document.addEventListener("visibilitychange", vis);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", vis); };
+  }, []);
   const [itens, setItens] = useState<ItemConsumo[]>(saved?.itens ?? ITENS_BASE.map(l => ({ label: l, trocas: [], collapsed: false })));
   const [obsEmb, setObsEmb] = useState(saved?.obsEmb ?? "");
   const [paradasMap, setParadasMap] = useState<ParadasMap>(saved?.paradasMap ?? { emb: [], cl: [], rc: [] });
@@ -757,6 +772,12 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
     const assunto = modoTombador
       ? `Relatório Tombador - Turno ${turnoTxt}`
       : `Relatório Embaladeira ${String(embaladeiraNum).padStart(2, "0")} - Turno ${turnoTxt}`;
+    const para = emailDest.trim();
+    if (para && emailValido(para)) {
+      toast({ title: "📧 Abrindo o e-mail…", description: `Para: ${para}` });
+      abrirEmail(para, assunto, text);
+      return;
+    }
     const result = await shareText(assunto, text);
     if (result === "copied") {
       toast({ title: "✅ Copiado!", description: "Relatório copiado para a área de transferência." });
@@ -770,6 +791,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   const avisosEnvio = (): string[] => {
     const a: string[] = [];
     if (!dest.trim()) a.push("Destinatário vazio.");
+    if (emailDest.trim() && !emailValido(emailDest)) a.push("O e-mail do destinatário parece inválido: o envio vai abrir o compartilhar normal.");
     if (resps.filter(r => r.trim()).length === 0) a.push("Nenhum responsável informado.");
     if (HORARIOS[turno] && horario.trim() !== HORARIOS[turno]) a.push(`O horário não é o padrão do Turno ${turno} (${HORARIOS[turno]}).`);
     const turnoRelogio = turnoAtual();
@@ -783,6 +805,11 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
     return a;
   };
   const avisos = showSendConfirm ? avisosEnvio() : [];
+  const pl = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
+  const nParadasTotal = paradasMap.emb.length + paradasMap.cl.length + paradasMap.rc.length + paradasTomb.length;
+  const resumoEnvio = modoTombador
+    ? `${pl(retrabalhadas.length, "retrabalhada", "retrabalhadas")} · ${pl(rejeitadas.length, "rejeitada", "rejeitadas")} · ${pl(paradasTomb.length, "parada", "paradas")}`
+    : `${pl(itens.reduce((n, i) => n + i.trocas.length, 0), "troca", "trocas")} · ${pl(nParadasTotal, "parada", "paradas")} · ${formatMin(calcTotalEmb())} de parada`;
   const relatorioLabel = modoTombador ? "Relatório do Tombador" : `Relatório da Embaladeira ${embaladeiraNum}`;
   const handleSaveNote = () => {
     let text: string;
@@ -828,12 +855,32 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   const mostraCL = !modoTombador && (secCL || temDadosCL);
   const mostraRC = !modoTombador && (secRC || temDadosRC);
   const mostraTomb = modoTombador || secTomb || temDadosTomb;
+  // Paradas iniciadas com "Iniciar agora" e esquecidas abertas há 60 min ou mais
+  type SecKey = "emb" | "cl" | "rc" | "tomb";
+  const paradasLongas: { chave: string; sec: SecKey; nome: string; min: number; desde: string }[] = [];
+  const checarLongas = (lista: Parada[], sec: SecKey, nome: string) => lista.forEach(p => {
+    if (!p.emAndamento || !p.iniciadaEm) return;
+    const m = Math.floor((agora - p.iniciadaEm) / 60000);
+    if (m >= 60) paradasLongas.push({ chave: `${sec}-${p.iniciadaEm}`, sec, nome, min: m, desde: new Date(p.iniciadaEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) });
+  });
+  checarLongas(paradasMap.emb, "emb", "Embaladeira");
+  checarLongas(paradasMap.cl, "cl", "Core Link");
+  checarLongas(paradasMap.rc, "rc", "Roll Cutter");
+  checarLongas(paradasTomb, "tomb", "Tombador");
+  const avisoParada = paradasLongas.find(p => !paradasDescartadas.includes(p.chave));
   // Uma seção aberta por vez: abrir uma recolhe as outras (menos rolagem)
   const focarSecao = (k: "emb" | "cl" | "rc" | "tomb") => {
     setEmbCollapsed(k !== "emb");
     setClCollapsed(k !== "cl");
     setRcCollapsed(k !== "rc");
     setTombCollapsed(k !== "tomb");
+  };
+
+  const verParada = (sec: SecKey) => {
+    if (sec === "cl") setSecCL(true);
+    if (sec === "rc") setSecRC(true);
+    if (sec === "tomb") setSecTomb(true);
+    focarSecao(sec);
   };
 
   // ── Tema ──
@@ -1111,11 +1158,11 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
           </button>
         </div>
 
-        {/* Linha fixa: resumo do turno (toque para editar) + parada total + Embaladeira 1 | 2 */}
+        {/* Linha fixa: resumo do turno (toque para editar) + parada total + Emb. 1 | 2 */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <button
             onClick={() => setHeaderCollapsed(c => !c)}
-            style={{ flex: 1, minWidth: 0, minHeight: 36, display: "flex", alignItems: "center", gap: 6, textAlign: "left", padding: "4px 10px", borderRadius: 10, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, fontSize: s(12), fontWeight: 600, cursor: "pointer" }}
+            style={{ flex: 1, minWidth: 0, minHeight: 38, display: "flex", alignItems: "center", gap: 6, textAlign: "left", padding: "4px 10px", borderRadius: 10, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, fontSize: s(12), fontWeight: 600, cursor: "pointer" }}
             aria-label={headerCollapsed ? "Editar dados do turno" : "Recolher dados do turno"}
           >
             <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -1125,19 +1172,21 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
           </button>
           {!modoTombador && (
             <>
-              <span style={{ fontSize: s(11), fontWeight: 700, color: theme.textSub, whiteSpace: "nowrap" }} title="Total de tempo de parada">⏱ {formatMin(calcTotalEmb())}</span>
-              <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+              <span style={{ fontSize: s(11), fontWeight: 700, color: theme.textSub, whiteSpace: "nowrap", flexShrink: 0 }} title="Total de tempo de parada">⏱ {formatMin(calcTotalEmb())}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                <span style={{ fontSize: s(11), fontWeight: 600, color: theme.textSub }}>Emb.</span>
                 {(["1", "2"] as const).map(n => (
                   <button
                     key={n}
                     onClick={() => setEmbaladeiraNum(n)}
                     aria-pressed={embaladeiraNum === n}
-                    style={{ minHeight: 36, padding: "4px 9px", borderRadius: 999, fontSize: s(12), fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
+                    aria-label={`Embaladeira ${n}`}
+                    style={{ width: 38, height: 38, padding: 0, borderRadius: "50%", fontSize: s(14), fontWeight: 800, cursor: "pointer",
                       border: embaladeiraNum === n ? "none" : `1px solid ${theme.sectionBtnBorder}`,
                       background: embaladeiraNum === n ? "#2D9E7F" : theme.sectionBtnBg,
                       color: embaladeiraNum === n ? "#FFF" : theme.textSub }}
                   >
-                    Emb. {n}
+                    {n}
                   </button>
                 ))}
               </div>
@@ -1148,6 +1197,18 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
 
       {/* Conteúdo rolável */}
       <div style={{ flex: 1, overflowY: "auto", padding: "10px 16px 100px" }}>
+
+        {avisoParada && (
+          <div style={{ marginBottom: 10, padding: "10px 12px", borderRadius: 12, background: "rgba(229,57,53,0.10)", border: "1px solid rgba(229,57,53,0.45)" }}>
+            <p style={{ margin: "0 0 8px", fontSize: s(12), fontWeight: 700, color: "#E53935" }}>
+              ⚠ Parada em andamento há {formatMin(avisoParada.min)} ({avisoParada.nome}, desde {avisoParada.desde}). Finalize ou ajuste o tempo.
+            </p>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => verParada(avisoParada.sec)} style={{ ...sectionBtn, flex: 1, minHeight: 38 }}>Ver parada</button>
+              <button onClick={() => setParadasDescartadas(d => [...d, avisoParada.chave])} style={{ ...sectionBtn, flex: 1, minHeight: 38 }}>Ok, já sei</button>
+            </div>
+          </div>
+        )}
 
         {/* Cabeçalho do turno: some quando recolhido (o resumo fica na linha fixa do topo) */}
         {!headerCollapsed && <div style={cardStyle}>
@@ -1171,6 +1232,14 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
                 ))}
               </div>
             )}
+            <label style={{ fontSize: s(11), color: theme.textSub }}>E-mail do destinatário{dest.trim() ? ` (${dest.trim()})` : ""}</label>
+            <input
+              type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+              placeholder={dest.trim() ? "nome@empresa.com (fica salvo)" : "Escolha o destinatário primeiro"}
+              value={emailDest} disabled={!dest.trim()}
+              onChange={e => atualizarEmailDest(e.target.value)}
+              style={{ ...inputStyle, marginTop: 4, marginBottom: 12 }}
+            />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
               <div><label style={{ fontSize: s(11), color: theme.textSub }}>Turno</label>
                 <select value={turno} onChange={e => onTurnoChange(e.target.value)} style={selectStyle}>
@@ -1514,6 +1583,10 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
               </div>
               <div style={{ fontSize: s(13), color: theme.text }}>
                 Turno {turno} - Letra {letra} - {horario}
+              </div>
+              <div style={{ fontSize: s(13), color: theme.text }}>{resumoEnvio}</div>
+              <div style={{ fontSize: s(12), color: theme.textSub, wordBreak: "break-all" }}>
+                {emailDest.trim() && emailValido(emailDest) ? `📧 Vai abrir o e-mail para ${emailDest.trim()}` : "Sem e-mail salvo: vai abrir o compartilhar"}
               </div>
             </div>
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 // ── Tipos (mesmos dados que os relatórios já salvavam — notas antigas continuam abrindo) ──
 export interface Troca { min: number | null; qtd?: number; }
@@ -58,7 +58,7 @@ function Stepper({ value, onChange, min, theme, fz, label }: {
   const n = parseInt(value, 10);
   const atual = isNaN(n) ? min : n;
   const btn: React.CSSProperties = {
-    width: 36, height: 40, padding: 0, fontSize: 20, fontWeight: 700, border: "none",
+    width: 32, height: 40, padding: 0, fontSize: 20, fontWeight: 700, border: "none",
     background: "transparent", color: theme.text, cursor: "pointer", flexShrink: 0,
   };
   return (
@@ -68,7 +68,7 @@ function Stepper({ value, onChange, min, theme, fz, label }: {
         type="text" inputMode="numeric" aria-label={label} value={value}
         onChange={e => onChange(e.target.value.replace(/\D/g, "").slice(0, 3))}
         onFocus={e => e.target.select()}
-        style={{ width: 38, height: 40, boxSizing: "border-box", textAlign: "center", border: "none", background: "transparent", color: theme.text, fontSize: fz, fontWeight: 700, padding: 0 }}
+        style={{ width: 32, height: 40, boxSizing: "border-box", textAlign: "center", border: "none", background: "transparent", color: theme.text, fontSize: fz, fontWeight: 700, padding: 0 }}
       />
       <button type="button" aria-label={`Aumentar ${label}`} onClick={() => onChange(String(Math.min(999, atual + 1)))} style={btn}>+</button>
     </div>
@@ -105,6 +105,19 @@ export function ConsumidosEditor({ itens, setItens, theme, s, fz, usoKey }: Prop
 
   // Edição de uma troca já lançada
   const [edit, setEdit] = useState<{ idx: number; ti: number } | null>(null);
+  // Exclusão com pergunta ("Excluir?") e destaque rápido da troca repetida
+  const [confTroca, setConfTroca] = useState<{ idx: number; ti: number } | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
+  useEffect(() => {
+    if (!confTroca) return;
+    const t = setTimeout(() => setConfTroca(null), 4000); // a pergunta some sozinha
+    return () => clearTimeout(t);
+  }, [confTroca]);
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(null), 1200);
+    return () => clearTimeout(t);
+  }, [flash]);
 
   // Gerenciar itens (renomear, mover, excluir)
   const [gerenciar, setGerenciar] = useState(false);
@@ -120,7 +133,7 @@ export function ConsumidosEditor({ itens, setItens, theme, s, fz, usoKey }: Prop
     background: theme.sectionBtnBg, color: theme.text, cursor: "pointer",
   };
   const miniLabel: React.CSSProperties = { fontSize: s(11), color: theme.textSub, marginBottom: 3 };
-  const fonteNome = (nome: string) => (nome.length > LIMITE_NOME ? s(11) : s(13));
+  const fonteNome = (nome: string) => (nome.length > LIMITE_NOME ? s(11) : s(12));
   const addTrocaEm = (label: string, nova: Troca) => {
     const idx = itens.findIndex(i => i.label === label);
     if (idx < 0) return false;
@@ -166,6 +179,14 @@ export function ConsumidosEditor({ itens, setItens, theme, s, fz, usoKey }: Prop
   const removerTroca = (idx: number, ti: number) => {
     setItens(prev => ordenarConsumidos(prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.filter((_, j) => j !== ti) } : item)));
     setEdit(null);
+    setConfTroca(null);
+  };
+  // ↻ Repetir: lança de novo a mesma troca (mesmo item, quantidade e minutos) com um toque
+  const repetirTroca = (idx: number, ti: number) => {
+    const item = itens[idx];
+    const t = item?.trocas[ti];
+    if (!item || !t) return;
+    if (addTrocaEm(item.label, { min: t.min, qtd: t.qtd ?? 1 })) setFlash(`${idx}-${item.trocas.length}`);
   };
   const atualizarTroca = (idx: number, ti: number, patch: Partial<Troca>) =>
     setItens(prev => prev.map((item, i) => i === idx ? { ...item, trocas: item.trocas.map((t, j) => j === ti ? { ...t, ...patch } : t) } : item));
@@ -196,7 +217,7 @@ export function ConsumidosEditor({ itens, setItens, theme, s, fz, usoKey }: Prop
   const linhas: { idx: number; ti: number; label: string; t: Troca }[] = [];
   itens.forEach((item, idx) => item.trocas.forEach((t, ti) => linhas.push({ idx, ti, label: item.label, t })));
 
-  const iconBtn: React.CSSProperties = { width: 36, height: 36, fontSize: 16, borderRadius: 10, border: "none", background: "transparent", cursor: "pointer", flexShrink: 0, padding: 0 };
+  const iconBtn: React.CSSProperties = { width: 34, height: 36, fontSize: 16, borderRadius: 10, border: "none", background: "transparent", cursor: "pointer", flexShrink: 0, padding: 0 };
 
   return (
     <div>
@@ -209,7 +230,7 @@ export function ConsumidosEditor({ itens, setItens, theme, s, fz, usoKey }: Prop
               <button
                 key={label} type="button" onClick={() => abrirChip(label)}
                 style={{
-                  minHeight: 40, padding: "6px 12px", fontSize: fonteNome(label), fontWeight: 600, color: theme.accent,
+                  minHeight: 38, padding: "6px 10px", fontSize: fonteNome(label), fontWeight: 600, color: theme.accent,
                   background: chipAtivo === label ? "rgba(45,158,127,0.22)" : "rgba(45,158,127,0.1)",
                   border: chipAtivo === label ? "1.5px solid #2D9E7F" : "1px solid rgba(45,158,127,0.35)",
                   borderRadius: 22, cursor: "pointer",
@@ -246,7 +267,7 @@ export function ConsumidosEditor({ itens, setItens, theme, s, fz, usoKey }: Prop
             if (v === NOVO_ITEM) { setNovoNome(""); setSel(NOVO_ITEM); }
             else { setNovoNome(null); setSel(v); }
           }}
-          style={{ ...inputBase, width: "100%", fontSize: sel && sel !== NOVO_ITEM ? fonteNome(sel) : fz }}
+          style={{ ...inputBase, width: "100%", fontSize: sel && sel !== NOVO_ITEM && sel.length > LIMITE_NOME ? s(12) : fz }}
         >
           <option value="">Escolha o item…</option>
           {itens.map((item, idx) => {
@@ -269,14 +290,14 @@ export function ConsumidosEditor({ itens, setItens, theme, s, fz, usoKey }: Prop
           </div>
         )}
 
-        <div style={{ display: "flex", gap: 6, alignItems: "flex-end", marginTop: 8 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "flex-end", marginTop: 8 }}>
           <div><div style={miniLabel}>Qtd</div><Stepper value={qtd} onChange={setQtd} min={1} theme={theme} fz={fz} label="quantidade" /></div>
           <div><div style={miniLabel}>Min</div><Stepper value={min} onChange={setMin} min={0} theme={theme} fz={fz} label="minutos" /></div>
           <button
             type="button" onClick={adicionar}
-            style={{ flex: 1, minWidth: 0, height: 42, fontSize: s(13), fontWeight: 700, color: "#fff", background: "#2D9E7F", border: "none", borderRadius: 10, cursor: "pointer" }}
+            style={{ flex: 1, minWidth: 76, height: 42, fontSize: s(13), fontWeight: 700, color: "#fff", background: "#2D9E7F", border: "none", borderRadius: 10, cursor: "pointer" }}
           >
-            + Adicionar
+            Lançar
           </button>
         </div>
         {aviso && <p style={{ fontSize: s(12), color: "#E53935", margin: "8px 0 0" }}>{aviso}</p>}
@@ -296,12 +317,24 @@ export function ConsumidosEditor({ itens, setItens, theme, s, fz, usoKey }: Prop
             const ultima = pos === linhas.length - 1;
             const borda = ultima ? "none" : "1px solid rgba(45,158,127,0.2)";
             if (!editando) {
+              const confirmando = confTroca?.idx === idx && confTroca?.ti === ti;
+              const piscando = flash === `${idx}-${ti}`;
               return (
-                <div key={`${idx}-${ti}`} style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 4px 0 10px", minHeight: 40, borderBottom: borda }}>
+                <div key={`${idx}-${ti}`} style={{ display: "flex", alignItems: "center", gap: 4, padding: "0 4px", minHeight: 40, borderBottom: borda, background: piscando ? "rgba(45,158,127,0.30)" : "transparent", transition: "background 0.4s" }}>
+                  <button type="button" onClick={() => repetirTroca(idx, ti)} style={{ ...iconBtn, color: "#2D9E7F", fontSize: 20, fontWeight: 700 }} aria-label={`Repetir ${label}`} title="Repetir esta troca">↻</button>
                   <span style={{ flex: 1, minWidth: 0, fontSize: fonteNome(label), fontWeight: 600, color: theme.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{pad2(q)} {label}</span>
-                  <span style={{ fontSize: s(12), color: theme.textSub, whiteSpace: "nowrap" }}>{t.min === null ? "—" : `${t.min} min`}</span>
-                  <button type="button" onClick={() => setEdit({ idx, ti })} style={iconBtn} aria-label="Editar troca">✏️</button>
-                  <button type="button" onClick={() => removerTroca(idx, ti)} style={iconBtn} aria-label="Excluir troca">🗑</button>
+                  {confirmando ? (
+                    <>
+                      <button type="button" onClick={() => removerTroca(idx, ti)} style={{ ...smallBtn, padding: "8px 10px", background: "#E53935", color: "#fff", border: "none", fontWeight: 700 }}>Excluir?</button>
+                      <button type="button" onClick={() => setConfTroca(null)} style={{ ...smallBtn, padding: "8px 10px" }}>Não</button>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: s(12), color: theme.textSub, whiteSpace: "nowrap" }}>{t.min === null ? "—" : `${t.min} min`}</span>
+                      <button type="button" onClick={() => setEdit({ idx, ti })} style={iconBtn} aria-label="Editar troca">✏️</button>
+                      <button type="button" onClick={() => setConfTroca({ idx, ti })} style={iconBtn} aria-label="Excluir troca">🗑</button>
+                    </>
+                  )}
                 </div>
               );
             }

@@ -3,6 +3,7 @@ import { X, Camera, Pencil } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { shareText } from "@/lib/nativeShare";
 import { ConsumidosEditor } from "./ConsumidosEditor";
+import { emailDe, salvarEmail, emailValido, abrirEmail } from "@/lib/destinatarioEmail";
 import type { ItemConsumo } from "./ConsumidosEditor";
 
 // ── Chaves localStorage ──
@@ -354,6 +355,28 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
   const [clCollapsed, setClCollapsed] = useState(true);
   const [rcCollapsed, setRcCollapsed] = useState(true);
   const [obsCollapsed, setObsCollapsed] = useState(true);
+  // Core Link e Roll Cutter só aparecem quando têm dados ou quando você toca em "+ ..."
+  const [secCL, setSecCL] = useState(false);
+  const [secRC, setSecRC] = useState(false);
+  // Relatório novo com destinatário e responsáveis já preenchidos: o card Turno começa recolhido (resumo no topo)
+  useEffect(() => {
+    if (!saved && dest.trim() && resps.some(x => x.trim())) setHeaderCollapsed(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // E-mail do destinatário (guardado no aparelho, vale para todos os relatórios)
+  const [emailDest, setEmailDest] = useState<string>(() => emailDe(dest));
+  useEffect(() => { setEmailDest(emailDe(dest)); }, [dest]);
+  const atualizarEmailDest = (v: string) => { setEmailDest(v); if (dest.trim()) salvarEmail(dest, v); };
+  // Relógio para o aviso de parada esquecida aberta (confere ao abrir, a cada minuto e ao voltar para o app)
+  const [agora, setAgora] = useState(() => Date.now());
+  const [paradasDescartadas, setParadasDescartadas] = useState<string[]>([]);
+  useEffect(() => {
+    const tick = () => setAgora(Date.now());
+    const id = setInterval(tick, 60000);
+    const vis = () => { if (document.visibilityState === "visible") tick(); };
+    document.addEventListener("visibilitychange", vis);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", vis); };
+  }, []);
 
   // Liga essa tela ao botão/gesto de voltar nativo do Android — mesmo
   // mecanismo já usado pela tela de editar nota (window.__registerModal).
@@ -599,7 +622,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
   // ── Novo relatório ──
   const handleNovo = () => {
     localStorage.removeItem(RASCUNHO_KEY);
-    setRebobNum("1"); setDest((() => { try { return localStorage.getItem("rebobinadeira_last_dest") ?? ""; } catch { return ""; } })()); const turnoNovo = turnoAtual(); setTurno(turnoNovo); setLetra("D"); setHorario(HORARIOS[turnoNovo]);
+    setRebobNum("1"); setSecCL(false); setSecRC(false); setDest((() => { try { return localStorage.getItem("rebobinadeira_last_dest") ?? ""; } catch { return ""; } })()); const turnoNovo = turnoAtual(); setTurno(turnoNovo); setLetra("D"); setHorario(HORARIOS[turnoNovo]);
     setResps(["Everton"]); setIdMaquina(""); setParametros(loadParamsBase());
     setItens(ITENS_BASE.map(l => ({ label: l, trocas: [], collapsed: false })));
     setJumbos([]); setRascunhoJumbo(null); setClQtd(0); setObsCL(""); setParadasCL([]);
@@ -704,6 +727,12 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
       return;
     }
     const assunto = `Relatório Rebobinadeira ${String(rebobNum).padStart(2, "0")} - Turno ${String(turno).padStart(2, "0")}`;
+    const para = emailDest.trim();
+    if (para && emailValido(para)) {
+      toast({ title: "📧 Abrindo o e-mail…", description: `Para: ${para}` });
+      abrirEmail(para, assunto, text);
+      return;
+    }
     const result = await shareText(assunto, text);
     if (result === "copied") {
       toast({ title: "✅ Copiado!", description: "Relatório copiado para a área de transferência." });
@@ -718,6 +747,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
   const avisosEnvio = (): string[] => {
     const a: string[] = [];
     if (!dest.trim()) a.push("Destinatário vazio.");
+    if (emailDest.trim() && !emailValido(emailDest)) a.push("O e-mail do destinatário parece inválido: o envio vai abrir o compartilhar normal.");
     if (resps.filter(r => r.trim()).length === 0) a.push("Nenhum responsável informado.");
     if (HORARIOS[turno] && horario.trim() !== HORARIOS[turno]) a.push(`O horário não é o padrão do Turno ${turno} (${HORARIOS[turno]}).`);
     const turnoRelogio = turnoAtual();
@@ -729,6 +759,37 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
     return a;
   };
   const avisos = showSendConfirm ? avisosEnvio() : [];
+  const pl = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
+  const resumoEnvio = [
+    jumbos.length > 0 ? pl(jumbos.length, "jumbo", "jumbos") : "",
+    pl(itens.reduce((n, i) => n + i.trocas.length, 0), "troca", "trocas"),
+    pl(paradasCL.length + paradasRC.length + paradasRebob.length, "parada", "paradas"),
+    `${formatMin(calcTotalConsumidos())} de parada`,
+  ].filter(Boolean).join(" · ");
+
+  // ── Seções opcionais: aparecem se tiverem dados ou se você adicionou ──
+  const temDadosCL = clQtd > 0 || !!obsCL.trim() || paradasCL.length > 0 || trocasSerra.some(x => x.retirada.trim() || x.colocada.trim() || x.cortes.trim());
+  const temDadosRC = rcId > 0 || rcSid > 0 || !!obsRC.trim() || paradasRC.length > 0;
+  const mostraCL = secCL || temDadosCL;
+  const mostraRC = secRC || temDadosRC;
+
+  // Paradas iniciadas com "Iniciar agora" e esquecidas abertas há 60 min ou mais
+  type SecKey = "cl" | "rc" | "rebob";
+  const paradasLongas: { chave: string; sec: SecKey; nome: string; min: number; desde: string }[] = [];
+  const checarLongas = (lista: Parada[], sec: SecKey, nome: string) => lista.forEach(p => {
+    if (!p.emAndamento || !p.iniciadaEm) return;
+    const m = Math.floor((agora - p.iniciadaEm) / 60000);
+    if (m >= 60) paradasLongas.push({ chave: `${sec}-${p.iniciadaEm}`, sec, nome, min: m, desde: new Date(p.iniciadaEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) });
+  });
+  checarLongas(paradasCL, "cl", "Core Link");
+  checarLongas(paradasRC, "rc", "Roll Cutter");
+  checarLongas(paradasRebob, "rebob", "Rebobinadeira");
+  const avisoParada = paradasLongas.find(p => !paradasDescartadas.includes(p.chave));
+  const verParada = (sec: SecKey) => {
+    if (sec === "cl") { setSecCL(true); setClCollapsed(false); }
+    if (sec === "rc") { setSecRC(true); setRcCollapsed(false); }
+    if (sec === "rebob") setObsCollapsed(false);
+  };
 
   // ── Tema ──
   const fz = fontSize === "sm" ? 13 : fontSize === "lg" ? 18 : 16;
@@ -964,25 +1025,58 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
         </div>
       </div>
 
-      {/* Máquina selecionada: faixa fixa, não rola junto com o conteúdo */}
-      <div style={{ background: theme.headerBg, borderBottom: `1px solid ${theme.cardBorder}`, padding: "3px 16px 5px", textAlign: "center" }}>
-        <span style={{ display: "inline-block", fontSize: s(12), fontWeight: 800, letterSpacing: 0.5, color: "#FFF", background: "#2D9E7F", padding: "3px 18px", borderRadius: 999 }}>
-          REBOBINADEIRA {rebobNum}
-        </span>
+      {/* Linha fixa: resumo do turno (toque para editar) + parada total + Reb. 1 | 2 */}
+      <div style={{ background: theme.headerBg, borderBottom: `1px solid ${theme.cardBorder}`, padding: "6px 16px 8px", display: "flex", alignItems: "center", gap: 6 }}>
+        <button
+          onClick={() => setHeaderCollapsed(c => !c)}
+          style={{ flex: 1, minWidth: 0, minHeight: 38, display: "flex", alignItems: "center", gap: 6, textAlign: "left", padding: "4px 10px", borderRadius: 10, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, fontSize: s(12), fontWeight: 600, cursor: "pointer" }}
+          aria-label={headerCollapsed ? "Editar dados do turno" : "Recolher dados do turno"}
+        >
+          <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            Turno {turno} · {letra}{dest.trim() ? ` · ${dest.trim()}` : ""}
+          </span>
+          <span aria-hidden style={{ fontSize: s(12), flexShrink: 0 }}>{headerCollapsed ? "✏️" : "▲"}</span>
+        </button>
+        <span style={{ fontSize: s(11), fontWeight: 700, color: theme.textSub, whiteSpace: "nowrap", flexShrink: 0 }} title="Total de tempo de parada">⏱ {formatMin(calcTotalConsumidos())}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+          <span style={{ fontSize: s(11), fontWeight: 600, color: theme.textSub }}>Reb.</span>
+          {(["1", "2"] as const).map(n => (
+            <button
+              key={n}
+              onClick={() => setRebobNum(n)}
+              aria-pressed={rebobNum === n}
+              aria-label={`Rebobinadeira ${n}`}
+              style={{ width: 38, height: 38, padding: 0, borderRadius: "50%", fontSize: s(14), fontWeight: 800, cursor: "pointer",
+                border: rebobNum === n ? "none" : `1px solid ${theme.sectionBtnBorder}`,
+                background: rebobNum === n ? "#2D9E7F" : theme.sectionBtnBg,
+                color: rebobNum === n ? "#FFF" : theme.textSub }}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Conteúdo */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 100px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "10px 16px 100px" }}>
 
-        {/* Cabeçalho */}
-        <div style={cardStyle}>
+        {avisoParada && (
+          <div style={{ marginBottom: 10, padding: "10px 12px", borderRadius: 12, background: "rgba(229,57,53,0.10)", border: "1px solid rgba(229,57,53,0.45)" }}>
+            <p style={{ margin: "0 0 8px", fontSize: s(12), fontWeight: 700, color: "#E53935" }}>
+              ⚠ Parada em andamento há {formatMin(avisoParada.min)} ({avisoParada.nome}, desde {avisoParada.desde}). Finalize ou ajuste o tempo.
+            </p>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => verParada(avisoParada.sec)} style={{ ...sectionBtn, flex: 1, minHeight: 38 }}>Ver parada</button>
+              <button onClick={() => setParadasDescartadas(d => [...d, avisoParada.chave])} style={{ ...sectionBtn, flex: 1, minHeight: 38 }}>Ok, já sei</button>
+            </div>
+          </div>
+        )}
+
+        {/* Cabeçalho do turno: some quando recolhido (o resumo fica na linha fixa do topo) */}
+        {!headerCollapsed && <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: headerCollapsed ? 0 : 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>📋 Turno</span>
-              <select value={rebobNum} onChange={e => setRebobNum(e.target.value as "1"|"2")} style={{ fontSize: fz, fontWeight: 700, border: `1px solid ${theme.inputBorder}`, borderRadius: 8, padding: "2px 8px", background: theme.inputBg, color: theme.text }}>
-                <option value="1">Rebobinadeira 1</option>
-                <option value="2">Rebobinadeira 2</option>
-              </select>
             </div>
             <button onClick={() => setHeaderCollapsed(!headerCollapsed)} style={sectionBtn}>{headerCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
           </div>
@@ -1002,6 +1096,14 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
                 ))}
               </div>
             )}
+            <label style={{ fontSize: s(11), color: theme.textSub }}>E-mail do destinatário{dest.trim() ? ` (${dest.trim()})` : ""}</label>
+            <input
+              type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+              placeholder={dest.trim() ? "nome@empresa.com (fica salvo)" : "Escolha o destinatário primeiro"}
+              value={emailDest} disabled={!dest.trim()}
+              onChange={e => atualizarEmailDest(e.target.value)}
+              style={{ ...inputStyle, marginTop: 4 }}
+            />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, margin: "10px 0" }}>
               <div><label style={{ fontSize: s(11), color: theme.textSub }}>Turno</label>
                 <select value={turno} onChange={e => onTurnoChange(e.target.value)} style={selectStyle}>
@@ -1026,7 +1128,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
             </div>
             <button onClick={() => setResps(prev => [...prev, ""])} style={{ marginTop: 8, fontSize: s(12), color: theme.accent, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Adicionar responsável</button>
           </>}
-        </div>
+        </div>}
 
         {/* Parâmetros */}
         <div style={cardStyle}>
@@ -1104,10 +1206,13 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
         </div>
 
         {/* Core Link */}
-        <div style={cardStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: clCollapsed ? 0 : 10 }}>
+        {mostraCL && <div style={cardStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, marginBottom: clCollapsed ? 0 : 10 }}>
             <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>• Core Link</span>
-            <button onClick={() => setClCollapsed(!clCollapsed)} style={sectionBtn}>{clCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
+            <div style={{ display: "flex", gap: 6 }}>
+              {!temDadosCL && <button onClick={() => setSecCL(false)} style={{ ...sectionBtn, color: "#E53935" }} aria-label="Tirar Core Link do relatório">✕ Tirar</button>}
+              <button onClick={() => setClCollapsed(!clCollapsed)} style={sectionBtn}>{clCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
+            </div>
           </div>
           {!clCollapsed && <>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
@@ -1163,13 +1268,16 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
             <textarea value={obsCL} onChange={e => setObsCL(e.target.value)} rows={2} placeholder="Obs. Core Link..." style={{ ...inputStyle, resize: "vertical" }} />
             {renderParadas(paradasCL, setParadasCL, "Paradas Core Link")}
           </>}
-        </div>
+        </div>}
 
         {/* Roll Cutter */}
-        <div style={cardStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: rcCollapsed ? 0 : 10 }}>
+        {mostraRC && <div style={cardStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, marginBottom: rcCollapsed ? 0 : 10 }}>
             <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>• Roll Cutter</span>
-            <button onClick={() => setRcCollapsed(!rcCollapsed)} style={sectionBtn}>{rcCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
+            <div style={{ display: "flex", gap: 6 }}>
+              {!temDadosRC && <button onClick={() => setSecRC(false)} style={{ ...sectionBtn, color: "#E53935" }} aria-label="Tirar Roll Cutter do relatório">✕ Tirar</button>}
+              <button onClick={() => setRcCollapsed(!rcCollapsed)} style={sectionBtn}>{rcCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
+            </div>
           </div>
           {!rcCollapsed && <>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
@@ -1187,7 +1295,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
             <textarea value={obsRC} onChange={e => setObsRC(e.target.value)} rows={2} placeholder="Obs. Roll Cutter..." style={{ ...inputStyle, resize: "vertical" }} />
             {renderParadas(paradasRC, setParadasRC, "Paradas Roll Cutter")}
           </>}
-        </div>
+        </div>}
 
         {/* Obs e Paradas Rebobinadeira */}
         <div style={cardStyle}>
@@ -1200,6 +1308,17 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
             {renderParadas(paradasRebob, setParadasRebob, "Paradas Rebobinadeira")}
           </>}
         </div>
+
+        {/* Botões para adicionar só o que precisar ao relatório */}
+        {(!mostraCL || !mostraRC) && (
+          <div style={{ marginBottom: 12 }}>
+            <p style={{ fontSize: s(11), color: theme.textSub, margin: "0 0 5px" }}>Adicionar ao relatório</p>
+            <div style={{ display: "flex", gap: 6 }}>
+              {!mostraCL && <button onClick={() => { setSecCL(true); setClCollapsed(false); }} style={{ flex: 1, minHeight: 42, fontSize: s(12), fontWeight: 600, color: theme.textSub, background: "transparent", border: `1px dashed ${theme.sectionBtnBorder}`, borderRadius: 10, cursor: "pointer" }}>+ Core Link</button>}
+              {!mostraRC && <button onClick={() => { setSecRC(true); setRcCollapsed(false); }} style={{ flex: 1, minHeight: 42, fontSize: s(12), fontWeight: 600, color: theme.textSub, background: "transparent", border: `1px dashed ${theme.sectionBtnBorder}`, borderRadius: 10, cursor: "pointer" }}>+ Roll Cutter</button>}
+            </div>
+          </div>
+        )}
 
         {/* Prévia */}
         {showPrevia && (
@@ -1292,6 +1411,10 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
               </div>
               <div style={{ fontSize: s(13), color: theme.text }}>
                 Turno {turno} - Letra {letra} - {horario}
+              </div>
+              <div style={{ fontSize: s(13), color: theme.text }}>{resumoEnvio}</div>
+              <div style={{ fontSize: s(12), color: theme.textSub, wordBreak: "break-all" }}>
+                {emailDest.trim() && emailValido(emailDest) ? `📧 Vai abrir o e-mail para ${emailDest.trim()}` : "Sem e-mail salvo: vai abrir o compartilhar"}
               </div>
             </div>
 
