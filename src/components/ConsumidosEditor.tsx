@@ -29,8 +29,8 @@ interface Props {
   theme: ConsumidosTheme;
   s: (n: number) => number;
   fz: number;
-  /** Chave do localStorage onde fica a contagem de uso de cada item (um por relatório). */
-  usoKey: string;
+  /** Não é mais usado (os "Mais usados" foram removidos); continua aceito para não quebrar quem ainda passa. */
+  usoKey?: string;
 }
 
 const NOVO_ITEM = "__novo_item__";
@@ -41,14 +41,6 @@ const clampQtd = (n: number) => Math.max(1, Math.min(999, n));
 const parseMin = (v: string): number | null => {
   const n = parseInt(v, 10);
   return isNaN(n) ? null : Math.max(0, n);
-};
-
-const lerUso = (key: string): Record<string, number> => {
-  try {
-    const raw = localStorage.getItem(key);
-    const obj = raw ? JSON.parse(raw) : {};
-    return obj && typeof obj === "object" ? obj : {};
-  } catch { return {}; }
 };
 
 // Botões − e + com o número no meio (dá para tocar no número e digitar também)
@@ -75,33 +67,12 @@ function Stepper({ value, onChange, min, theme, fz, label }: {
   );
 }
 
-export function ConsumidosEditor({ itens, setItens, theme, s, fz, usoKey }: Props) {
-  // Contagem de quantas vezes cada item foi lançado (guardada no aparelho)
-  const [uso, setUso] = useState<Record<string, number>>(() => lerUso(usoKey));
-  const registrarUso = (label: string) => {
-    setUso(prev => {
-      const novo = { ...prev, [label]: (prev[label] ?? 0) + 1 };
-      try { localStorage.setItem(usoKey, JSON.stringify(novo)); } catch { /* sem espaço/privado: ignora */ }
-      return novo;
-    });
-  };
-  const maisUsados = Object.entries(uso)
-    .filter(([label, n]) => n > 0 && itens.some(i => i.label === label))
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 4)
-    .map(([label]) => label);
-
+export function ConsumidosEditor({ itens, setItens, theme, s, fz }: Props) {
   // Formulário "Adicionar troca" — quantidade começa em 1 e minutos em 0 (linha parada = 0 min)
   const [sel, setSel] = useState<string>("");
   const [qtd, setQtd] = useState<string>("1");
   const [min, setMin] = useState<string>("0");
   const [novoNome, setNovoNome] = useState<string | null>(null);
-  const [aviso, setAviso] = useState<string>("");
-
-  // Box dos "mais usados"
-  const [chipAtivo, setChipAtivo] = useState<string | null>(null);
-  const [chipQtd, setChipQtd] = useState<string>("1");
-  const [chipMin, setChipMin] = useState<string>("0");
 
   // Edição de uma troca já lançada
   const [edit, setEdit] = useState<{ idx: number; ti: number } | null>(null);
@@ -138,16 +109,15 @@ export function ConsumidosEditor({ itens, setItens, theme, s, fz, usoKey }: Prop
     const idx = itens.findIndex(i => i.label === label);
     if (idx < 0) return false;
     setItens(prev => ordenarConsumidos(prev.map(item => item.label === label ? { ...item, trocas: [...item.trocas, nova], collapsed: false } : item)));
-    registrarUso(label);
     return true;
   };
 
   // ── Adicionar troca ──
   const adicionar = () => {
-    if (!sel || sel === NOVO_ITEM) { setAviso("Escolha o item primeiro."); return; }
+    if (!sel || sel === NOVO_ITEM) return;
     const ok = addTrocaEm(sel, { min: parseMin(min), qtd: clampQtd(parseInt(qtd, 10) || 1) });
-    if (!ok) { setAviso("Escolha o item primeiro."); return; }
-    setSel(""); setQtd("1"); setMin("0"); setAviso("");
+    if (!ok) return;
+    setSel(""); setQtd("1"); setMin("0");
   };
 
   const confirmarNovoItem = () => {
@@ -161,18 +131,6 @@ export function ConsumidosEditor({ itens, setItens, theme, s, fz, usoKey }: Prop
       setSel(nome);
     }
     setNovoNome(null);
-    setAviso("");
-  };
-
-  // ── Mais usados: toque abre o box de quantidade e minutos ──
-  const abrirChip = (label: string) => {
-    if (chipAtivo === label) { setChipAtivo(null); return; }
-    setChipAtivo(label); setChipQtd("1"); setChipMin("0");
-  };
-  const lancarChip = () => {
-    if (!chipAtivo) return;
-    addTrocaEm(chipAtivo, { min: parseMin(chipMin), qtd: clampQtd(parseInt(chipQtd, 10) || 1) });
-    setChipAtivo(null);
   };
 
   // ── Trocas lançadas ──
@@ -221,49 +179,14 @@ export function ConsumidosEditor({ itens, setItens, theme, s, fz, usoKey }: Prop
 
   return (
     <div>
-      {/* ── Mais usados (toque abre o box) ── */}
-      {maisUsados.length > 0 && (
-        <div style={{ marginBottom: 8 }}>
-          <p style={{ fontSize: s(11), color: theme.textSub, margin: "0 0 5px" }}>Mais usados</p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {maisUsados.map(label => (
-              <button
-                key={label} type="button" onClick={() => abrirChip(label)}
-                style={{
-                  minHeight: 38, padding: "6px 10px", fontSize: fonteNome(label), fontWeight: 600, color: theme.accent,
-                  background: chipAtivo === label ? "rgba(45,158,127,0.22)" : "rgba(45,158,127,0.1)",
-                  border: chipAtivo === label ? "1.5px solid #2D9E7F" : "1px solid rgba(45,158,127,0.35)",
-                  borderRadius: 22, cursor: "pointer",
-                }}
-              >
-                + {label}
-              </button>
-            ))}
-          </div>
-          {chipAtivo && (
-            <div style={{ marginTop: 8, padding: 10, borderRadius: 12, background: theme.inputBg, border: "1.5px solid #2D9E7F" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{ fontSize: fonteNome(chipAtivo), fontWeight: 700, color: theme.text, minWidth: 0, wordBreak: "break-word" }}>{chipAtivo}</span>
-                <button type="button" onClick={() => setChipAtivo(null)} style={{ ...iconBtn, fontSize: 14, color: theme.textSub }} aria-label="Fechar">✕</button>
-              </div>
-              <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
-                <div><div style={miniLabel}>Qtd</div><Stepper value={chipQtd} onChange={setChipQtd} min={1} theme={theme} fz={fz} label="quantidade" /></div>
-                <div><div style={miniLabel}>Min</div><Stepper value={chipMin} onChange={setChipMin} min={0} theme={theme} fz={fz} label="minutos" /></div>
-                <button type="button" onClick={lancarChip} style={{ flex: 1, minWidth: 0, height: 42, fontSize: s(13), fontWeight: 700, color: "#fff", background: "#2D9E7F", border: "none", borderRadius: 10, cursor: "pointer" }}>Lançar</button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Adicionar troca ── */}
+      {/* ── Escolher o item: ao escolher, abre o box de quantidade e minutos ── */}
       <div style={{ padding: 10, borderRadius: 12, background: theme.inputBg, border: `1px solid ${theme.cardBorder}` }}>
         <select
           value={novoNome !== null ? NOVO_ITEM : sel}
           aria-label="Item consumido"
           onChange={e => {
             const v = e.target.value;
-            setAviso("");
+            setQtd("1"); setMin("0");
             if (v === NOVO_ITEM) { setNovoNome(""); setSel(NOVO_ITEM); }
             else { setNovoNome(null); setSel(v); }
           }}
@@ -290,17 +213,24 @@ export function ConsumidosEditor({ itens, setItens, theme, s, fz, usoKey }: Prop
           </div>
         )}
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "flex-end", marginTop: 8 }}>
-          <div><div style={miniLabel}>Qtd</div><Stepper value={qtd} onChange={setQtd} min={1} theme={theme} fz={fz} label="quantidade" /></div>
-          <div><div style={miniLabel}>Min</div><Stepper value={min} onChange={setMin} min={0} theme={theme} fz={fz} label="minutos" /></div>
-          <button
-            type="button" onClick={adicionar}
-            style={{ flex: 1, minWidth: 76, height: 42, fontSize: s(13), fontWeight: 700, color: "#fff", background: "#2D9E7F", border: "none", borderRadius: 10, cursor: "pointer" }}
-          >
-            Lançar
-          </button>
-        </div>
-        {aviso && <p style={{ fontSize: s(12), color: "#E53935", margin: "8px 0 0" }}>{aviso}</p>}
+        {novoNome === null && sel && sel !== NOVO_ITEM && itens.some(i => i.label === sel) && (
+          <div style={{ marginTop: 8, padding: 10, borderRadius: 12, background: theme.card, border: "1.5px solid #2D9E7F" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 8 }}>
+              <span style={{ fontSize: fonteNome(sel), fontWeight: 700, color: theme.text, minWidth: 0, wordBreak: "break-word" }}>{sel}</span>
+              <button type="button" onClick={() => { setSel(""); setQtd("1"); setMin("0"); }} style={{ ...iconBtn, fontSize: 14, color: theme.textSub }} aria-label="Cancelar">✕</button>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "flex-end" }}>
+              <div><div style={miniLabel}>Qtd</div><Stepper value={qtd} onChange={setQtd} min={1} theme={theme} fz={fz} label="quantidade" /></div>
+              <div><div style={miniLabel}>Min</div><Stepper value={min} onChange={setMin} min={0} theme={theme} fz={fz} label="minutos" /></div>
+              <button
+                type="button" onClick={adicionar}
+                style={{ flex: 1, minWidth: 76, height: 42, fontSize: s(13), fontWeight: 700, color: "#fff", background: "#2D9E7F", border: "none", borderRadius: 10, cursor: "pointer" }}
+              >
+                Lançar
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Trocas lançadas (uma linha cada) ── */}
