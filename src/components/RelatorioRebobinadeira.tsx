@@ -3,7 +3,8 @@ import { X, Camera, Pencil } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { shareText } from "@/lib/nativeShare";
 import { ConsumidosEditor } from "./ConsumidosEditor";
-import { emailDe, salvarEmail, emailValido, abrirEmail, emailDiretoDisponivel } from "@/lib/destinatarioEmail";
+import { emailDe, salvarEmail, emailValido, abrirEmail, abrirGmail, emailDiretoDisponivel, lerCanalPC, salvarCanalPC, semAcentos } from "@/lib/destinatarioEmail";
+import type { CanalPC } from "@/lib/destinatarioEmail";
 import type { ItemConsumo } from "./ConsumidosEditor";
 
 // ── Chaves localStorage ──
@@ -358,6 +359,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
   // Core Link e Roll Cutter só aparecem quando têm dados ou quando você toca em "+ ..."
   const [secCL, setSecCL] = useState(false);
   const [secRC, setSecRC] = useState(false);
+  const [secObs, setSecObs] = useState(false);
   // Relatório novo com destinatário e responsáveis já preenchidos: o card Turno começa recolhido (resumo no topo)
   useEffect(() => {
     if (!saved && dest.trim() && resps.some(x => x.trim())) setHeaderCollapsed(true);
@@ -367,6 +369,9 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
   const [emailDest, setEmailDest] = useState<string>(() => emailDe(dest));
   useEffect(() => { setEmailDest(emailDe(dest)); }, [dest]);
   const atualizarEmailDest = (v: string) => { setEmailDest(v); if (dest.trim()) salvarEmail(dest, v); };
+  // Jeito de enviar pelo computador (lembra o último escolhido)
+  const [canalPC, setCanalPC] = useState<CanalPC>(() => lerCanalPC());
+  const escolherCanal = (c: CanalPC) => { setCanalPC(c); salvarCanalPC(c); };
   // Relógio para o aviso de parada esquecida aberta (confere ao abrir, a cada minuto e ao voltar para o app)
   const [agora, setAgora] = useState(() => Date.now());
   const [paradasDescartadas, setParadasDescartadas] = useState<string[]>([]);
@@ -622,7 +627,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
   // ── Novo relatório ──
   const handleNovo = () => {
     localStorage.removeItem(RASCUNHO_KEY);
-    setRebobNum("1"); setSecCL(false); setSecRC(false); setDest((() => { try { return localStorage.getItem("rebobinadeira_last_dest") ?? ""; } catch { return ""; } })()); const turnoNovo = turnoAtual(); setTurno(turnoNovo); setLetra("D"); setHorario(HORARIOS[turnoNovo]);
+    setRebobNum("1"); setSecCL(false); setSecRC(false); setSecObs(false); setDest((() => { try { return localStorage.getItem("rebobinadeira_last_dest") ?? ""; } catch { return ""; } })()); const turnoNovo = turnoAtual(); setTurno(turnoNovo); setLetra("D"); setHorario(HORARIOS[turnoNovo]);
     setResps(["Everton"]); setIdMaquina(""); setParametros(loadParamsBase());
     setItens(ITENS_BASE.map(l => ({ label: l, trocas: [], collapsed: false })));
     setJumbos([]); setRascunhoJumbo(null); setClQtd(0); setObsCL(""); setParadasCL([]);
@@ -727,10 +732,22 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
       return;
     }
     const assunto = `Relatório Rebobinadeira ${String(rebobNum).padStart(2, "0")} - Turno ${String(turno).padStart(2, "0")}`;
-    const para = emailDest.trim();
-    if (para && emailValido(para) && emailDiretoDisponivel()) {
-      toast({ title: "📧 Abrindo o e-mail…", description: `Para: ${para}` });
-      abrirEmail(para, assunto, text);
+    const para = emailDest.trim() && emailValido(emailDest) ? emailDest.trim() : "";
+    if (emailDiretoDisponivel()) {
+      // Celular: abre o e-mail já com destinatário, assunto e texto (com acentos)
+      if (para) {
+        toast({ title: "📧 Abrindo o e-mail…", description: `Para: ${para}` });
+        abrirEmail(para, assunto, text);
+        return;
+      }
+    } else if (canalPC === "outlook") {
+      // Computador + Outlook: texto sem acentos, para o Outlook não trocar as letras
+      toast({ title: "📧 Abrindo o Outlook…", description: para ? `Para: ${para} · texto sem acentos` : "Texto sem acentos" });
+      abrirEmail(para, semAcentos(assunto), semAcentos(text));
+      return;
+    } else if (canalPC === "gmail") {
+      toast({ title: "📧 Abrindo o Gmail…", description: para ? `Para: ${para}` : undefined });
+      abrirGmail(para, assunto, text);
       return;
     }
     const result = await shareText(assunto, text);
@@ -772,6 +789,8 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
   const temDadosRC = rcId > 0 || rcSid > 0 || !!obsRC.trim() || paradasRC.length > 0;
   const mostraCL = secCL || temDadosCL;
   const mostraRC = secRC || temDadosRC;
+  const temDadosObs = !!obsRebob.trim() || paradasRebob.length > 0;
+  const mostraObs = secObs || temDadosObs;
 
   // Paradas iniciadas com "Iniciar agora" e esquecidas abertas há 60 min ou mais
   type SecKey = "cl" | "rc" | "rebob";
@@ -788,7 +807,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
   const verParada = (sec: SecKey) => {
     if (sec === "cl") { setSecCL(true); setClCollapsed(false); }
     if (sec === "rc") { setSecRC(true); setRcCollapsed(false); }
-    if (sec === "rebob") setObsCollapsed(false);
+    if (sec === "rebob") { setSecObs(true); setObsCollapsed(false); }
   };
 
   // ── Tema ──
@@ -1018,7 +1037,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
           <span style={{ fontWeight: 800, fontSize: s(15), color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Rebobinadeira</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
-          <button onClick={handleNovo} style={{ fontSize: s(11), padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: "#E53935", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>🗑 Novo</button>
+          <button onClick={handleNovo} style={{ fontSize: s(11), padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: "#E53935", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }} title="Novo relatório" aria-label="Novo relatório">🗑</button>
           <button onClick={() => setDarkMode(!darkMode)} style={{ fontSize: s(14), width: 30, height: 30, borderRadius: "50%", border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, cursor: "pointer", flexShrink: 0 }}>{darkMode ? "☀️" : "🌙"}</button>
           <button onClick={() => setFontSize(f => f === "sm" ? "md" : f === "md" ? "lg" : "sm")} style={{ fontSize: s(11), padding: "5px 8px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>{fontSize === "sm" ? "A" : fontSize === "md" ? "A+" : "A++"}</button>
           <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: "50%", background: theme.sectionBtnBg, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: theme.text, flexShrink: 0 }}><X size={16} /></button>
@@ -1029,7 +1048,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
       <div style={{ background: theme.headerBg, borderBottom: `1px solid ${theme.cardBorder}`, padding: "6px 16px 8px", display: "flex", alignItems: "center", gap: 6 }}>
         <button
           onClick={() => setHeaderCollapsed(c => !c)}
-          style={{ flex: 1, minWidth: 0, minHeight: 38, display: "flex", alignItems: "center", gap: 6, textAlign: "left", padding: "4px 10px", borderRadius: 10, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, fontSize: s(12), fontWeight: 600, cursor: "pointer" }}
+          style={{ flex: 1, minWidth: 0, minHeight: 38, display: "flex", alignItems: "center", gap: 6, textAlign: "left", padding: "4px 10px", borderRadius: 10, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, color: theme.text, fontSize: s(14), fontWeight: 600, cursor: "pointer" }}
           aria-label={headerCollapsed ? "Editar dados do turno" : "Recolher dados do turno"}
         >
           <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -1037,7 +1056,6 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
           </span>
           <span aria-hidden style={{ fontSize: s(12), flexShrink: 0 }}>{headerCollapsed ? "✏️" : "▲"}</span>
         </button>
-        <span style={{ fontSize: s(11), fontWeight: 700, color: theme.textSub, whiteSpace: "nowrap", flexShrink: 0 }} title="Total de tempo de parada">⏱ {formatMin(calcTotalConsumidos())}</span>
         <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
           <span style={{ fontSize: s(11), fontWeight: 600, color: theme.textSub }}>Reb.</span>
           {(["1", "2"] as const).map(n => (
@@ -1298,24 +1316,28 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
         </div>}
 
         {/* Obs e Paradas Rebobinadeira */}
-        <div style={cardStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: obsCollapsed ? 0 : 10 }}>
+        {mostraObs && <div style={cardStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, marginBottom: obsCollapsed ? 0 : 10 }}>
             <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>📝 Obs. e Paradas</span>
-            <button onClick={() => setObsCollapsed(!obsCollapsed)} style={sectionBtn}>{obsCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
+            <div style={{ display: "flex", gap: 6 }}>
+              {!temDadosObs && <button onClick={() => setSecObs(false)} style={{ ...sectionBtn, color: "#E53935" }} aria-label="Tirar observações e paradas do relatório">✕ Tirar</button>}
+              <button onClick={() => setObsCollapsed(!obsCollapsed)} style={sectionBtn}>{obsCollapsed ? "▼ Expandir" : "▲ Minimizar"}</button>
+            </div>
           </div>
           {!obsCollapsed && <>
             <textarea value={obsRebob} onChange={e => setObsRebob(e.target.value)} rows={2} placeholder="Observações gerais..." style={{ ...inputStyle, resize: "vertical" }} />
             {renderParadas(paradasRebob, setParadasRebob, "Paradas Rebobinadeira")}
           </>}
-        </div>
+        </div>}
 
         {/* Botões para adicionar só o que precisar ao relatório */}
-        {(!mostraCL || !mostraRC) && (
+        {(!mostraObs || !mostraCL || !mostraRC) && (
           <div style={{ marginBottom: 12 }}>
             <p style={{ fontSize: s(11), color: theme.textSub, margin: "0 0 5px" }}>Adicionar ao relatório</p>
-            <div style={{ display: "flex", gap: 6 }}>
-              {!mostraCL && <button onClick={() => { setSecCL(true); setClCollapsed(false); }} style={{ flex: 1, minHeight: 42, fontSize: s(12), fontWeight: 600, color: theme.textSub, background: "transparent", border: `1px dashed ${theme.sectionBtnBorder}`, borderRadius: 10, cursor: "pointer" }}>+ Core Link</button>}
-              {!mostraRC && <button onClick={() => { setSecRC(true); setRcCollapsed(false); }} style={{ flex: 1, minHeight: 42, fontSize: s(12), fontWeight: 600, color: theme.textSub, background: "transparent", border: `1px dashed ${theme.sectionBtnBorder}`, borderRadius: 10, cursor: "pointer" }}>+ Roll Cutter</button>}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {!mostraObs && <button onClick={() => { setSecObs(true); setObsCollapsed(false); }} style={{ flex: "1 1 30%", minHeight: 42, fontSize: s(12), fontWeight: 600, color: theme.textSub, background: "transparent", border: `1px dashed ${theme.sectionBtnBorder}`, borderRadius: 10, cursor: "pointer" }}>+ Obs. e Paradas</button>}
+              {!mostraCL && <button onClick={() => { setSecCL(true); setClCollapsed(false); }} style={{ flex: "1 1 30%", minHeight: 42, fontSize: s(12), fontWeight: 600, color: theme.textSub, background: "transparent", border: `1px dashed ${theme.sectionBtnBorder}`, borderRadius: 10, cursor: "pointer" }}>+ Core Link</button>}
+              {!mostraRC && <button onClick={() => { setSecRC(true); setRcCollapsed(false); }} style={{ flex: "1 1 30%", minHeight: 42, fontSize: s(12), fontWeight: 600, color: theme.textSub, background: "transparent", border: `1px dashed ${theme.sectionBtnBorder}`, borderRadius: 10, cursor: "pointer" }}>+ Roll Cutter</button>}
             </div>
           </div>
         )}
@@ -1413,9 +1435,32 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
                 Turno {turno} - Letra {letra} - {horario}
               </div>
               <div style={{ fontSize: s(13), color: theme.text }}>{resumoEnvio}</div>
-              <div style={{ fontSize: s(12), color: theme.textSub, wordBreak: "break-all" }}>
-                {emailDest.trim() && emailValido(emailDest) ? (emailDiretoDisponivel() ? `📧 Vai abrir o e-mail para ${emailDest.trim()}` : "Vai abrir o compartilhar (no computador o e-mail salvo não é usado)") : "Sem e-mail salvo: vai abrir o compartilhar"}
-              </div>
+              {emailDiretoDisponivel() ? (
+                <div style={{ fontSize: s(12), color: theme.textSub, wordBreak: "break-all" }}>
+                  {emailDest.trim() && emailValido(emailDest) ? `📧 Vai abrir o e-mail para ${emailDest.trim()}` : "Sem e-mail salvo: vai abrir o compartilhar"}
+                </div>
+              ) : (
+                <div style={{ marginTop: 2 }}>
+                  <div style={{ fontSize: s(12), color: theme.textSub, marginBottom: 5 }}>Enviar com:</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {([["outlook", "Outlook"], ["gmail", "Gmail"], ["compartilhar", "Compartilhar"]] as const).map(([c, nome]) => (
+                      <button
+                        key={c} onClick={() => escolherCanal(c)} aria-pressed={canalPC === c}
+                        style={{ flex: 1, minHeight: 38, padding: "0 4px", fontSize: s(12), fontWeight: 700, borderRadius: 10, cursor: "pointer",
+                          border: canalPC === c ? "none" : `1px solid ${theme.sectionBtnBorder}`,
+                          background: canalPC === c ? "#2D9E7F" : theme.sectionBtnBg,
+                          color: canalPC === c ? "#FFF" : theme.text }}
+                      >
+                        {nome}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: s(11), color: theme.textSub, marginTop: 6, wordBreak: "break-all" }}>
+                    {canalPC === "outlook" ? "Abre o Outlook com o texto sem acentos (o Outlook troca as letras acentuadas)." : canalPC === "gmail" ? "Abre o Gmail no navegador, com os acentos." : "Abre o compartilhar do sistema, sem destinatário."}
+                    {canalPC !== "compartilhar" && emailDest.trim() && emailValido(emailDest) ? ` Para: ${emailDest.trim()}.` : ""}
+                  </div>
+                </div>
+              )}
             </div>
 
             {avisos.length > 0 && (

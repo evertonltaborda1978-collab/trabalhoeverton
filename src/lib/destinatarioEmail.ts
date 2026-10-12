@@ -60,3 +60,39 @@ export function abrirEmail(para: string, assunto: string, corpo: string): void {
   const url = `mailto:${destinos}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo.replace(/\n/g, "\r\n"))}`;
   window.location.href = url;
 }
+
+// ── Envio pelo computador: Outlook (sem acentos), Gmail (com acentos) ou Compartilhar ──
+export type CanalPC = "outlook" | "gmail" | "compartilhar";
+const CANAL_KEY = "canal_envio_pc";
+
+/** Último jeito de enviar escolhido no computador (começa no Outlook). */
+export function lerCanalPC(): CanalPC {
+  try {
+    const v = localStorage.getItem(CANAL_KEY);
+    return v === "gmail" || v === "compartilhar" ? v : "outlook";
+  } catch {
+    return "outlook";
+  }
+}
+
+export function salvarCanalPC(canal: CanalPC): void {
+  try { localStorage.setItem(CANAL_KEY, canal); } catch { /* ignora */ }
+}
+
+/** Texto só com letras sem acento (o Outlook do PC troca as acentuadas): • vira *, ✔ vira -, emojis saem. */
+export function semAcentos(texto: string): string {
+  return texto
+    .replace(/•/g, "*")
+    .replace(/✔/g, "-")
+    .replace(/[–—]/g, "-")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "");
+}
+
+/** Abre o Gmail no navegador (nova aba) com destinatário, assunto e texto preenchidos; os acentos funcionam. */
+export function abrirGmail(para: string, assunto: string, corpo: string): void {
+  const destinos = para.split(/[;,]/).map(p => p.trim()).filter(Boolean).join(",");
+  const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(destinos)}&su=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;
+  window.open(url, "_blank", "noopener");
+}
