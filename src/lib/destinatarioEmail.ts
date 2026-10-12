@@ -39,6 +39,21 @@ export function emailValido(email: string): boolean {
   return partes.length > 0 && partes.every(p => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p));
 }
 
+/**
+ * O envio direto por e-mail (mailto) só é usado no celular. No computador, alguns programas
+ * de e-mail (como o Outlook) leem o texto do mailto sem respeitar os acentos e o relatório
+ * chega com letras trocadas (RelatÃ³rio); por isso lá o app usa o compartilhar normal.
+ */
+export function emailDiretoDisponivel(): boolean {
+  try {
+    const cap = (window as any).Capacitor;
+    if (cap && typeof cap.isNativePlatform === "function" && cap.isNativePlatform()) return true;
+    return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+  } catch {
+    return false;
+  }
+}
+
 /** Abre o app de e-mail já com destinatário, assunto e texto preenchidos. */
 export function abrirEmail(para: string, assunto: string, corpo: string): void {
   const destinos = para.split(/[;,]/).map(p => p.trim()).filter(Boolean).join(",");

@@ -3,7 +3,7 @@ import { X, FileText, Camera, Pencil } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { shareText } from "@/lib/nativeShare";
 import { ConsumidosEditor } from "./ConsumidosEditor";
-import { emailDe, salvarEmail, emailValido, abrirEmail } from "@/lib/destinatarioEmail";
+import { emailDe, salvarEmail, emailValido, abrirEmail, emailDiretoDisponivel } from "@/lib/destinatarioEmail";
 import type { ItemConsumo } from "./ConsumidosEditor";
 
 // Caixa de texto que cresce sozinha conforme você digita (altura mínima confortável, ~3 linhas)
@@ -773,7 +773,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
       ? `Relatório Tombador - Turno ${turnoTxt}`
       : `Relatório Embaladeira ${String(embaladeiraNum).padStart(2, "0")} - Turno ${turnoTxt}`;
     const para = emailDest.trim();
-    if (para && emailValido(para)) {
+    if (para && emailValido(para) && emailDiretoDisponivel()) {
       toast({ title: "📧 Abrindo o e-mail…", description: `Para: ${para}` });
       abrirEmail(para, assunto, text);
       return;
@@ -1586,7 +1586,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
               </div>
               <div style={{ fontSize: s(13), color: theme.text }}>{resumoEnvio}</div>
               <div style={{ fontSize: s(12), color: theme.textSub, wordBreak: "break-all" }}>
-                {emailDest.trim() && emailValido(emailDest) ? `📧 Vai abrir o e-mail para ${emailDest.trim()}` : "Sem e-mail salvo: vai abrir o compartilhar"}
+                {emailDest.trim() && emailValido(emailDest) ? (emailDiretoDisponivel() ? `📧 Vai abrir o e-mail para ${emailDest.trim()}` : "Vai abrir o compartilhar (no computador o e-mail salvo não é usado)") : "Sem e-mail salvo: vai abrir o compartilhar"}
               </div>
             </div>
 
