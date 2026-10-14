@@ -96,10 +96,10 @@ function loadLocal(userId: string): Note[] {
 function loadAnyLocal(): Note[] {
   try {
     const lastUser = localStorage.getItem("ultimo_usuario_id");
-    if (lastUser) {
-      const byUser = loadLocal(lastUser);
-      if (byUser.length > 0) return byUser;
-    }
+    // Se já sabemos qual foi a última conta deste aparelho, usa SÓ o cache dela
+    // (mesmo que seja pequeno). Antes, quando ele estava vazio, o app pegava o
+    // maior cache de QUALQUER conta e mostrava as notas de outra conta ao abrir.
+    if (lastUser) return loadLocal(lastUser);
     let best: Note[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
@@ -177,6 +177,22 @@ function mapRow(n: any): Note {
   };
 }
 
+// Colunas baixadas na atualização da lista. As FOTOS (images, em base64 dentro da
+// tabela) ficam de fora: eram elas que faziam cada atualização baixar megabytes.
+// As fotos só são baixadas para notas novas ou que mudaram em outro aparelho.
+const COLUNAS_LISTA =
+  "id, title, content, color, font_family, font_size, status, created_at, updated_at, " +
+  "reminder_date, reminder_time, reminder_sound, reminder_native_sound_uri, reminder_native_sound_name, " +
+  "is_locked, lock_salt, deleted_at, is_pinned, pin_order";
+
+// Nota na lixeira há mais de 30 dias: já deveria ter sido apagada de vez.
+const LIXEIRA_MS = 30 * 24 * 60 * 60 * 1000;
+const lixeiraVencida = (n: { deletedAt?: Date | string | null }) => {
+  if (!n.deletedAt) return false;
+  const t = new Date(n.deletedAt).getTime();
+  return !isNaN(t) && Date.now() - t > LIXEIRA_MS;
+};
+
 export function useNotes() {
   const { user } = useAuth();
   const [notes, setNotes] = useState<Note[]>([]);
@@ -200,6 +216,8 @@ export function useNotes() {
   // pode se perder por diferença de relógio entre o celular e o servidor.
   const pinIntentRef = useRef<Map<string, { isPinned: boolean; pinOrder: number | null }>>(new Map());
   const notesRef = useRef<Note[]>([]);
+  // Quando foi o último download da lista de notas (para não baixar tudo toda hora).
+  const lastFetchRef = useRef<number>(0);
 
   // Atualizador único: garante que a "cópia rápida" (notesRef, usada por
   // fetchNotes/syncToSupabase pra decisões rápidas) e a tela oficial mudam
@@ -447,10 +465,12 @@ export function useNotes() {
     // Mescla qualquer nota criada antes da sessão ficar disponível ("anon")
     // com as notas já salvas para este usuário.
     const anonNotes = loadLocal("anon");
-    const userLocalNotes = loadLocal(user.id).length > 0 ? loadLocal(user.id) : loadAnyLocal();
+    // Só o cache DESTA conta (nunca o de outra conta, que mostrava notas erradas ao abrir).
+    const userLocalNotes = loadLocal(user.id);
     const savedLocalNotes = anonNotes.length > 0 ? mergeNotes(anonNotes, userLocalNotes) : userLocalNotes;
 
-    const localNotes = notesRef.current.length > 0 ? mergeNotes(savedLocalNotes, notesRef.current) : savedLocalNotes;
+    const localNotes = (notesRef.current.length > 0 ? mergeNotes(savedLocalNotes, notesRef.current) : savedLocalNotes).filter((n) => !lixeiraVencida(n));
+    lastFetchRef.current = Date.now();
     if (anonNotes.length > 0) {
       try { localStorage.removeItem(getLocalKey("anon")); } catch {}
     }
@@ -464,17 +484,60 @@ export function useNotes() {
     }
 
     try {
-      const { data, error } = await supabase
-        .from("notes")
-        .select("*")
+      // Lista SEM as fotos (leve). As fotos entram só para notas novas/alteradas.
+      const { data, error } = await (supabase.from("notes") as any)
+        .select(COLUNAS_LISTA)
         .order("updated_at", { ascending: false });
 
       if (error) throw error;
 
+      // Notas que estão na lixeira há mais de 30 dias: pede para o servidor apagar
+      // de vez e não deixa elas voltarem (era isso que fazia a lixeira piscar sem
+      // você ter apagado nada: elas voltavam e eram apagadas de novo, em ciclo).
+      const vencidasIds: string[] = ((data as any[]) || [])
+        .filter((r) => lixeiraVencida({ deletedAt: r.deleted_at }))
+        .map((r) => r.id);
+      if (vencidasIds.length > 0) {
+        vencidasIds.forEach((id) => deletedIdsRef.current.add(id));
+        savePendingDeletes(user.id, [...loadPendingDeletes(user.id), ...vencidasIds]);
+      }
+
       // Antes de mesclar: reenvia as exclusões pendentes e nunca deixa
       // voltar uma nota que a pessoa já apagou de vez.
       const apagadas = new Set(await flushPendingDeletes());
-      const remoteNotes = (data ? data.map(mapRow) : []).filter((n) => !apagadas.has(n.id));
+      const remoteBase = ((data as any[]) ? (data as any[]).map(mapRow) : []).filter((n) => !apagadas.has(n.id) && !lixeiraVencida(n));
+
+      // Fotos: só baixa para notas que ainda não existem aqui ou que foram
+      // alteradas em outro aparelho (versão do servidor mais nova que a daqui).
+      // Nos outros casos a versão daqui é a que vale (ver mergeNotes), então
+      // baixar as fotos de novo seria desperdício.
+      const aqui = new Map<string, Note>();
+      localNotes.forEach((n) => aqui.set(n.id, n));
+      notesRef.current.forEach((n) => aqui.set(n.id, n));
+      const precisamFotos = remoteBase
+        .filter((r) => {
+          const l = aqui.get(r.id);
+          return !l || (l.sincronizado && r.updatedAt.getTime() > l.updatedAt.getTime());
+        })
+        .map((r) => r.id);
+      const fotosPorId = new Map<string, string[]>();
+      const semFotos = new Set<string>();
+      for (let i = 0; i < precisamFotos.length; i += 20) {
+        const lote = precisamFotos.slice(i, i + 20);
+        try {
+          const { data: imgs, error: imgErr } = await (supabase.from("notes") as any).select("id, images").in("id", lote);
+          if (imgErr || !imgs) throw imgErr || new Error("sem dados");
+          (imgs as any[]).forEach((r) => fotosPorId.set(r.id, r.images || []));
+        } catch {
+          // Não conseguiu as fotos desse lote: deixa essas notas para a próxima
+          // atualização, em vez de mostrar sem foto e correr o risco de apagar as
+          // fotos do servidor num salvamento futuro.
+          lote.forEach((id) => semFotos.add(id));
+        }
+      }
+      const remoteNotes = remoteBase
+        .filter((n) => !semFotos.has(n.id))
+        .map((n) => (fotosPorId.has(n.id) ? { ...n, images: fotosPorId.get(n.id)! } : n));
       remoteNotes.forEach((n) => serverSeenRef.current.set(n.id, n.updatedAt.getTime()));
 
       // Mescla contra o estado ATUAL de verdade (via a forma funcional),
@@ -513,6 +576,12 @@ export function useNotes() {
     fetchNotes();
   }, [fetchNotes]);
 
+  // Baixa de novo só se já passou tempo suficiente desde o último download.
+  const fetchSePassouTempo = useCallback((minMs: number) => {
+    if (Date.now() - lastFetchRef.current < minMs) return;
+    fetchNotes();
+  }, [fetchNotes]);
+
   // Realtime sync — atualiza automaticamente em todos os dispositivos
   useEffect(() => {
     if (!user) return;
@@ -537,25 +606,25 @@ export function useNotes() {
             return;
           }
           if (pinningSuppressRef.current) return;
-          fetchNotes();
+          fetchSePassouTempo(10000);
         }
       )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, fetchNotes]);
+  }, [user, fetchNotes, fetchSePassouTempo]);
 
   // Atualiza quando o app volta para primeiro plano
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
-        fetchNotes();
+        fetchSePassouTempo(60000); // voltou ao app: atualiza, mas no máximo 1 vez por minuto
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [fetchNotes]);
+  }, [fetchSePassouTempo]);
 
   // Listen for online/offline
   useEffect(() => {
@@ -573,16 +642,31 @@ export function useNotes() {
     };
   }, [fetchNotes]);
 
-  // Auto-refresh every 30 seconds when online
+  // Rede de segurança: com o app aberto e visível, atualiza a lista de 10 em 10
+  // minutos (as mudanças de outros aparelhos já chegam na hora pelo Realtime).
+  // Antes baixava TODAS as notas a cada 30 segundos — era isso que estourava a
+  // cota de dados do Supabase.
   useEffect(() => {
     if (!user) return;
     const id = setInterval(() => {
-      if (navigator.onLine && !syncingRef.current) {
-        fetchNotes();
+      if (navigator.onLine && !syncingRef.current && document.visibilityState === "visible") {
+        fetchSePassouTempo(5 * 60 * 1000);
       }
-    }, 30000);
+    }, 10 * 60 * 1000);
     return () => clearInterval(id);
-  }, [user, fetchNotes]);
+  }, [user, fetchSePassouTempo]);
+
+  // Reenvio leve: a cada 1 minuto, se alguma nota ficou pendente (internet ruim),
+  // tenta enviar de novo — sem baixar nada.
+  useEffect(() => {
+    if (!user) return;
+    const id = setInterval(() => {
+      if (navigator.onLine && !syncingRef.current && notesRef.current.some((n) => !n.sincronizado)) {
+        syncToSupabase(notesRef.current);
+      }
+    }, 60000);
+    return () => clearInterval(id);
+  }, [user, syncToSupabase]);
 
   const addNote = useCallback(
     async (title: string, content: string, images: string[] = [], color?: string, fontFamily?: string, fontSize?: string, status: "rascunho" | "publicada" = "publicada") => {
@@ -891,7 +975,7 @@ export function useNotes() {
       }
       return b.updatedAt.getTime() - a.updatedAt.getTime();
     });
-  const trashedNotes = notes.filter((n) => !!n.deletedAt);
+  const trashedNotes = notes.filter((n) => !!n.deletedAt && !lixeiraVencida(n));
 
   // Build backup payload (shared by manual export and auto-backup)
   const buildBackupData = useCallback(() => {
