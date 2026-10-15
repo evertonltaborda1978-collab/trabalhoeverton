@@ -155,7 +155,7 @@ function mapRow(n: any): Note {
   return {
     id: n.id,
     title: n.title,
-    content: n.content,
+    content: n.content ?? "",
     images: n.images || [],
     createdAt: new Date(n.created_at),
     updatedAt: new Date(n.updated_at),
@@ -177,11 +177,12 @@ function mapRow(n: any): Note {
   };
 }
 
-// Colunas baixadas na atualização da lista. As FOTOS (images, em base64 dentro da
-// tabela) ficam de fora: eram elas que faziam cada atualização baixar megabytes.
-// As fotos só são baixadas para notas novas ou que mudaram em outro aparelho.
+// Colunas baixadas na atualização da lista: só as informações PEQUENAS de cada
+// nota. O corpo (content), onde ficam as fotos em base64, e a lista de fotos
+// (images) ficam de fora: eram eles que faziam cada atualização baixar megabytes.
+// Corpo e fotos só são baixados para notas novas ou alteradas em outro aparelho.
 const COLUNAS_LISTA =
-  "id, title, content, color, font_family, font_size, status, created_at, updated_at, " +
+  "id, title, color, font_family, font_size, status, created_at, updated_at, " +
   "reminder_date, reminder_time, reminder_sound, reminder_native_sound_uri, reminder_native_sound_name, " +
   "is_locked, lock_salt, deleted_at, is_pinned, pin_order";
 
@@ -193,10 +194,23 @@ const lixeiraVencida = (n: { deletedAt?: Date | string | null }) => {
   return !isNaN(t) && Date.now() - t > LIXEIRA_MS;
 };
 
+// Cópia guardada no celular da ÚLTIMA conta que usou o app, lida antes da primeira
+// tela aparecer: a lista já nasce preenchida em vez de abrir com "0 notas".
+function lerCacheInicial(): { userId: string | null; notas: Note[] } {
+  try {
+    const ultimo = localStorage.getItem("ultimo_usuario_id");
+    if (!ultimo) return { userId: null, notas: [] };
+    return { userId: ultimo, notas: loadLocal(ultimo).filter((n) => !lixeiraVencida(n)) };
+  } catch {
+    return { userId: null, notas: [] };
+  }
+}
+
 export function useNotes() {
   const { user } = useAuth();
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [cacheInicial] = useState(lerCacheInicial);
+  const [notes, setNotes] = useState<Note[]>(cacheInicial.notas);
+  const [loading, setLoading] = useState(cacheInicial.notas.length === 0);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("synced");
   // Guarda qual nota falhou ao sincronizar e o motivo exato (mensagem que
   // vem do próprio banco), pra dar um jeito de ver o que está travando em
@@ -215,7 +229,9 @@ export function useNotes() {
   // O que a pessoa pediu pra fixar/desafixar/reordenar. É uma ação dela e não
   // pode se perder por diferença de relógio entre o celular e o servidor.
   const pinIntentRef = useRef<Map<string, { isPinned: boolean; pinOrder: number | null }>>(new Map());
-  const notesRef = useRef<Note[]>([]);
+  const notesRef = useRef<Note[]>(cacheInicial.notas);
+  // De qual conta é a cópia inicial: se a conta que entrar for outra, ela é descartada.
+  const cacheUserIdRef = useRef<string | null>(cacheInicial.notas.length > 0 ? cacheInicial.userId : null);
   // Quando foi o último download da lista de notas (para não baixar tudo toda hora).
   const lastFetchRef = useRef<number>(0);
 
@@ -243,11 +259,13 @@ export function useNotes() {
   useEffect(() => {
     notesRef.current = notes;
     if (loading && notes.length === 0) return;
+    // Ainda é a cópia inicial (nada mudou): não regrava, nem na chave de outra conta.
+    if (notes === cacheInicial.notas) return;
     saveLocal(user?.id || "anon", notes);
     if (user?.id) {
       try { localStorage.setItem("ultimo_usuario_id", user.id); } catch {}
     }
-  }, [notes, user, loading]);
+  }, [notes, user, loading, cacheInicial]);
 
 
   // Sync unsynced notes to Supabase
@@ -455,11 +473,21 @@ export function useNotes() {
       const anonNotes = loadLocal("anon");
       const fallback = anonNotes.length > 0 ? anonNotes : loadAnyLocal();
       if (fallback.length > 0) {
-        setNotesAndRef(fallback);
+        if (notesRef.current.length === 0) setNotesAndRef(fallback);
         setSyncStatus("offline");
       }
       setLoading(false);
       return;
+    }
+
+    // A cópia inicial era de OUTRA conta? Descarta antes de usar qualquer coisa.
+    if (cacheUserIdRef.current !== null) {
+      const donoDoCache = cacheUserIdRef.current;
+      cacheUserIdRef.current = null;
+      if (donoDoCache !== user.id) {
+        notesRef.current = [];
+        setNotesAndRef([]);
+      }
     }
 
     // Mescla qualquer nota criada antes da sessão ficar disponível ("anon")
@@ -507,37 +535,37 @@ export function useNotes() {
       const apagadas = new Set(await flushPendingDeletes());
       const remoteBase = ((data as any[]) ? (data as any[]).map(mapRow) : []).filter((n) => !apagadas.has(n.id) && !lixeiraVencida(n));
 
-      // Fotos: só baixa para notas que ainda não existem aqui ou que foram
+      // Corpo e fotos: só baixa para notas que ainda não existem aqui ou que foram
       // alteradas em outro aparelho (versão do servidor mais nova que a daqui).
       // Nos outros casos a versão daqui é a que vale (ver mergeNotes), então
-      // baixar as fotos de novo seria desperdício.
+      // baixar o texto com as fotos de novo seria desperdício.
       const aqui = new Map<string, Note>();
       localNotes.forEach((n) => aqui.set(n.id, n));
       notesRef.current.forEach((n) => aqui.set(n.id, n));
-      const precisamFotos = remoteBase
+      const precisamCorpo = remoteBase
         .filter((r) => {
           const l = aqui.get(r.id);
           return !l || (l.sincronizado && r.updatedAt.getTime() > l.updatedAt.getTime());
         })
         .map((r) => r.id);
-      const fotosPorId = new Map<string, string[]>();
-      const semFotos = new Set<string>();
-      for (let i = 0; i < precisamFotos.length; i += 20) {
-        const lote = precisamFotos.slice(i, i + 20);
+      const corpoPorId = new Map<string, { content: string; images: string[] }>();
+      const semCorpo = new Set<string>();
+      for (let i = 0; i < precisamCorpo.length; i += 10) {
+        const lote = precisamCorpo.slice(i, i + 10);
         try {
-          const { data: imgs, error: imgErr } = await (supabase.from("notes") as any).select("id, images").in("id", lote);
-          if (imgErr || !imgs) throw imgErr || new Error("sem dados");
-          (imgs as any[]).forEach((r) => fotosPorId.set(r.id, r.images || []));
+          const { data: corpos, error: corpoErr } = await (supabase.from("notes") as any).select("id, content, images").in("id", lote);
+          if (corpoErr || !corpos) throw corpoErr || new Error("sem dados");
+          (corpos as any[]).forEach((r) => corpoPorId.set(r.id, { content: r.content ?? "", images: r.images || [] }));
         } catch {
-          // Não conseguiu as fotos desse lote: deixa essas notas para a próxima
-          // atualização, em vez de mostrar sem foto e correr o risco de apagar as
-          // fotos do servidor num salvamento futuro.
-          lote.forEach((id) => semFotos.add(id));
+          // Não conseguiu o corpo desse lote: deixa essas notas para a próxima
+          // atualização, em vez de mostrar vazias e correr o risco de apagar o
+          // conteúdo (e as fotos) do servidor num salvamento futuro.
+          lote.forEach((id) => semCorpo.add(id));
         }
       }
       const remoteNotes = remoteBase
-        .filter((n) => !semFotos.has(n.id))
-        .map((n) => (fotosPorId.has(n.id) ? { ...n, images: fotosPorId.get(n.id)! } : n));
+        .filter((n) => !semCorpo.has(n.id) && (!precisamCorpo.includes(n.id) || corpoPorId.has(n.id)))
+        .map((n) => (corpoPorId.has(n.id) ? { ...n, content: corpoPorId.get(n.id)!.content, images: corpoPorId.get(n.id)!.images } : n));
       remoteNotes.forEach((n) => serverSeenRef.current.set(n.id, n.updatedAt.getTime()));
 
       // Mescla contra o estado ATUAL de verdade (via a forma funcional),
