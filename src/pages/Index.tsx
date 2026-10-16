@@ -15,7 +15,7 @@ const WeatherView = lazy(() => import("@/components/WeatherView").then((m) => ({
 const DevicesView = lazy(() => import("@/components/DevicesView").then((m) => ({ default: m.DevicesView })));
 const FuelCalculatorView = lazy(() => import("@/components/FuelCalculatorView").then((m) => ({ default: m.FuelCalculatorView })));
 const MedicationView = lazy(() => import("@/components/MedicationView").then((m) => ({ default: m.MedicationView })));
-import { useNotes } from "@/hooks/useNotes";
+import { useNotes, lerMarcasAbertura } from "@/hooks/useNotes";
 import { useAppointments } from "@/hooks/useAppointments";
 import { useDeviceTracking } from "@/hooks/useDeviceTracking";
 import { useDeviceCommands } from "@/hooks/useDeviceCommands";
@@ -446,7 +446,20 @@ const Index = () => {
                 {titles[tab]}
               </h1>
               <div className="flex items-center gap-1 mt-0.5">
-                <span style={{ fontSize: 9, color: "#9E9E9E", fontWeight: 700, letterSpacing: 0.3 }}>
+                <span
+                  role="button"
+                  onClick={() => {
+                    // Cronômetro: mostra quanto tempo cada etapa da abertura levou
+                    const m = lerMarcasAbertura();
+                    const f = (ms?: number) => (ms === undefined ? "—" : ms >= 1000 ? `${(ms / 1000).toFixed(1).replace(".", ",")} s` : `${ms} ms`);
+                    toast({
+                      title: "⏱ Tempos da abertura",
+                      description: `Página pronta: ${f(m.domPronto)} · Código pronto: ${f(m.jsPronto)} · Cópia lida: ${f(m.cacheMs)} · Lista na tela: ${f(m.listaNaTela)} · Usuário pronto: ${f(m.usuarioPronto)} · Servidor: ${f(m.servidorOk)}`,
+                      duration: 20000,
+                    });
+                  }}
+                  style={{ fontSize: 9, color: "#9E9E9E", fontWeight: 700, letterSpacing: 0.3, padding: "4px 6px", cursor: "pointer" }}
+                >
                   {APP_VERSION}
                 </span>
                 <button

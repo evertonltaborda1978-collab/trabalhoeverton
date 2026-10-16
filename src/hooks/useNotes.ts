@@ -195,6 +195,22 @@ const lixeiraVencida = (n: { deletedAt?: Date | string | null }) => {
   return !isNaN(t) && Date.now() - t > LIXEIRA_MS;
 };
 
+// ── Cronômetro de abertura: toque no número da versão (tela de notas) para ver ──
+// Os tempos contam desde o início do carregamento da página (inclui o app subindo).
+const marcasAbertura: { jsPronto: number; cacheMs: number; usuarioPronto?: number; listaNaTela?: number; servidorOk?: number } = {
+  jsPronto: Math.round(performance.now()),
+  cacheMs: 0,
+};
+const agoraMs = () => Math.round(performance.now());
+export function lerMarcasAbertura() {
+  let domPronto: number | undefined;
+  try {
+    const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    if (nav && nav.domContentLoadedEventEnd > 0) domPronto = Math.round(nav.domContentLoadedEventEnd);
+  } catch { /* ignora */ }
+  return { ...marcasAbertura, domPronto };
+}
+
 // "Assinatura" barata de uma lista de notas: muda sempre que algo que aparece ou é
 // salvo muda (texto, fixação, lixeira, lembrete, cadeado...). Serve para não
 // regravar no celular a cópia inteira (vários MB) quando nada mudou.
@@ -211,12 +227,15 @@ function assinaturaNotas(userId: string, lista: Note[]): string {
 // Cópia guardada no celular da ÚLTIMA conta que usou o app, lida antes da primeira
 // tela aparecer: a lista já nasce preenchida em vez de abrir com "0 notas".
 function lerCacheInicial(): { userId: string | null; notas: Note[] } {
+  const t0 = performance.now();
   try {
     const ultimo = localStorage.getItem("ultimo_usuario_id");
     if (!ultimo) return { userId: null, notas: [] };
     return { userId: ultimo, notas: loadLocal(ultimo).filter((n) => !lixeiraVencida(n)) };
   } catch {
     return { userId: null, notas: [] };
+  } finally {
+    marcasAbertura.cacheMs = Math.round(performance.now() - t0);
   }
 }
 
@@ -244,6 +263,10 @@ export function useNotes() {
   // pode se perder por diferença de relógio entre o celular e o servidor.
   const pinIntentRef = useRef<Map<string, { isPinned: boolean; pinOrder: number | null }>>(new Map());
   const notesRef = useRef<Note[]>(cacheInicial.notas);
+  // Cronômetro: quando a lista apareceu com notas pela primeira vez.
+  useEffect(() => {
+    if (marcasAbertura.listaNaTela === undefined && notes.length > 0) marcasAbertura.listaNaTela = agoraMs();
+  }, [notes]);
   // Assinatura do que já está gravado no celular (começa igual à cópia que foi lida).
   const ultimaGravacaoRef = useRef<string>(assinaturaNotas(cacheInicial.userId || "", cacheInicial.notas));
   // Grava a cópia no celular SÓ se algo mudou (antes regravava tudo a cada atualização,
@@ -260,6 +283,7 @@ export function useNotes() {
       try { localStorage.setItem("cache_sem_lista_fotos", "1"); } catch { /* ignora */ }
     }
   }, []);
+  const cacheInicialUsadaRef = useRef(false);
   // De qual conta é a cópia inicial: se a conta que entrar for outra, ela é descartada.
   const cacheUserIdRef = useRef<string | null>(cacheInicial.notas.length > 0 ? cacheInicial.userId : null);
   // Quando foi o último download da lista de notas (para não baixar tudo toda hora).
@@ -500,15 +524,21 @@ export function useNotes() {
     // Sem usuário ainda: carrega o que houver salvo localmente (chave "anon"
     // ou de um usuário anterior) para não deixar a tela vazia/travada offline.
     if (!user) {
-      const anonNotes = loadLocal("anon");
-      const fallback = anonNotes.length > 0 ? anonNotes : loadAnyLocal();
-      if (fallback.length > 0) {
-        if (notesRef.current.length === 0) setNotesAndRef(fallback);
+      if (notesRef.current.length === 0) {
+        const anonNotes = loadLocal("anon");
+        const fallback = anonNotes.length > 0 ? anonNotes : loadAnyLocal();
+        if (fallback.length > 0) {
+          setNotesAndRef(fallback);
+          setSyncStatus("offline");
+        }
+      } else {
+        // A lista já nasceu preenchida com a cópia do celular: não precisa ler de novo.
         setSyncStatus("offline");
       }
       setLoading(false);
       return;
     }
+    if (marcasAbertura.usuarioPronto === undefined) marcasAbertura.usuarioPronto = agoraMs();
 
     // A cópia inicial era de OUTRA conta? Descarta antes de usar qualquer coisa.
     if (cacheUserIdRef.current !== null) {
@@ -524,7 +554,11 @@ export function useNotes() {
     // com as notas já salvas para este usuário.
     const anonNotes = loadLocal("anon");
     // Só o cache DESTA conta (nunca o de outra conta, que mostrava notas erradas ao abrir).
-    const userLocalNotes = loadLocal(user.id);
+    // Na primeira atualização do app reaproveita a cópia já lida na abertura (antes lia a
+    // cópia de vários MB uma segunda vez).
+    const reaproveitarCopia = !cacheInicialUsadaRef.current && cacheInicial.userId === user.id && cacheInicial.notas.length > 0;
+    cacheInicialUsadaRef.current = true;
+    const userLocalNotes = reaproveitarCopia ? cacheInicial.notas : loadLocal(user.id);
     const savedLocalNotes = anonNotes.length > 0 ? mergeNotes(anonNotes, userLocalNotes) : userLocalNotes;
 
     const localNotes = (notesRef.current.length > 0 ? mergeNotes(savedLocalNotes, notesRef.current) : savedLocalNotes).filter((n) => !lixeiraVencida(n));
@@ -612,6 +646,7 @@ export function useNotes() {
         return mergedResult;
       });
       gravarCache(user.id, mergedResult);
+      if (marcasAbertura.servidorOk === undefined) marcasAbertura.servidorOk = agoraMs();
 
       // Sync any local-only notes
       const unsynced = mergedResult.filter((n) => !n.sincronizado);
@@ -630,7 +665,7 @@ export function useNotes() {
       setSyncStatus("offline");
     }
     setLoading(false);
-  }, [user, syncToSupabase, flushPendingDeletes, gravarCache]);
+  }, [user, syncToSupabase, flushPendingDeletes, gravarCache, cacheInicial]);
 
   useEffect(() => {
     fetchNotes();

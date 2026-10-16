@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, lazy, Suspense } from "react";
 import { NoteCard } from "./NoteCard";
 import { NoteEditor } from "./NoteEditor";
 import { ReminderModal } from "./ReminderModal";
@@ -16,8 +16,10 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { RelatorioTurno } from "./RelatorioTurno";
-import { RelatorioRebobinadeira } from "./RelatorioRebobinadeira";
+// Os relatórios são pesados e só aparecem quando você os abre: carregam sob demanda
+// (e são pré-carregados em segundo plano uns segundos depois da abertura).
+const RelatorioTurno = lazy(() => import("./RelatorioTurno").then((m) => ({ default: m.RelatorioTurno })));
+const RelatorioRebobinadeira = lazy(() => import("./RelatorioRebobinadeira").then((m) => ({ default: m.RelatorioRebobinadeira })));
 import type { AlertSoundId } from "@/lib/alertSound";
 
 export { getFontClass, getSizeClass } from "./NoteEditor";
@@ -54,6 +56,11 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
   const [searchFocused, setSearchFocused] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
   const [showRelatorio, setShowRelatorio] = useState(false);
+  // Pré-carrega os relatórios em segundo plano, sem atrapalhar a abertura.
+  useEffect(() => {
+    const t = setTimeout(() => { import("./RelatorioTurno"); import("./RelatorioRebobinadeira"); }, 3000);
+    return () => clearTimeout(t);
+  }, []);
   const [relatorioInitialState, setRelatorioInitialState] = useState<any>(null);
   const [relatorioNovo, setRelatorioNovo] = useState(false);
   const [showRebobinadeira, setShowRebobinadeira] = useState(false);
@@ -510,6 +517,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
       </Dialog>
 
       {showRelatorio && (
+        <Suspense fallback={null}>
         <RelatorioTurno
           initialState={relatorioInitialState}
           iniciarNovo={relatorioNovo}
@@ -527,9 +535,11 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
             setRelatorioNovo(false);
           }}
         />
+        </Suspense>
       )}
 
       {showRebobinadeira && (
+        <Suspense fallback={null}>
         <RelatorioRebobinadeira
           initialState={rebobInitialState}
           iniciarNovo={rebobNovo}
@@ -546,6 +556,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
             setRebobNovo(false);
           }}
         />
+        </Suspense>
       )}
     </div>
   );
