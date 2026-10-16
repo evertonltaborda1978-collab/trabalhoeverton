@@ -82,6 +82,7 @@ function loadLocal(userId: string): Note[] {
     const parsed = JSON.parse(raw);
     return parsed.map((n: any) => ({
       ...n,
+      images: [], // a lista separada de fotos duplicava tudo; as fotos ficam dentro do texto (content)
       createdAt: new Date(n.createdAt),
       updatedAt: new Date(n.updatedAt),
       deletedAt: n.deletedAt ? new Date(n.deletedAt) : null,
@@ -194,6 +195,19 @@ const lixeiraVencida = (n: { deletedAt?: Date | string | null }) => {
   return !isNaN(t) && Date.now() - t > LIXEIRA_MS;
 };
 
+// "Assinatura" barata de uma lista de notas: muda sempre que algo que aparece ou é
+// salvo muda (texto, fixação, lixeira, lembrete, cadeado...). Serve para não
+// regravar no celular a cópia inteira (vários MB) quando nada mudou.
+function assinaturaNotas(userId: string, lista: Note[]): string {
+  return userId + "#" + lista.map((n) => [
+    n.id, n.updatedAt.getTime(), n.sincronizado ? 1 : 0, n.isPinned ? 1 : 0, n.pinOrder ?? "",
+    n.deletedAt ? new Date(n.deletedAt).getTime() : 0, n.isLocked ? 1 : 0, n.lockSalt ?? "",
+    n.title, n.color, n.fontFamily, n.fontSize, n.status, n.content.length,
+    n.reminderDate ?? "", n.reminderTime ?? "", n.reminderSound ?? "",
+    n.reminderNativeSoundUri ?? "", n.reminderNativeSoundName ?? "",
+  ].join("~")).join("|");
+}
+
 // Cópia guardada no celular da ÚLTIMA conta que usou o app, lida antes da primeira
 // tela aparecer: a lista já nasce preenchida em vez de abrir com "0 notas".
 function lerCacheInicial(): { userId: string | null; notas: Note[] } {
@@ -230,6 +244,22 @@ export function useNotes() {
   // pode se perder por diferença de relógio entre o celular e o servidor.
   const pinIntentRef = useRef<Map<string, { isPinned: boolean; pinOrder: number | null }>>(new Map());
   const notesRef = useRef<Note[]>(cacheInicial.notas);
+  // Assinatura do que já está gravado no celular (começa igual à cópia que foi lida).
+  const ultimaGravacaoRef = useRef<string>(assinaturaNotas(cacheInicial.userId || "", cacheInicial.notas));
+  // Grava a cópia no celular SÓ se algo mudou (antes regravava tudo a cada atualização,
+  // 2 a 3 vezes por abertura, travando a tela). Na 1ª vez depois desta versão grava uma
+  // vez para limpar a lista duplicada de fotos que ainda estava na cópia antiga.
+  const gravarCache = useCallback((userId: string, lista: Note[]) => {
+    let precisaLimpar = false;
+    try { precisaLimpar = localStorage.getItem("cache_sem_lista_fotos") !== "1"; } catch { /* ignora */ }
+    const sig = assinaturaNotas(userId, lista);
+    if (!precisaLimpar && sig === ultimaGravacaoRef.current) return;
+    saveLocal(userId, lista);
+    ultimaGravacaoRef.current = sig;
+    if (precisaLimpar) {
+      try { localStorage.setItem("cache_sem_lista_fotos", "1"); } catch { /* ignora */ }
+    }
+  }, []);
   // De qual conta é a cópia inicial: se a conta que entrar for outra, ela é descartada.
   const cacheUserIdRef = useRef<string | null>(cacheInicial.notas.length > 0 ? cacheInicial.userId : null);
   // Quando foi o último download da lista de notas (para não baixar tudo toda hora).
@@ -261,11 +291,11 @@ export function useNotes() {
     if (loading && notes.length === 0) return;
     // Ainda é a cópia inicial (nada mudou): não regrava, nem na chave de outra conta.
     if (notes === cacheInicial.notas) return;
-    saveLocal(user?.id || "anon", notes);
+    gravarCache(user?.id || "anon", notes);
     if (user?.id) {
       try { localStorage.setItem("ultimo_usuario_id", user.id); } catch {}
     }
-  }, [notes, user, loading, cacheInicial]);
+  }, [notes, user, loading, cacheInicial, gravarCache]);
 
 
   // Sync unsynced notes to Supabase
@@ -507,7 +537,7 @@ export function useNotes() {
     // é isso que faz o app abrir na hora, com as notas todas visíveis. A
     // internet só entra depois, silenciosamente, pra conferir/atualizar.
     if (localNotes.length > 0) {
-      setNotesAndRef(localNotes);
+      if (assinaturaNotas(user.id, localNotes) !== assinaturaNotas(user.id, notesRef.current)) setNotesAndRef(localNotes);
       setLoading(false);
     }
 
@@ -553,9 +583,9 @@ export function useNotes() {
       for (let i = 0; i < precisamCorpo.length; i += 10) {
         const lote = precisamCorpo.slice(i, i + 10);
         try {
-          const { data: corpos, error: corpoErr } = await (supabase.from("notes") as any).select("id, content, images").in("id", lote);
+          const { data: corpos, error: corpoErr } = await (supabase.from("notes") as any).select("id, content").in("id", lote);
           if (corpoErr || !corpos) throw corpoErr || new Error("sem dados");
-          (corpos as any[]).forEach((r) => corpoPorId.set(r.id, { content: r.content ?? "", images: r.images || [] }));
+          (corpos as any[]).forEach((r) => corpoPorId.set(r.id, { content: r.content ?? "", images: [] }));
         } catch {
           // Não conseguiu o corpo desse lote: deixa essas notas para a próxima
           // atualização, em vez de mostrar vazias e correr o risco de apagar o
@@ -576,10 +606,12 @@ export function useNotes() {
       // seria apagada por cima assim que essa busca terminasse.
       let mergedResult: Note[] = localNotes;
       setNotesAndRef((prev) => {
-        mergedResult = mergeNotes(prev, remoteNotes);
+        const novo = mergeNotes(prev, remoteNotes);
+        // Nada mudou? Mantém a MESMA lista (sem redesenhar a tela nem regravar o cache).
+        mergedResult = assinaturaNotas(user.id, novo) === assinaturaNotas(user.id, prev) ? prev : novo;
         return mergedResult;
       });
-      saveLocal(user.id, mergedResult);
+      gravarCache(user.id, mergedResult);
 
       // Sync any local-only notes
       const unsynced = mergedResult.filter((n) => !n.sincronizado);
@@ -594,11 +626,11 @@ export function useNotes() {
       // que falhou, ainda estava em andamento) — só usa a foto antiga
       // salva localmente se ainda não tiver nada na tela de jeito nenhum.
       setNotesAndRef((prev) => (prev.length > 0 ? prev : localNotes));
-      if (localNotes.length > 0) saveLocal(user.id, localNotes);
+      if (localNotes.length > 0) gravarCache(user.id, localNotes);
       setSyncStatus("offline");
     }
     setLoading(false);
-  }, [user, syncToSupabase, flushPendingDeletes]);
+  }, [user, syncToSupabase, flushPendingDeletes, gravarCache]);
 
   useEffect(() => {
     fetchNotes();
