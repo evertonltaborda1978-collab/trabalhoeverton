@@ -1265,6 +1265,9 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const [showUnsavedPrompt, setShowUnsavedPrompt] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showFab, setShowFab] = useState(false);
+  // Botão "Reduzir fotos" (menu ⋮): trabalhando agora? e em qual tamanho as fotos chegaram no mínimo.
+  const [reduzindoFotos, setReduzindoFotos] = useState(false);
+  const [fotosNoMinimoSig, setFotosNoMinimoSig] = useState("");
   // Menu "•••" que esconde a barra de ferramentas (cor, copiar, tema, tamanho de
   // fonte, formatação de texto etc.), deixando só uma linha limpa pra digitar.
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -1375,7 +1378,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
       const hasContent = title.trim() || blocksToPlainText(blocks).trim();
       if (!hasContent) return;
       const serialized = serializeBlocks(blocks);
-      const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
+      const imageUrls: string[] = []; // as fotos já ficam dentro do texto da nota (serialized); gravar a lista separada duplicava tudo
       const status = editingNote?.status || "rascunho";
       onSave(title, serialized, imageUrls, selectedColor, "default", "medium", status);
     }, 10000);
@@ -1392,7 +1395,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
         const hasContent = title.trim() || blocksToPlainText(blocks).trim();
         if (hasContent && editingNote) {
           const serialized = serializeBlocks(blocks);
-          const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
+          const imageUrls: string[] = []; // as fotos já ficam dentro do texto da nota (serialized); gravar a lista separada duplicava tudo
           const status = editingNote?.status || "rascunho";
           onSave(title, serialized, imageUrls, selectedColor, "default", "medium", status);
         }
@@ -1867,6 +1870,90 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     }
   };
 
+  // ── Reduzir fotos da nota (botão no menu ⋮) ──
+  // Cada toque diminui as fotos mais um pouco (lado maior x0,8 e JPEG mais leve),
+  // até chegar no mínimo (500 px) e não diminuir mais. Mostra o tamanho em MB.
+  const LADO_MINIMO_FOTO = 500;
+  const bytesDeDataUrl = (url: string): number => {
+    if (!url.startsWith("data:")) return 0;
+    const i = url.indexOf(",");
+    return i < 0 ? 0 : Math.round(((url.length - i - 1) * 3) / 4);
+  };
+  const formatarMB = (bytes: number) => `${(bytes / 1048576).toFixed(2).replace(".", ",")} MB`;
+
+  const reduzirDataUrl = (url: string): Promise<string> =>
+    new Promise((resolve) => {
+      if (!url.startsWith("data:image")) { resolve(url); return; }
+      const img = new Image();
+      const desenhar = () => {
+        try {
+          const w0 = img.naturalWidth || img.width;
+          const h0 = img.naturalHeight || img.height;
+          if (!w0 || !h0) { resolve(url); return; }
+          const lado = Math.max(w0, h0);
+          const novoLado = lado > LADO_MINIMO_FOTO ? Math.max(LADO_MINIMO_FOTO, Math.round(lado * 0.8)) : lado;
+          const escala = novoLado / lado;
+          const w = Math.max(1, Math.round(w0 * escala));
+          const h = Math.max(1, Math.round(h0 * escala));
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) { resolve(url); return; }
+          ctx.fillStyle = "#FFFFFF"; // PNG com transparência não pode ficar preto no JPEG
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          const novo = canvas.toDataURL("image/jpeg", lado > LADO_MINIMO_FOTO ? 0.7 : 0.55);
+          // Só vale se ficou menor e não é um resultado suspeito (vazio).
+          resolve(novo.length < 1000 || novo.length >= url.length ? url : novo);
+        } catch {
+          resolve(url);
+        }
+      };
+      if (typeof img.decode === "function") {
+        img.src = url;
+        img.decode().then(desenhar).catch(() => { img.onload = desenhar; img.onerror = () => resolve(url); });
+      } else {
+        img.onload = desenhar;
+        img.onerror = () => resolve(url);
+        img.src = url;
+      }
+    });
+
+  const indicesFotos = blocks.map((b, i) => (b.type === "image" ? i : -1)).filter((i) => i >= 0);
+  const temFotos = indicesFotos.length > 0;
+  const bytesFotos = indicesFotos.reduce((soma, i) => soma + bytesDeDataUrl(blocks[i].url || ""), 0);
+  const fotosSig = indicesFotos.map((i) => (blocks[i].url || "").length).join(",");
+  const fotosNoMinimo = temFotos && fotosNoMinimoSig === fotosSig;
+
+  const reduzirFotosDaNota = async () => {
+    if (reduzindoFotos || !temFotos) return;
+    setReduzindoFotos(true);
+    try {
+      const urlsAntes = indicesFotos.map((i) => blocks[i].url || "");
+      const antes = urlsAntes.reduce((soma, u) => soma + bytesDeDataUrl(u), 0);
+      const novas = await Promise.all(urlsAntes.map((u) => reduzirDataUrl(u)));
+      const depois = novas.reduce((soma, u) => soma + bytesDeDataUrl(u), 0);
+      if (depois >= antes * 0.95) {
+        // Quase não diminuiu mais: chegou no mínimo.
+        setFotosNoMinimoSig(fotosSig);
+        toast({ title: "Fotos já estão no mínimo", description: `Tamanho: ${formatarMB(antes)}. Reduzir mais estragaria a imagem.` });
+        return;
+      }
+      setBlocks((prev) => {
+        const next = [...prev];
+        indicesFotos.forEach((i, k) => {
+          if (next[i]?.type === "image" && next[i].url === urlsAntes[k]) next[i] = { ...next[i], url: novas[k] };
+        });
+        pushHistory(next);
+        return next;
+      });
+      toast({ title: "📉 Fotos reduzidas", description: `${formatarMB(antes)} → ${formatarMB(depois)}` });
+    } finally {
+      setReduzindoFotos(false);
+    }
+  };
+
   const insertImageAtBlock = async (file: File) => {
     const url = await compressImage(file);
     const idx = focusedBlockRef.current;
@@ -2304,7 +2391,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const doSave = (status: "rascunho" | "publicada") => {
     if (status === "publicada" && !title.trim() && !blocksToPlainText(blocks).trim()) return;
     const serialized = serializeBlocks(blocks);
-    const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
+    const imageUrls: string[] = []; // as fotos já ficam dentro do texto da nota (serialized); gravar a lista separada duplicava tudo
     onSave(title, serialized, imageUrls, selectedColor, "default", "medium", status);
     clearDraft();
     snapshotRef.current = null;
@@ -2319,7 +2406,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
   const doSaveAndClose = (status: "rascunho" | "publicada") => {
     if (status === "publicada" && !title.trim() && !blocksToPlainText(blocks).trim()) return;
     const serialized = serializeBlocks(blocks);
-    const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
+    const imageUrls: string[] = []; // as fotos já ficam dentro do texto da nota (serialized); gravar a lista separada duplicava tudo
     onSave(title, serialized, imageUrls, selectedColor, "default", "medium", status);
     clearDraft();
     snapshotRef.current = null;
@@ -2377,7 +2464,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
     if (hasContent && !readOnly) {
       try {
         const serialized = serializeBlocks(blocks);
-        const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
+        const imageUrls: string[] = []; // as fotos já ficam dentro do texto da nota (serialized); gravar a lista separada duplicava tudo
         const status = editingNote?.status || "rascunho";
         onSave(title, serialized, imageUrls, selectedColor, "default", "medium", status);
 
@@ -3426,6 +3513,13 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                         { icon: <Table2 size={18} />, label: "Tabela Manual", action: () => { addTable(); setShowFab(false); } },
                         ...(voiceSupported ? [{ icon: isListening ? <MicOff size={18} /> : <Mic size={18} />, label: isListening ? "Parar voz" : "Voz", action: () => { toggleVoice(); setShowFab(false); } }] : []),
                         ...(onSchedule ? [{ icon: <CalendarPlus size={18} />, label: "Agendar", action: () => { setScheduleDate(new Date().toISOString().slice(0, 10)); setScheduleTime("09:00"); setScheduleSound(null); setShowScheduleDialog(true); setShowFab(false); } }] : []),
+                        ...(temFotos ? [{
+                          icon: reduzindoFotos ? <Loader2 size={18} className="animate-spin" /> : <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>📉</span>,
+                          label: reduzindoFotos ? "Reduzindo…" : fotosNoMinimo ? `Fotos no mínimo · ${formatarMB(bytesFotos)}` : `Reduzir fotos · ${formatarMB(bytesFotos)}`,
+                          // não fecha o menu: dá para tocar de novo e ver o tamanho cair
+                          action: () => { reduzirFotosDaNota(); },
+                          disabled: reduzindoFotos || fotosNoMinimo,
+                        }] : []),
                         { icon: <Undo2 size={18} />, label: "Desfazer", action: () => { undo(); setShowFab(false); }, disabled: !canUndo },
                         { icon: <Redo2 size={18} />, label: "Refazer", action: () => { redo(); setShowFab(false); }, disabled: !canRedo },
                       ].map((item, i) => (
@@ -3528,7 +3622,7 @@ export function NoteEditor({ open, onOpenChange, editingNote, readOnly = false, 
                     onClick={() => {
                       setShowUnsavedPrompt(false);
                       const serialized = serializeBlocks(blocks);
-                      const imageUrls = blocks.filter((b) => b.type === "image").map((b) => b.url || "");
+                      const imageUrls: string[] = []; // as fotos já ficam dentro do texto da nota (serialized); gravar a lista separada duplicava tudo
                       onSave(title, serialized, imageUrls, selectedColor, "default", "medium", editingNote?.status === "rascunho" ? "rascunho" : "publicada");
                       clearDraft();
                       snapshotRef.current = null;
