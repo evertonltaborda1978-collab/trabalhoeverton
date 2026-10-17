@@ -48,29 +48,38 @@ function getLocalKey(userId: string) {
   return `notas_usuario_${userId}`;
 }
 
-function saveLocal(userId: string, notes: Note[]) {
+type ResultadoCache = { status: "completo" | "parcial" | "falhou"; kb: number };
+
+function saveLocal(userId: string, notes: Note[]): ResultadoCache {
   const key = getLocalKey(userId);
   try {
-    localStorage.setItem(key, JSON.stringify(notes));
-    return;
+    const json = JSON.stringify(notes);
+    localStorage.setItem(key, json);
+    return { status: "completo", kb: Math.round(json.length / 1024) };
   } catch {
     // Provável estouro de espaço do navegador (fotos em base64 dentro das notas).
     // Nesse caso salvamos o TEXTO das notas sem as imagens — melhor ter as notas
     // legíveis offline do que não ter nada.
   }
   try {
-    const semImagens = notes.map((n) => ({ ...n, images: [] }));
-    localStorage.setItem(key, JSON.stringify(semImagens));
+    const json = JSON.stringify(notes.map((n) => ({ ...n, images: [] })));
+    localStorage.setItem(key, json);
+    return { status: "parcial", kb: Math.round(json.length / 1024) };
   } catch {
     // Ainda não coube: guarda apenas as 100 notas mais recentes, sem imagens.
-    try {
-      const reduzido = notes
+  }
+  try {
+    const json = JSON.stringify(
+      notes
         .slice()
         .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
         .slice(0, 100)
-        .map((n) => ({ ...n, images: [] }));
-      localStorage.setItem(key, JSON.stringify(reduzido));
-    } catch {}
+        .map((n) => ({ ...n, images: [] }))
+    );
+    localStorage.setItem(key, json);
+    return { status: "parcial", kb: Math.round(json.length / 1024) };
+  } catch {
+    return { status: "falhou", kb: 0 };
   }
 }
 
@@ -197,9 +206,15 @@ const lixeiraVencida = (n: { deletedAt?: Date | string | null }) => {
 
 // ── Cronômetro de abertura: toque no número da versão (tela de notas) para ver ──
 // Os tempos contam desde o início do carregamento da página (inclui o app subindo).
-const marcasAbertura: { jsPronto: number; cacheMs: number; usuarioPronto?: number; listaNaTela?: number; servidorOk?: number } = {
+const marcasAbertura: {
+  jsPronto: number; cacheMs: number; usuarioPronto?: number; listaNaTela?: number; servidorOk?: number;
+  cacheStatus?: string; cacheKB?: number; listasBaixadas: number; corposBaixados: number; corposKB: number;
+} = {
   jsPronto: Math.round(performance.now()),
   cacheMs: 0,
+  listasBaixadas: 0,
+  corposBaixados: 0,
+  corposKB: 0,
 };
 const agoraMs = () => Math.round(performance.now());
 export function lerMarcasAbertura() {
@@ -277,7 +292,9 @@ export function useNotes() {
     try { precisaLimpar = localStorage.getItem("cache_sem_lista_fotos") !== "1"; } catch { /* ignora */ }
     const sig = assinaturaNotas(userId, lista);
     if (!precisaLimpar && sig === ultimaGravacaoRef.current) return;
-    saveLocal(userId, lista);
+    const r = saveLocal(userId, lista);
+    marcasAbertura.cacheStatus = r.status;
+    marcasAbertura.cacheKB = r.kb;
     ultimaGravacaoRef.current = sig;
     if (precisaLimpar) {
       try { localStorage.setItem("cache_sem_lista_fotos", "1"); } catch { /* ignora */ }
@@ -300,18 +317,21 @@ export function useNotes() {
   // desatualizada, sem a mudança — e "resgatava" a nota de volta (fixar
   // desfazendo sozinho, nota excluída reaparecendo).
   const setNotesAndRef = useCallback((updater: Note[] | ((prev: Note[]) => Note[])) => {
-    setNotes((prev) => {
-      const next = typeof updater === "function" ? (updater as (p: Note[]) => Note[])(prev) : updater;
-      notesRef.current = next;
-      return next;
-    });
+    // O novo valor é calculado AGORA, a partir do notesRef (a "fonte da verdade"), e não
+    // dentro do setNotes: o React só roda a função de dentro do setNotes mais tarde, e
+    // quem lia o notesRef logo em seguida (como a atualização das notas) via a lista
+    // antiga — o que fazia baixar o texto de todas as notas de novo.
+    const prev = notesRef.current;
+    const next = typeof updater === "function" ? (updater as (p: Note[]) => Note[])(prev) : updater;
+    notesRef.current = next;
+    setNotes(next);
   }, []);
 
   // Salva no aparelho sempre que as notas mudam. A linha do notesRef aqui
   // agora é só uma rede de segurança redundante — o setNotesAndRef acima já
   // mantém as duas cópias sincronizadas na hora, sem esperar esse efeito.
   useEffect(() => {
-    notesRef.current = notes;
+    // (o notesRef é mantido pelo setNotesAndRef; não é regravado aqui para não voltar a uma lista antiga)
     if (loading && notes.length === 0) return;
     // Ainda é a cópia inicial (nada mudou): não regrava, nem na chave de outra conta.
     if (notes === cacheInicial.notas) return;
@@ -520,7 +540,7 @@ export function useNotes() {
     return ids;
   }, [user]);
 
-  const fetchNotes = useCallback(async () => {
+  const fetchNotesInterno = useCallback(async () => {
     // Sem usuário ainda: carrega o que houver salvo localmente (chave "anon"
     // ou de um usuário anterior) para não deixar a tela vazia/travada offline.
     if (!user) {
@@ -582,6 +602,7 @@ export function useNotes() {
         .order("updated_at", { ascending: false });
 
       if (error) throw error;
+      marcasAbertura.listasBaixadas++;
 
       // Notas que estão na lixeira há mais de 30 dias: pede para o servidor apagar
       // de vez e não deixa elas voltarem (era isso que fazia a lixeira piscar sem
@@ -619,7 +640,11 @@ export function useNotes() {
         try {
           const { data: corpos, error: corpoErr } = await (supabase.from("notes") as any).select("id, content").in("id", lote);
           if (corpoErr || !corpos) throw corpoErr || new Error("sem dados");
-          (corpos as any[]).forEach((r) => corpoPorId.set(r.id, { content: r.content ?? "", images: [] }));
+          (corpos as any[]).forEach((r) => {
+            corpoPorId.set(r.id, { content: r.content ?? "", images: [] });
+            marcasAbertura.corposBaixados++;
+            marcasAbertura.corposKB += Math.round(String(r.content ?? "").length / 1024);
+          });
         } catch {
           // Não conseguiu o corpo desse lote: deixa essas notas para a próxima
           // atualização, em vez de mostrar vazias e correr o risco de apagar o
@@ -667,9 +692,41 @@ export function useNotes() {
     setLoading(false);
   }, [user, syncToSupabase, flushPendingDeletes, gravarCache, cacheInicial]);
 
+  // Uma atualização por vez: se já há uma rodando para este usuário, as outras esperam e
+  // só uma repetição leve acontece depois. Antes, na abertura rodavam 2 a 3 ao mesmo
+  // tempo (cada mudança do objeto do usuário disparava outra) e cada uma baixava o
+  // texto de TODAS as notas.
+  const fetchInternoRef = useRef(fetchNotesInterno);
+  fetchInternoRef.current = fetchNotesInterno;
+  const userIdAtualRef = useRef<string | null>(null);
+  userIdAtualRef.current = user?.id ?? null;
+  const fetchEmCursoRef = useRef<{ uid: string | null; p: Promise<void> } | null>(null);
+  const fetchPendenteRef = useRef(false);
+  const fetchNotesRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  const fetchNotes = useCallback((): Promise<void> => {
+    const uid = userIdAtualRef.current;
+    const atual = fetchEmCursoRef.current;
+    if (atual && atual.uid === uid) {
+      fetchPendenteRef.current = true; // pediram de novo durante a atualização: repete 1 vez no fim
+      return atual.p;
+    }
+    const p: Promise<void> = fetchInternoRef.current()
+      .catch(() => { /* erros já tratados dentro da atualização */ })
+      .finally(() => {
+        if (fetchEmCursoRef.current?.p === p) fetchEmCursoRef.current = null;
+        if (fetchPendenteRef.current) {
+          fetchPendenteRef.current = false;
+          void fetchNotesRef.current();
+        }
+      });
+    fetchEmCursoRef.current = { uid, p };
+    return p;
+  }, []);
+  fetchNotesRef.current = fetchNotes;
+
   useEffect(() => {
     fetchNotes();
-  }, [fetchNotes]);
+  }, [fetchNotes, user?.id]);
 
   // Baixa de novo só se já passou tempo suficiente desde o último download.
   const fetchSePassouTempo = useCallback((minMs: number) => {
@@ -708,7 +765,8 @@ export function useNotes() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, fetchNotes, fetchSePassouTempo]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, fetchNotes, fetchSePassouTempo]);
 
   // Atualiza quando o app volta para primeiro plano
   useEffect(() => {

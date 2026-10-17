@@ -449,13 +449,26 @@ const Index = () => {
                 <span
                   role="button"
                   onClick={() => {
-                    // Cronômetro: mostra quanto tempo cada etapa da abertura levou
+                    // Cronômetro: mostra quanto tempo cada etapa da abertura levou,
+                    // se a cópia das notas coube no celular e quanto o app já baixou
                     const m = lerMarcasAbertura();
                     const f = (ms?: number) => (ms === undefined ? "—" : ms >= 1000 ? `${(ms / 1000).toFixed(1).replace(".", ",")} s` : `${ms} ms`);
+                    const mb = (n: number) => `${n.toFixed(1).replace(".", ",")} MB`;
+                    let usadoLS = 0;
+                    try {
+                      for (let k = 0; k < localStorage.length; k++) {
+                        const chave = localStorage.key(k) || "";
+                        usadoLS += chave.length + (localStorage.getItem(chave) || "").length;
+                      }
+                    } catch { /* ignora */ }
                     toast({
                       title: "⏱ Tempos da abertura",
-                      description: `Página pronta: ${f(m.domPronto)} · Código pronto: ${f(m.jsPronto)} · Cópia lida: ${f(m.cacheMs)} · Lista na tela: ${f(m.listaNaTela)} · Usuário pronto: ${f(m.usuarioPronto)} · Servidor: ${f(m.servidorOk)}`,
-                      duration: 20000,
+                      description:
+                        `Página pronta: ${f(m.domPronto)} · Código pronto: ${f(m.jsPronto)} · Cópia lida: ${f(m.cacheMs)} · Lista na tela: ${f(m.listaNaTela)} · Usuário pronto: ${f(m.usuarioPronto)} · Servidor: ${f(m.servidorOk)}` +
+                        ` · Cópia gravada: ${m.cacheStatus ?? "ainda não"}${m.cacheKB ? ` (${Math.round(m.cacheKB)} KB)` : ""}` +
+                        ` · Espaço usado no aparelho: ${mb(usadoLS / 1048576)} de ~5 MB` +
+                        ` · Baixou desde que abriu: lista ${m.listasBaixadas}x, textos de ${m.corposBaixados} notas (${mb(m.corposKB / 1024)})`,
+                      duration: 25000,
                     });
                   }}
                   style={{ fontSize: 9, color: "#9E9E9E", fontWeight: 700, letterSpacing: 0.3, padding: "4px 6px", cursor: "pointer" }}
