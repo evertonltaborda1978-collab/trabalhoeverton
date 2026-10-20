@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { SnoozeAlertData } from "@/components/SnoozeAlert";
 import { supabase } from "@/integrations/supabase/client";
+import { idbLer, idbGravar } from "@/lib/notasCache";
 import { useAuth } from "@/contexts/AuthContext";
 import { encryptNote, decryptNote, isEncrypted, LockPayload } from "@/lib/noteCrypto";
 import type { AlertSoundId } from "@/lib/alertSound";
@@ -48,7 +49,7 @@ function getLocalKey(userId: string) {
   return `notas_usuario_${userId}`;
 }
 
-type ResultadoCache = { status: "completo" | "parcial" | "falhou"; kb: number };
+type ResultadoCache = { status: "idb" | "completo" | "parcial" | "falhou"; kb: number };
 
 function saveLocal(userId: string, notes: Note[]): ResultadoCache {
   const key = getLocalKey(userId);
@@ -84,21 +85,65 @@ function saveLocal(userId: string, notes: Note[]): ResultadoCache {
 }
 
 
+// Transforma o que veio do armazenamento (datas viram Date de novo) em notas de verdade.
+function reviverNotas(parsed: any): Note[] {
+  if (!Array.isArray(parsed)) return [];
+  return parsed.map((n: any) => ({
+    ...n,
+    images: [], // a lista separada de fotos duplicava tudo; as fotos ficam dentro do texto (content)
+    createdAt: new Date(n.createdAt),
+    updatedAt: new Date(n.updatedAt),
+    deletedAt: n.deletedAt ? new Date(n.deletedAt) : null,
+  }));
+}
+
 function loadLocal(userId: string): Note[] {
   try {
     const raw = localStorage.getItem(getLocalKey(userId));
     if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return parsed.map((n: any) => ({
-      ...n,
-      images: [], // a lista separada de fotos duplicava tudo; as fotos ficam dentro do texto (content)
-      createdAt: new Date(n.createdAt),
-      updatedAt: new Date(n.updatedAt),
-      deletedAt: n.deletedAt ? new Date(n.deletedAt) : null,
-    }));
+    return reviverNotas(JSON.parse(raw));
   } catch {
     return [];
   }
+}
+
+// Cópia grande no IndexedDB (sem o limite de ~5 MB); se não houver lá, tenta o armazenamento comum.
+async function lerCacheCompleto(userId: string): Promise<Note[]> {
+  const doIdb = await idbLer<any[]>(getLocalKey(userId));
+  if (Array.isArray(doIdb) && doIdb.length > 0) return reviverNotas(doIdb);
+  return loadLocal(userId);
+}
+
+// Grava a cópia no IndexedDB. Se não der, cai para o armazenamento comum (como antes).
+async function gravarCacheNoAparelho(userId: string, lista: Note[]): Promise<ResultadoCache> {
+  const chave = getLocalKey(userId);
+  const ok = await idbGravar(chave, lista);
+  if (ok) {
+    try { localStorage.removeItem(chave); } catch { /* ignora */ } // libera o armazenamento pequeno
+    const kb = Math.round(lista.reduce((s, n) => s + n.content.length + n.title.length, 0) / 1024);
+    return { status: "idb", kb };
+  }
+  return saveLocal(userId, lista);
+}
+
+// Uma vez só: passa para o IndexedDB as cópias antigas (de outras contas) que estavam
+// ocupando o armazenamento comum e impedindo a cópia nova de caber.
+async function migrarCachesAntigos(userIdAtual: string): Promise<void> {
+  try {
+    const chaves: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith("notas_usuario_") && k !== getLocalKey(userIdAtual) && k !== getLocalKey("anon")) chaves.push(k);
+    }
+    for (const k of chaves) {
+      const raw = localStorage.getItem(k);
+      if (!raw) { localStorage.removeItem(k); continue; }
+      let lista: Note[] = [];
+      try { lista = reviverNotas(JSON.parse(raw)); } catch { continue; }
+      if (lista.length === 0) { localStorage.removeItem(k); continue; }
+      if (await idbGravar(k, lista)) localStorage.removeItem(k);
+    }
+  } catch { /* migração é só uma faxina: se falhar, tenta de novo em outra hora */ }
 }
 
 // Offline sem sessão restaurada: procura o último conjunto de notas salvo neste
@@ -278,29 +323,69 @@ export function useNotes() {
   // pode se perder por diferença de relógio entre o celular e o servidor.
   const pinIntentRef = useRef<Map<string, { isPinned: boolean; pinOrder: number | null }>>(new Map());
   const notesRef = useRef<Note[]>(cacheInicial.notas);
+  // Preenche a lista com a cópia do IndexedDB assim que o app abre.
+  useEffect(() => {
+    if (cacheInicial.notas.length > 0) return; // já nasceu preenchida pela cópia pequena
+    let ultimo: string | null = null;
+    try { ultimo = localStorage.getItem("ultimo_usuario_id"); } catch { /* ignora */ }
+    if (!ultimo) return;
+    const donoDaCopia = ultimo;
+    const t0 = performance.now();
+    hidratacaoRef.current = (async () => {
+      const doIdb = await idbLer<any[]>(getLocalKey(donoDaCopia));
+      marcasAbertura.cacheMs = Math.round(performance.now() - t0);
+      if (Array.isArray(doIdb) && doIdb.length > 0 && notesRef.current.length === 0) {
+        const notas = reviverNotas(doIdb).filter((n) => !lixeiraVencida(n));
+        if (notas.length === 0) return;
+        cacheUserIdRef.current = donoDaCopia;
+        hidratadoNotasRef.current = notas;
+        ultimaGravacaoRef.current = assinaturaNotas(donoDaCopia, notas);
+        setNotesAndRef(notas);
+        setLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Cronômetro: quando a lista apareceu com notas pela primeira vez.
   useEffect(() => {
     if (marcasAbertura.listaNaTela === undefined && notes.length > 0) marcasAbertura.listaNaTela = agoraMs();
   }, [notes]);
   // Assinatura do que já está gravado no celular (começa igual à cópia que foi lida).
   const ultimaGravacaoRef = useRef<string>(assinaturaNotas(cacheInicial.userId || "", cacheInicial.notas));
-  // Grava a cópia no celular SÓ se algo mudou (antes regravava tudo a cada atualização,
-  // 2 a 3 vezes por abertura, travando a tela). Na 1ª vez depois desta versão grava uma
-  // vez para limpar a lista duplicada de fotos que ainda estava na cópia antiga.
-  const gravarCache = useCallback((userId: string, lista: Note[]) => {
-    let precisaLimpar = false;
-    try { precisaLimpar = localStorage.getItem("cache_sem_lista_fotos") !== "1"; } catch { /* ignora */ }
-    const sig = assinaturaNotas(userId, lista);
-    if (!precisaLimpar && sig === ultimaGravacaoRef.current) return;
-    const r = saveLocal(userId, lista);
-    marcasAbertura.cacheStatus = r.status;
-    marcasAbertura.cacheKB = r.kb;
-    ultimaGravacaoRef.current = sig;
-    if (precisaLimpar) {
-      try { localStorage.setItem("cache_sem_lista_fotos", "1"); } catch { /* ignora */ }
-    }
-  }, []);
+  const filaGravacaoRef = useRef<Promise<void>>(Promise.resolve());
+  const migracaoIniciadaRef = useRef(false);
   const cacheInicialUsadaRef = useRef(false);
+  // Quando a cópia pequena não existe (a grande mora no IndexedDB), a lista começa
+  // "Carregando…" e é preenchida em poucas dezenas de milissegundos, sem esperar a internet.
+  const hidratacaoRef = useRef<Promise<void>>(Promise.resolve());
+  const hidratadoNotasRef = useRef<Note[] | null>(null);
+  // Grava a cópia no aparelho SÓ se algo mudou. As gravações entram numa fila (uma de cada
+  // vez), no IndexedDB, que não tem o limite de ~5 MB do armazenamento comum.
+  const gravarCache = useCallback((userId: string, lista: Note[]) => {
+    let precisaMigrar = false;
+    try { precisaMigrar = localStorage.getItem("cache_idb_v1") !== "1"; } catch { /* ignora */ }
+    const sig = assinaturaNotas(userId, lista);
+    if (sig === ultimaGravacaoRef.current && (!precisaMigrar || migracaoIniciadaRef.current)) return;
+    if (precisaMigrar) migracaoIniciadaRef.current = true;
+    ultimaGravacaoRef.current = sig; // marca já, para não enfileirar a mesma gravação duas vezes
+    filaGravacaoRef.current = filaGravacaoRef.current
+      .then(async () => {
+        const r = await gravarCacheNoAparelho(userId, lista);
+        marcasAbertura.cacheStatus = r.status;
+        marcasAbertura.cacheKB = r.kb;
+        if (r.status === "falhou") {
+          ultimaGravacaoRef.current = ""; // tenta de novo na próxima mudança
+          migracaoIniciadaRef.current = false;
+          return;
+        }
+        if (precisaMigrar) {
+          if (r.status === "idb") await migrarCachesAntigos(userId);
+          try { localStorage.setItem("cache_idb_v1", "1"); } catch { /* ignora */ }
+        }
+      })
+      .catch(() => { /* gravação falhou: tenta de novo na próxima mudança */ });
+  }, []);
   // De qual conta é a cópia inicial: se a conta que entrar for outra, ela é descartada.
   const cacheUserIdRef = useRef<string | null>(cacheInicial.notas.length > 0 ? cacheInicial.userId : null);
   // Quando foi o último download da lista de notas (para não baixar tudo toda hora).
@@ -334,7 +419,7 @@ export function useNotes() {
     // (o notesRef é mantido pelo setNotesAndRef; não é regravado aqui para não voltar a uma lista antiga)
     if (loading && notes.length === 0) return;
     // Ainda é a cópia inicial (nada mudou): não regrava, nem na chave de outra conta.
-    if (notes === cacheInicial.notas) return;
+    if (notes === cacheInicial.notas || notes === hidratadoNotasRef.current) return;
     gravarCache(user?.id || "anon", notes);
     if (user?.id) {
       try { localStorage.setItem("ultimo_usuario_id", user.id); } catch {}
@@ -541,12 +626,15 @@ export function useNotes() {
   }, [user]);
 
   const fetchNotesInterno = useCallback(async () => {
+    await hidratacaoRef.current; // espera a cópia do IndexedDB (se estiver sendo lida)
     // Sem usuário ainda: carrega o que houver salvo localmente (chave "anon"
     // ou de um usuário anterior) para não deixar a tela vazia/travada offline.
     if (!user) {
       if (notesRef.current.length === 0) {
         const anonNotes = loadLocal("anon");
-        const fallback = anonNotes.length > 0 ? anonNotes : loadAnyLocal();
+        let ultimoUsuario: string | null = null;
+        try { ultimoUsuario = localStorage.getItem("ultimo_usuario_id"); } catch { /* ignora */ }
+        const fallback = anonNotes.length > 0 ? anonNotes : ultimoUsuario ? await lerCacheCompleto(ultimoUsuario) : loadAnyLocal();
         if (fallback.length > 0) {
           setNotesAndRef(fallback);
           setSyncStatus("offline");
@@ -576,12 +664,13 @@ export function useNotes() {
     // Só o cache DESTA conta (nunca o de outra conta, que mostrava notas erradas ao abrir).
     // Na primeira atualização do app reaproveita a cópia já lida na abertura (antes lia a
     // cópia de vários MB uma segunda vez).
-    const reaproveitarCopia = !cacheInicialUsadaRef.current && cacheInicial.userId === user.id && cacheInicial.notas.length > 0;
     cacheInicialUsadaRef.current = true;
-    const userLocalNotes = reaproveitarCopia ? cacheInicial.notas : loadLocal(user.id);
+    // Se já há notas em memória (vieram da cópia ao abrir), elas SÃO a cópia: não lê o
+    // aparelho de novo. Só lê (IndexedDB e, por último, armazenamento comum) quando a lista está vazia.
+    const userLocalNotes = notesRef.current.length > 0 ? notesRef.current : await lerCacheCompleto(user.id);
     const savedLocalNotes = anonNotes.length > 0 ? mergeNotes(anonNotes, userLocalNotes) : userLocalNotes;
 
-    const localNotes = (notesRef.current.length > 0 ? mergeNotes(savedLocalNotes, notesRef.current) : savedLocalNotes).filter((n) => !lixeiraVencida(n));
+    const localNotes = savedLocalNotes.filter((n) => !lixeiraVencida(n));
     lastFetchRef.current = Date.now();
     if (anonNotes.length > 0) {
       try { localStorage.removeItem(getLocalKey("anon")); } catch {}

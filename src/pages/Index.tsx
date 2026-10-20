@@ -62,7 +62,7 @@ const Index = () => {
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const activeModalRef = useRef<string | null>(null);
   const onModalCloseRef = useRef<(() => void) | null>(null);
-  const { notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, reorderPinnedNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, syncStatus, unsyncedCount, lastSyncError, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes, refreshNotes } = useNotes();
+  const { loading: notasCarregando, notes, addNote, deleteNote, restoreNote, permanentDeleteNote, emptyTrash, updateNote, setNoteReminder, togglePinNote, reorderPinnedNote, lockNoteWithPin, unlockNoteWithPin, verifyNotePin, syncStatus, unsyncedCount, lastSyncError, draftCount, exportBackup, importBackup, shouldRemindBackup, reminderAlert, dismissReminderAlert, snoozeReminderAlert, trashedNotes, refreshNotes } = useNotes();
   const { appointments, trashedAppointments, addAppointment, updateAppointment, deleteAppointment, restoreAppointment, permanentDeleteAppointment, emptyAppointmentTrash, activeAlert, dismissAlert, snoozeAlert, fetchAppointments } = useAppointments();
   const { medicationAlert, dismissMedicationAlert, snoozeMedicationAlert } = useMedicationAlerts();
   const { user, signOut, permissions, isAdmin } = useAuth();
@@ -465,7 +465,7 @@ const Index = () => {
                       title: "⏱ Tempos da abertura",
                       description:
                         `Página pronta: ${f(m.domPronto)} · Código pronto: ${f(m.jsPronto)} · Cópia lida: ${f(m.cacheMs)} · Lista na tela: ${f(m.listaNaTela)} · Usuário pronto: ${f(m.usuarioPronto)} · Servidor: ${f(m.servidorOk)}` +
-                        ` · Cópia gravada: ${m.cacheStatus ?? "ainda não"}${m.cacheKB ? ` (${Math.round(m.cacheKB)} KB)` : ""}` +
+                        ` · Cópia gravada: ${({ idb: "no IndexedDB (espaço grande) ✓", completo: "no armazenamento comum ✓", parcial: "PARCIAL (sem fotos)", falhou: "FALHOU" } as Record<string, string>)[m.cacheStatus ?? ""] ?? "ainda não"}${m.cacheKB ? ` (${Math.round(m.cacheKB)} KB)` : ""}` +
                         ` · Espaço usado no aparelho: ${mb(usadoLS / 1048576)} de ~5 MB` +
                         ` · Baixou desde que abriu: lista ${m.listasBaixadas}x, textos de ${m.corposBaixados} notas (${mb(m.corposKB / 1024)})`,
                       duration: 25000,
@@ -644,6 +644,7 @@ const Index = () => {
         {tab === "notes" && (
           <NotesView
             notes={notes}
+            carregando={notasCarregando}
             onAdd={addNote}
             onDelete={deleteNote}
             onUpdate={updateNote}

@@ -26,6 +26,7 @@ export { getFontClass, getSizeClass } from "./NoteEditor";
 
 interface NotesViewProps {
   notes: Note[];
+  carregando?: boolean;
   onAdd: (title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string, status?: "rascunho" | "publicada") => void;
   onDelete: (id: string) => void;
   onUpdate: (id: string, title: string, content: string, images?: string[], color?: string, fontFamily?: string, fontSize?: string, status?: "rascunho" | "publicada") => void;
@@ -48,7 +49,7 @@ interface NotesViewProps {
   onEmptyTrash: () => void;
 }
 
-export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onTogglePin, onReorderPin, onLockNote, onUnlockNote, onVerifyPin, onAddAppointment, onRefresh, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, trashedNotes, onRestoreNote, onPermanentDeleteNote, onEmptyTrash }: NotesViewProps) {
+export function NotesView({ notes, carregando, onAdd, onDelete, onUpdate, onSetReminder, onTogglePin, onReorderPin, onLockNote, onUnlockNote, onVerifyPin, onAddAppointment, onRefresh, syncStatus, draftCount, exportBackup, importBackup, shouldRemindBackup, trashedNotes, onRestoreNote, onPermanentDeleteNote, onEmptyTrash }: NotesViewProps) {
   const [search, setSearch] = useState("");
   const [showOnlyDrafts, setShowOnlyDrafts] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -410,7 +411,7 @@ export function NotesView({ notes, onAdd, onDelete, onUpdate, onSetReminder, onT
 
       <div className="flex items-center justify-between mb-3">
         <p className="text-xs font-semibold text-[#BDBDBD]">
-          {filtered.length} {filtered.length === 1 ? "nota" : "notas"}
+          {carregando && notes.length === 0 ? "Carregando notas…" : `${filtered.length} ${filtered.length === 1 ? "nota" : "notas"}`}
         </p>
       </div>
 
