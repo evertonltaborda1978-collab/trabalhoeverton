@@ -6,6 +6,7 @@ import { ALERT_SOUND_OPTIONS, playAlertSoundPreview, type AlertSoundId } from "@
 import { NativeAlarmSoundPicker, type NativeSoundValue } from "./NativeAlarmSoundPicker";
 import { HealthVisitsView } from "./HealthVisitsView";
 import type { MedPrefill } from "@/lib/healthLink";
+import { getDoseStatus, getPhaseOnDate } from "@/lib/medicationSchedule";
 import { getCurrentPhaseIndex, getDaysElapsed, type MedOrigin, type MedPhase, type Medication } from "@/lib/medicationTypes";
 export type { Medication } from "@/lib/medicationTypes";
 
@@ -47,7 +48,30 @@ const FONT_STEPS = [0.9, 1.0, 1.15, 1.3, 1.55, 1.8];
 const DEFAULT_FONT_STEP = 3;
 const FONT_STORAGE_KEY = "med_font_step";
 
-const WHEEL_CSS = `.med-wheel{scrollbar-width:none;-ms-overflow-style:none}.med-wheel::-webkit-scrollbar{display:none}`;
+type TrashedMedication = Medication & { deletedAt: string };
+const TRASH_DAYS = 30;
+
+// Destaque piscante no nome do remédio: amarelo (dose em até 1h), vermelho (atrasada), verde (acabou de tomar)
+const WHEEL_CSS = `.med-wheel{scrollbar-width:none;-ms-overflow-style:none}.med-wheel::-webkit-scrollbar{display:none}
+@keyframes medPulseY{0%,100%{box-shadow:0 0 0 0 rgba(239,159,39,.65)}50%{box-shadow:0 0 0 8px rgba(239,159,39,0)}}
+@keyframes medPulseR{0%,100%{box-shadow:0 0 0 0 rgba(226,75,74,.65)}50%{box-shadow:0 0 0 8px rgba(226,75,74,0)}}
+@keyframes medPulseG{0%,100%{box-shadow:0 0 0 0 rgba(29,158,117,.65)}50%{box-shadow:0 0 0 8px rgba(29,158,117,0)}}
+.med-hl-soon{animation:medPulseY 1.5s ease-in-out infinite}
+.med-hl-late{animation:medPulseR 1s ease-in-out infinite}
+.med-hl-ok{animation:medPulseG 1.2s ease-in-out infinite}
+@media (prefers-reduced-motion: reduce){.med-hl-soon,.med-hl-late,.med-hl-ok{animation:none}}`;
+
+function fmtMinutes(min: number): string {
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m ? `${h}h ${m}min` : `${h}h`;
+}
+
+function fmtDateTime(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
 
 // ── Funções auxiliares ────────────────────────────────
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -329,6 +353,15 @@ export function MedicationView() {
   const [newProfileIcon, setNewProfileIcon] = useState("👨");
   const [showSizePanel, setShowSizePanel] = useState(false);
   const [tab, setTab] = useState<"remedios" | "atendimentos">("remedios");
+  const [trash, setTrash] = useState<TrashedMedication[]>([]);
+  const [showTrash, setShowTrash] = useState(false);
+  const [confirmPurgeId, setConfirmPurgeId] = useState<string | null>(null);
+  // Relógio da tela: atualiza a cada 15s para o destaque do nome (amarelo/vermelho/verde) acompanhar a hora
+  const [clock, setClock] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setClock(new Date()), 15_000);
+    return () => clearInterval(t);
+  }, []);
 
   // Tamanho da fonte (salvo no aparelho)
   const [fontStep, setFontStep] = useState<number>(() => {
@@ -360,11 +393,20 @@ export function MedicationView() {
   const [formOrigin, setFormOrigin] = useState<MedOrigin | null>(null);
 
   const STORAGE_KEY = `medications_${user?.id}`;
+  const TRASH_KEY = `medications_trash_${user?.id}`;
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) setMedications(JSON.parse(raw));
+      const rawT = localStorage.getItem(TRASH_KEY);
+      if (rawT) {
+        const cutoff = Date.now() - TRASH_DAYS * 24 * 60 * 60 * 1000;
+        const all: TrashedMedication[] = JSON.parse(rawT);
+        const kept = all.filter(t => new Date(t.deletedAt).getTime() > cutoff);
+        setTrash(kept);
+        if (kept.length !== all.length) localStorage.setItem(TRASH_KEY, JSON.stringify(kept));
+      }
       const rawP = localStorage.getItem(`profiles_${user?.id}`);
       if (rawP) setProfiles(JSON.parse(rawP));
     } catch {}
@@ -534,6 +576,7 @@ export function MedicationView() {
   const takeMed = (id: string) => {
     const now = new Date().toISOString();
     save(medications.map(m => m.id === id ? { ...m, takenDates: [...m.takenDates, now], stock: Math.max(0, m.stock - 1) } : m));
+    setClock(new Date());
     toast({ title: "✅ Dose registrada!" });
   };
 
@@ -546,13 +589,39 @@ export function MedicationView() {
       if (last < 0) return m;
       return { ...m, takenDates: m.takenDates.filter((_, i) => i !== last), stock: m.stock + 1 };
     }));
+    setClock(new Date());
     toast({ title: "Dose desfeita" });
   };
 
-  const deleteMed = (id: string) => {
+  const saveTrash = (list: TrashedMedication[]) => {
+    setTrash(list);
+    try { localStorage.setItem(TRASH_KEY, JSON.stringify(list)); } catch {}
+  };
+
+  // Excluir = mover para a lixeira (dá para restaurar por 30 dias). Os alarmes dele param.
+  const moveToTrash = (id: string) => {
+    const med = medications.find(m => m.id === id);
+    if (!med) return;
+    saveTrash([...trash, { ...med, deletedAt: new Date().toISOString() }]);
     save(medications.filter(m => m.id !== id));
     setConfirmDeleteId(null);
-    toast({ title: "Medicamento removido" });
+    toast({ title: "Movido para a lixeira", description: `Você pode restaurar em até ${TRASH_DAYS} dias.` });
+  };
+
+  const restoreFromTrash = (id: string) => {
+    const item = trash.find(t => t.id === id);
+    if (!item) return;
+    const med = { ...item } as Medication & { deletedAt?: string };
+    delete med.deletedAt;
+    save([...medications, med]);
+    saveTrash(trash.filter(t => t.id !== id));
+    toast({ title: "✅ Medicamento restaurado" });
+  };
+
+  const purgeFromTrash = (id: string) => {
+    saveTrash(trash.filter(t => t.id !== id));
+    setConfirmPurgeId(null);
+    toast({ title: "Excluído de vez" });
   };
 
   const addProfile = () => {
@@ -802,6 +871,7 @@ export function MedicationView() {
   // ══════════════════════════════════════════════════════
   const today = localKey();
   const medToDelete = confirmDeleteId ? medications.find(m => m.id === confirmDeleteId) : null;
+  const trashForProfile = trash.filter(t => t.profileId === activeProfile);
 
   return (
     <div>
@@ -902,6 +972,7 @@ export function MedicationView() {
           const takenToday = med.takenDates.filter(d => keyOfIso(d) === today).length;
           const allDone = takenToday >= perDay;
           const lowStock = med.lowStockAlert > 0 && med.stock <= med.lowStockAlert;
+          const dose = getDoseStatus(getPhaseOnDate(med, clock), med.takenDates, clock);
           const adherence = getAdherence(med);
 
           return (
@@ -921,7 +992,21 @@ export function MedicationView() {
                 </button>
 
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: fs(16), fontWeight: 600, color: "var(--color-text-primary)", wordBreak: "break-word" }}>{med.name}</div>
+                  <div style={{ fontSize: fs(16), fontWeight: 600, color: "var(--color-text-primary)", wordBreak: "break-word" }}>
+                    <span
+                      className={dose.kind === "soon" ? "med-hl-soon" : dose.kind === "late" ? "med-hl-late" : dose.kind === "recent" ? "med-hl-ok" : undefined}
+                      style={{
+                        display: "inline-block", padding: "2px 10px", marginLeft: -12, borderRadius: 14, border: "2px solid transparent",
+                        ...(dose.kind === "soon" ? { borderColor: "#EF9F27", background: "rgba(239,159,39,0.16)" } : {}),
+                        ...(dose.kind === "late" ? { borderColor: "#E24B4A", background: "rgba(226,75,74,0.14)" } : {}),
+                        ...(dose.kind === "recent" ? { borderColor: "#1D9E75", background: "rgba(29,158,117,0.14)" } : {}),
+                      }}
+                    >
+                      {med.name}
+                    </span>
+                  </div>
+                  {dose.kind === "soon" && <div style={{ fontSize: fs(12), fontWeight: 600, color: "#B26B00", marginTop: 2 }}>⏰ Falta {fmtMinutes(dose.minutes)} para a dose</div>}
+                  {dose.kind === "late" && <div style={{ fontSize: fs(12), fontWeight: 600, color: "#C62828", marginTop: 2 }}>⚠️ Dose atrasada há {fmtMinutes(dose.minutes)}</div>}
                   <div style={{ fontSize: fs(13), color: "var(--color-text-secondary)", marginTop: 2 }}>
                     {phase ? `${fmtDose(phase.dose)} ${unitLabel(phase.doseUnit, phase.dose)} · ${phase.timesPerDay}x ao dia` : ""}
                   </div>
@@ -932,7 +1017,7 @@ export function MedicationView() {
                   {med.origin && <div style={{ fontSize: fs(12), color: "var(--color-text-secondary)", marginTop: 2, wordBreak: "break-word" }}>📋 {med.origin.label}</div>}
                 </div>
 
-                <button onClick={() => setConfirmDeleteId(med.id)} aria-label={`Excluir ${med.name}`}
+                <button onClick={() => setConfirmDeleteId(med.id)} aria-label={`Mover ${med.name} para a lixeira`}
                   style={{ width: 46, height: 46, borderRadius: 14, border: "1px solid #F7C1C1", background: "rgba(252,235,235,0.5)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <Trash2 size={20} color="#E24B4A" />
                 </button>
@@ -989,6 +1074,64 @@ export function MedicationView() {
         <Plus size={18} /> Adicionar medicamento
       </button>
 
+      {trashForProfile.length > 0 && (
+        <button onClick={() => setShowTrash(true)}
+          style={{ width: "100%", minHeight: 48, borderRadius: 14, border: "1px solid #F7C1C1", background: "rgba(252,235,235,0.5)", color: "#E24B4A", fontSize: fs(14), fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 10 }}>
+          <Trash2 size={17} /> Lixeira ({trashForProfile.length})
+        </button>
+      )}
+
+      {showTrash && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+          onClick={() => setShowTrash(false)}>
+          <div style={{ background: "var(--color-background-primary)", borderRadius: "20px 20px 0 0", padding: 20, width: "100%", maxWidth: 480, maxHeight: "80vh", overflowY: "auto" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <div style={{ fontSize: fs(16), fontWeight: 600, color: "var(--color-text-primary)" }}>🗑️ Lixeira</div>
+              <button onClick={() => setShowTrash(false)} aria-label="Fechar" style={{ background: "transparent", border: "none", cursor: "pointer", width: 44, height: 44 }}><X size={20} /></button>
+            </div>
+            <div style={{ fontSize: fs(12), color: "var(--color-text-secondary)", marginBottom: 14 }}>
+              Os medicamentos na lixeira são apagados definitivamente após {TRASH_DAYS} dias. Enquanto estiverem aqui, não tocam alarme.
+            </div>
+            {trashForProfile.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 24, color: "var(--color-text-secondary)", fontSize: fs(14) }}>Lixeira vazia</div>
+            ) : (
+              trashForProfile.map(t => (
+                <div key={t.id} style={{ border: "0.5px solid var(--color-border-tertiary)", borderRadius: 14, padding: 12, marginBottom: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                    <span style={{ fontSize: fs(22) }}>{TYPE_MAP[t.type].icon}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: fs(15), fontWeight: 600, color: "var(--color-text-primary)", wordBreak: "break-word" }}>{t.name}</div>
+                      <div style={{ fontSize: fs(12), color: "var(--color-text-secondary)" }}>Removido em {fmtDateTime(t.deletedAt)}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => restoreFromTrash(t.id)}
+                      style={{ flex: 1, minHeight: 46, borderRadius: 12, border: "none", background: "#1D9E75", color: "white", fontSize: fs(14), fontWeight: 700, cursor: "pointer" }}>Restaurar</button>
+                    <button onClick={() => setConfirmPurgeId(t.id)}
+                      style={{ flex: 1, minHeight: 46, borderRadius: 12, border: "1px solid #F7C1C1", background: "transparent", color: "#E24B4A", fontSize: fs(14), fontWeight: 600, cursor: "pointer" }}>Excluir de vez</button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {confirmPurgeId && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 10000, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setConfirmPurgeId(null)}>
+          <div style={{ background: "var(--color-background-primary)", borderRadius: 20, padding: 22, width: "88%", maxWidth: 340 }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: fs(16), fontWeight: 600, marginBottom: 8, textAlign: "center", color: "var(--color-text-primary)" }}>Excluir de vez?</div>
+            <div style={{ fontSize: fs(14), color: "var(--color-text-secondary)", textAlign: "center", marginBottom: 18 }}>Isso apaga o medicamento e todo o histórico de doses. Não dá para desfazer.</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setConfirmPurgeId(null)} style={{ flex: 1, padding: 12, minHeight: 48, borderRadius: 12, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", fontSize: fs(14), color: "var(--color-text-primary)" }}>Cancelar</button>
+              <button onClick={() => purgeFromTrash(confirmPurgeId)} style={{ flex: 1, padding: 12, minHeight: 48, borderRadius: 12, border: "none", background: "#E24B4A", color: "white", cursor: "pointer", fontWeight: 600, fontSize: fs(14) }}>Excluir de vez</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal histórico */}
       {showHistory && (() => {
         const med = medications.find(m => m.id === showHistory);
@@ -1032,13 +1175,13 @@ export function MedicationView() {
           onClick={() => setConfirmDeleteId(null)}>
           <div style={{ background: "var(--color-background-primary)", borderRadius: 20, padding: 22, width: "88%", maxWidth: 340 }}
             onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: fs(16), fontWeight: 600, marginBottom: 8, textAlign: "center", color: "var(--color-text-primary)" }}>Excluir medicamento?</div>
+            <div style={{ fontSize: fs(16), fontWeight: 600, marginBottom: 8, textAlign: "center", color: "var(--color-text-primary)" }}>Mover para a lixeira?</div>
             <div style={{ fontSize: fs(14), color: "var(--color-text-secondary)", textAlign: "center", marginBottom: 18, wordBreak: "break-word" }}>
-              {medToDelete.name} e todo o histórico de doses serão removidos.
+              {medToDelete.name} sai da lista e os alarmes dele param. Você pode restaurar em até 30 dias, na lixeira.
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={() => setConfirmDeleteId(null)} style={{ flex: 1, padding: 12, minHeight: 48, borderRadius: 12, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", fontSize: fs(14), color: "var(--color-text-primary)" }}>Cancelar</button>
-              <button onClick={() => deleteMed(medToDelete.id)} style={{ flex: 1, padding: 12, minHeight: 48, borderRadius: 12, border: "none", background: "#E24B4A", color: "white", cursor: "pointer", fontWeight: 600, fontSize: fs(14) }}>Excluir</button>
+              <button onClick={() => moveToTrash(medToDelete.id)} style={{ flex: 1, padding: 12, minHeight: 48, borderRadius: 12, border: "none", background: "#E24B4A", color: "white", cursor: "pointer", fontWeight: 600, fontSize: fs(14) }}>Mover para a lixeira</button>
             </div>
           </div>
         </div>

@@ -82,3 +82,48 @@ export function buildMedicationReminders(meds: Medication[], now: Date = new Dat
   }
   return out;
 }
+
+// ── Situação da próxima dose (para o destaque no nome do remédio) ──
+export type DoseStatusKind = "none" | "soon" | "late" | "recent";
+
+export interface DoseStatus {
+  kind: DoseStatusKind;
+  /** soon = minutos que faltam; late = minutos de atraso */
+  minutes: number;
+}
+
+/**
+ * - "recent": você marcou TOMEI há menos de 2 minutos (verde piscando)
+ * - "soon":   a próxima dose é daqui a 1 hora ou menos (amarelo)
+ * - "late":   o horário da próxima dose já passou e ela não foi marcada (vermelho)
+ * - "none":   nada a destacar
+ * A próxima dose é a de número (doses de hoje já tomadas + 1), contando a partir do
+ * horário inicial da fase. Horários depois da meia-noite contam como "amanhã".
+ */
+export function getDoseStatus(phase: MedPhase | null | undefined, takenDates: string[], now: Date = new Date()): DoseStatus {
+  const none: DoseStatus = { kind: "none", minutes: 0 };
+  if (!phase || phase.timesPerDay <= 0) return none;
+
+  let last = 0;
+  for (const iso of takenDates) {
+    const t = new Date(iso).getTime();
+    if (t > last) last = t;
+  }
+  if (last && now.getTime() >= last - 5000 && now.getTime() - last < 2 * 60_000) return { kind: "recent", minutes: 0 };
+
+  const today = localDateKey(now);
+  const takenToday = takenDates.filter((d) => localDateKey(new Date(d)) === today).length;
+  if (takenToday >= phase.timesPerDay) return none;
+
+  const [h, m] = phase.startTime.split(":").map(Number);
+  if (isNaN(h)) return none;
+  const intervalMin = Math.floor(24 / phase.timesPerDay) * 60;
+  const midnight = new Date(now);
+  midnight.setHours(0, 0, 0, 0);
+  const slot = midnight.getTime() + (h * 60 + (m || 0) + takenToday * intervalMin) * 60_000;
+  const diff = Math.round((slot - now.getTime()) / 60_000);
+
+  if (diff > 60) return none;
+  if (diff > 0) return { kind: "soon", minutes: diff };
+  return { kind: "late", minutes: -diff };
+}
