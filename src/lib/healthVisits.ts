@@ -9,10 +9,18 @@ import { HealthFile, deleteHealthFiles, syncPendingFile } from "./healthFiles";
 
 export const PLACE_TYPES = ["UPA", "Hospital", "Clínica", "Posto de saúde", "Particular", "Outro"] as const;
 
+// Opções para tocar (em vez de digitar) ao cadastrar o remédio da receita
+export const RX_UNITS = ["mg", "g", "mcg", "ml", "gotas", "UI", "%"] as const;
+export const RX_FORMS = ["Caixa", "Envelope", "Cartela", "Frasco", "Tubo", "Ampola", "Unidade", "Outro"] as const;
+
 export interface RxItem {
   id: string;
-  name: string; // ex.: "Amoxicilina 500 mg"
-  qty: string; // ex.: "1 caixa, 21 cápsulas"
+  name: string; // ex.: "Amoxicilina"
+  strength?: string; // ex.: "500"
+  unit?: string; // ex.: "mg", "gotas"
+  form?: string; // ex.: "Caixa", "Envelope"
+  amount?: number; // quantas embalagens (ex.: 2)
+  qty: string; // observação livre (ex.: "21 cápsulas; 1 a cada 8 horas")
   bought: boolean;
 }
 

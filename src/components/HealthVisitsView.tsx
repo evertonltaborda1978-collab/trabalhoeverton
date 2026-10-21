@@ -9,7 +9,7 @@ import {
   compressImage, deleteHealthFiles, getHealthFileBlob, imagesToPdf, shareFiles, storeHealthFile,
 } from "@/lib/healthFiles";
 import {
-  HealthVisit, PLACE_TYPES, Prescription, RxItem,
+  HealthVisit, PLACE_TYPES, Prescription, RX_FORMS, RX_UNITS, RxItem,
   loadLocalVisits, pendingCount, refreshVisits, removeVisit, saveVisit,
 } from "@/lib/healthVisits";
 import { isUnlocked, lockNow, markUnlocked, touchActivity, unlockWithBiometric, verifyAccountPassword } from "@/lib/healthLock";
@@ -50,6 +50,15 @@ function newPrescription(n: number): Prescription {
 
 function allFiles(v: HealthVisit): HealthFile[] {
   return v.prescriptions.flatMap((p) => p.files);
+}
+
+function itemSummary(it: RxItem): { title: string; sub: string } {
+  const strength = it.strength ? `${it.strength}${it.unit ? ` ${it.unit}` : ""}` : "";
+  const title = [it.name.trim() || "Remédio sem nome", strength].filter(Boolean).join(" ");
+  const amount = it.amount && it.amount > 0 ? it.amount : 0;
+  const pack = amount ? `${amount} ${(it.form || "unid.").toLowerCase()}${it.form && amount > 1 ? "s" : ""}` : (it.form || "");
+  const sub = [pack, it.qty.trim()].filter(Boolean).join(" · ");
+  return { title, sub };
 }
 
 // ── Tela de bloqueio ──────────────────────────────────
@@ -253,7 +262,7 @@ function VisitEditor({
   initial: HealthVisit;
   isNew: boolean;
   userId: string;
-  suggestions: { doctors: string[]; places: string[] };
+  suggestions: { doctors: string[]; places: string[]; meds: RxItem[] };
   scale: number;
   onSave: (v: HealthVisit, removed: HealthFile[]) => Promise<void>;
   onDelete: () => Promise<void>;
@@ -270,6 +279,7 @@ function VisitEditor({
   const cameraInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const targetRx = useRef(0);
+  const [openItem, setOpenItem] = useState<string | null>(null);
 
   const dirty = JSON.stringify(draft) !== initialJson.current;
 
@@ -285,8 +295,37 @@ function VisitEditor({
 
   const addRx = () => setDraft((d) => ({ ...d, prescriptions: [...d.prescriptions, newPrescription(d.prescriptions.length + 1)] }));
 
-  const addItem = (idx: number) =>
-    updRx(idx, { items: [...draft.prescriptions[idx].items, { id: crypto.randomUUID(), name: "", qty: "", bought: false }] });
+  const addItem = (idx: number) => {
+    const id = crypto.randomUUID();
+    updRx(idx, { items: [...draft.prescriptions[idx].items, { id, name: "", qty: "", bought: false, amount: 1 }] });
+    setOpenItem(id);
+  };
+
+  // Ao digitar um nome que você já usou antes, puxa a dose e a embalagem da última vez
+  const onItemName = (idx: number, it: RxItem, value: string) => {
+    const known = suggestions.meds.find((m) => m.name.trim().toLowerCase() === value.trim().toLowerCase());
+    const patch: Partial<RxItem> = { name: value };
+    if (known && !it.strength && !it.unit && !it.form) {
+      patch.strength = known.strength;
+      patch.unit = known.unit;
+      patch.form = known.form;
+      patch.amount = known.amount && known.amount > 0 ? known.amount : 1;
+    }
+    updItem(idx, it.id, patch);
+  };
+
+  const closeItem = (idx: number, it: RxItem) => {
+    if (!it.name.trim()) {
+      if (!it.strength && !it.unit && !it.form && !it.qty.trim()) {
+        delItem(idx, it.id);
+        setOpenItem(null);
+      } else {
+        toast({ title: "Digite o nome do remédio", variant: "destructive" });
+      }
+      return;
+    }
+    setOpenItem(null);
+  };
 
   const updItem = (idx: number, itemId: string, patch: Partial<RxItem>) =>
     updRx(idx, { items: draft.prescriptions[idx].items.map((it) => (it.id === itemId ? { ...it, ...patch } : it)) });
@@ -436,6 +475,7 @@ function VisitEditor({
   return (
     <div style={{ opacity: busy ? 0.7 : 1 }}>
       <datalist id="hv-doctors">{suggestions.doctors.map((d) => <option key={d} value={d} />)}</datalist>
+      <datalist id="hv-meds">{suggestions.meds.map((m) => <option key={m.id} value={m.name} />)}</datalist>
       <datalist id="hv-places">{suggestions.places.map((d) => <option key={d} value={d} />)}</datalist>
       <input ref={cameraInput} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={onInputChange} />
       <input ref={fileInput} type="file" accept="image/*,application/pdf" multiple style={{ display: "none" }} onChange={onInputChange} />
@@ -518,24 +558,69 @@ function VisitEditor({
 
           {/* Remédios da receita */}
           <div style={labelStyle}>Remédios da receita</div>
-          {rx.items.map((it) => (
-            <div key={it.id} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
-              <button onClick={() => updItem(idx, it.id, { bought: !it.bought })} aria-label={it.bought ? "Marcar como não comprado" : "Marcar como comprado"}
-                style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 12, border: `1.5px solid ${it.bought ? GREEN : "var(--color-border-secondary)"}`, background: it.bought ? "#E1F5EE" : "transparent", cursor: "pointer", fontSize: 18 }}>
-                {it.bought ? "✅" : "🛒"}
-              </button>
-              <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
-                <input value={it.name} onChange={(e) => updItem(idx, it.id, { name: e.target.value })} placeholder="Remédio e dose (ex.: Amoxicilina 500 mg)"
-                  style={{ ...inputStyle, padding: "9px 10px", textDecoration: it.bought ? "line-through" : "none" }} />
-                <input value={it.qty} onChange={(e) => updItem(idx, it.id, { qty: e.target.value })} placeholder="Quantidade (ex.: 1 caixa, 21 cápsulas)"
-                  style={{ ...inputStyle, padding: "9px 10px", fontSize: fs(13) }} />
+          {rx.items.map((it) => {
+            const { title, sub } = itemSummary(it);
+            if (openItem !== it.id) {
+              return (
+                <div key={it.id} style={{ display: "flex", gap: 4, alignItems: "center", marginBottom: 8, background: "var(--color-background-primary)", borderRadius: 12, padding: "6px 6px", border: "0.5px solid var(--color-border-tertiary)" }}>
+                  <button onClick={() => updItem(idx, it.id, { bought: !it.bought })} aria-label={it.bought ? "Marcar como não comprado" : "Marcar como comprado"}
+                    style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 12, border: `1.5px solid ${it.bought ? GREEN : "var(--color-border-secondary)"}`, background: it.bought ? "#E1F5EE" : "transparent", cursor: "pointer", fontSize: 18 }}>
+                    {it.bought ? "✅" : "🛒"}
+                  </button>
+                  <div style={{ flex: 1, minWidth: 0, padding: "0 4px" }}>
+                    <div style={{ fontSize: fs(14), fontWeight: 600, color: "var(--color-text-primary)", textDecoration: it.bought ? "line-through" : "none", wordBreak: "break-word" }}>{title}</div>
+                    {sub && <div style={{ fontSize: fs(12), color: "var(--color-text-secondary)", wordBreak: "break-word" }}>{sub}</div>}
+                  </div>
+                  <button onClick={() => setOpenItem(it.id)} aria-label={`Editar ${it.name || "remédio"}`}
+                    style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 12, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", fontSize: 18 }}>✏️</button>
+                  <button onClick={() => setConfirm({ text: `Remover "${it.name.trim() || "este remédio"}" da receita?`, yes: () => { setConfirm(null); delItem(idx, it.id); } })} aria-label="Remover remédio"
+                    style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 12, border: "1px solid #F7C1C1", background: "rgba(252,235,235,0.5)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Trash2 size={18} color={RED} />
+                  </button>
+                </div>
+              );
+            }
+            const amount = it.amount && it.amount > 0 ? it.amount : 1;
+            return (
+              <div key={it.id} style={{ border: `1.5px solid ${ACCENT}`, borderRadius: 14, padding: 12, marginBottom: 10, background: "var(--color-background-primary)" }}>
+                <div style={labelStyle}>Nome do remédio</div>
+                <input list="hv-meds" value={it.name} onChange={(e) => onItemName(idx, it, e.target.value)} placeholder="Digite o nome (os já usados aparecem)" style={{ ...inputStyle, marginBottom: 12 }} autoFocus={!it.name} />
+
+                <div style={labelStyle}>Dose (concentração)</div>
+                <input inputMode="decimal" value={it.strength || ""} onChange={(e) => updItem(idx, it.id, { strength: e.target.value.replace(/[^0-9.,]/g, "") })} placeholder="Número (ex.: 500)" style={{ ...inputStyle, marginBottom: 8 }} />
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                  {RX_UNITS.map((u) => (
+                    <button key={u} onClick={() => updItem(idx, it.id, { unit: it.unit === u ? "" : u })} style={chip(it.unit === u)}>{u}</button>
+                  ))}
+                </div>
+
+                <div style={labelStyle}>Embalagem</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                  {RX_FORMS.map((f) => (
+                    <button key={f} onClick={() => updItem(idx, it.id, { form: it.form === f ? "" : f })} style={chip(it.form === f)}>{f}</button>
+                  ))}
+                </div>
+
+                <div style={labelStyle}>Quantidade</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <button onClick={() => updItem(idx, it.id, { amount: Math.max(1, amount - 1) })} aria-label="Diminuir"
+                    style={{ width: 48, height: 48, borderRadius: 12, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", fontSize: fs(22), color: "var(--color-text-primary)" }}>−</button>
+                  <span style={{ minWidth: 44, textAlign: "center", fontSize: fs(20), fontWeight: 700, color: "var(--color-text-primary)" }}>{amount}</span>
+                  <button onClick={() => updItem(idx, it.id, { amount: amount + 1 })} aria-label="Aumentar"
+                    style={{ width: 48, height: 48, borderRadius: 12, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", fontSize: fs(22), color: "var(--color-text-primary)" }}>+</button>
+                  <span style={{ fontSize: fs(13), color: "var(--color-text-secondary)" }}>{it.form ? it.form.toLowerCase() + (amount > 1 ? "s" : "") : "embalagem"}</span>
+                </div>
+
+                <div style={labelStyle}>Observação (opcional)</div>
+                <input value={it.qty} onChange={(e) => updItem(idx, it.id, { qty: e.target.value })} placeholder="Ex.: 21 comprimidos; 1 a cada 8 horas" style={{ ...inputStyle, marginBottom: 12 }} />
+
+                <button onClick={() => closeItem(idx, it)}
+                  style={{ width: "100%", minHeight: 48, borderRadius: 12, border: "none", background: ACCENT, color: "#fff", fontSize: fs(14), fontWeight: 700, cursor: "pointer" }}>
+                  Pronto
+                </button>
               </div>
-              <button onClick={() => delItem(idx, it.id)} aria-label="Remover remédio"
-                style={{ width: 40, height: 44, flexShrink: 0, background: "transparent", border: "none", cursor: "pointer" }}>
-                <X size={18} color="var(--color-text-secondary)" />
-              </button>
-            </div>
-          ))}
+            );
+          })}
           <button onClick={() => addItem(idx)}
             style={{ width: "100%", minHeight: 44, borderRadius: 12, border: "1px dashed var(--color-border-secondary)", background: "transparent", cursor: "pointer", fontSize: fs(13), color: "var(--color-text-secondary)" }}>
             + Adicionar remédio da receita
@@ -618,7 +703,16 @@ export function HealthVisitsView({ scale }: { scale: number }) {
 
   const suggestions = useMemo(() => {
     const uniq = (xs: string[]) => Array.from(new Set(xs.map((x) => x.trim()).filter(Boolean)));
-    return { doctors: uniq(visits.map((v) => v.doctor_name)), places: uniq(visits.map((v) => v.place_name)) };
+    const meds = new Map<string, RxItem>();
+    for (const v of visits) {
+      for (const p of v.prescriptions) {
+        for (const it of p.items) {
+          const key = it.name.trim().toLowerCase();
+          if (key && !meds.has(key)) meds.set(key, it); // a lista vem do mais novo para o mais antigo
+        }
+      }
+    }
+    return { doctors: uniq(visits.map((v) => v.doctor_name)), places: uniq(visits.map((v) => v.place_name)), meds: Array.from(meds.values()) };
   }, [visits]);
 
   if (!user) return null;
