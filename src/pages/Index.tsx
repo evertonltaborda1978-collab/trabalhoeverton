@@ -25,7 +25,8 @@ import { APP_VERSION, forceUpdateApp } from "@/lib/appVersion";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { syncNativeAlarms, type NativeAlarmReminder } from "@/lib/nativeAlarm";
-import { getCurrentPhaseIndex, type Medication } from "@/lib/medicationTypes";
+import type { Medication } from "@/lib/medicationTypes";
+import { buildMedicationReminders } from "@/lib/medicationSchedule";
 import { LogOut, RefreshCw, RotateCcw, Cloud, CloudOff, Download, Upload, SignalHigh, SignalMedium, SignalLow, SignalZero, MoreHorizontal, ClipboardList, Trash2, ShieldCheck } from "lucide-react";
 import type { AlertSoundId } from "@/lib/alertSound";
 import { useAppTextSize, APP_TEXT_SIZE_LABELS } from "@/hooks/useAppTextSize";
@@ -187,6 +188,20 @@ const Index = () => {
     }
   };
 
+  // Sobe de número quando a aba Saúde salva um remédio (evento "medications-changed")
+  // ou quando o app volta pra tela — força o reagendamento dos alarmes.
+  const [medsVersion, setMedsVersion] = useState(0);
+  useEffect(() => {
+    const bump = () => setMedsVersion((v) => v + 1);
+    const onVisible = () => { if (document.visibilityState === "visible") bump(); };
+    window.addEventListener("medications-changed", bump);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("medications-changed", bump);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
   useEffect(() => {
     const reminders: NativeAlarmReminder[] = [];
 
@@ -218,44 +233,22 @@ const Index = () => {
       });
     }
 
-    // Remédios: os horários se repetem todo dia (não têm uma data fixa
-    // como nota/compromisso), então agenda sempre a PRÓXIMA ocorrência de
-    // cada um — hoje, se ainda não passou, senão já amanhã no mesmo
-    // horário. Recalcula de novo a cada mudança, então o dia seguinte
-    // sempre acaba entrando na lista.
+    // Remédios: agenda os próximos 3 dias de cada horário (respeitando a troca
+    // de fase e o fim do tratamento), pra os alarmes continuarem mesmo que o
+    // app fique uns dias sem ser aberto. Recalcula quando a aba Saúde salva
+    // algo e quando você volta pro app (ver os dois "listeners" logo acima).
     if (user) {
       try {
         const raw = localStorage.getItem(`medications_${user.id}`);
         const meds: Medication[] = raw ? JSON.parse(raw) : [];
-        const now = new Date();
-        for (const med of meds) {
-          const phaseIdx = getCurrentPhaseIndex(med.phases, med.startDate);
-          const phase = med.phases[phaseIdx];
-          if (!phase) continue;
-          for (const t of phase.schedules) {
-            const [h, m] = t.split(":").map(Number);
-            if (isNaN(h)) continue;
-            let at = new Date(now);
-            at.setHours(h, m || 0, 0, 0);
-            if (at.getTime() <= now.getTime()) {
-              at = new Date(at.getTime() + 24 * 60 * 60 * 1000);
-            }
-            reminders.push({
-              key: `med-${med.id}-${t}`,
-              title: `Remédio: ${med.name}`,
-              body: `Horário: ${t}`,
-              at,
-              soundUri: med.nativeSoundUri,
-            });
-          }
-        }
+        reminders.push(...buildMedicationReminders(meds));
       } catch {}
     }
 
     // O alarme nativo substitui a notificação simples de antes — evita
     // dois avisos diferentes para o mesmo lembrete.
     syncNativeAlarms(reminders);
-  }, [notes, appointments, user]);
+  }, [notes, appointments, user, medsVersion]);
 
   // Aviso único de atualização, logo após o login (não se repete durante o uso)
   useEffect(() => {

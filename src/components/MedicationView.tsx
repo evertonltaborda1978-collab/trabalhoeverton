@@ -33,10 +33,9 @@ const DOSE_CONFIG: Record<MedType, { unit: string; short: string; values: number
   powder: { unit: "sachê", short: "sachê", values: [0.5, 1, 2, 3, 4] },
 };
 
-const DAYS_OPTIONS: number[] = [...Array.from({ length: 60 }, (_, i) => i + 1), 70, 80, 90, 120, 180];
-const TIMES_OPTIONS: number[] = Array.from({ length: 12 }, (_, i) => i + 1);
-const HOUR_OPTIONS: number[] = Array.from({ length: 24 }, (_, i) => i);
-const MINUTE_OPTIONS: number[] = Array.from({ length: 12 }, (_, i) => i * 5);
+// O 0 vem primeiro: um medicamento novo começa zerado e você escolhe cada valor.
+const DAYS_OPTIONS: number[] = [0, ...Array.from({ length: 60 }, (_, i) => i + 1), 70, 80, 90, 120, 180];
+const TIMES_OPTIONS: number[] = Array.from({ length: 13 }, (_, i) => i);
 
 const COLORS = ["#1D9E75", "#378ADD", "#EF9F27", "#D85A30", "#9C27B0", "#E24B4A"];
 const PROFILE_ICONS = ["👨", "👩", "👦", "👧", "👴", "👵"];
@@ -80,6 +79,7 @@ function nearest(list: number[], v: number): number {
 }
 
 function generateSchedules(timesPerDay: number, startTime: string): string[] {
+  if (timesPerDay <= 0) return [];
   const [h, m] = startTime.split(":").map(Number);
   const interval = Math.floor(24 / timesPerDay);
   return Array.from({ length: timesPerDay }, (_, i) => {
@@ -119,6 +119,8 @@ function getAdherence(med: Medication): number {
 }
 
 // ── Rolagem (picker) ──────────────────────────────────
+// Celular: rolagem nativa com "imã" (snap). Computador: roda do mouse (1 número
+// por clique da roda), arrastar com o mouse, clicar no número e setas ↑ ↓.
 function WheelPicker({
   options, value, onChange, format, color, scale, ariaLabel,
 }: {
@@ -133,35 +135,103 @@ function WheelPicker({
   const ref = useRef<HTMLDivElement>(null);
   const scrolling = useRef(false);
   const timer = useRef<number | undefined>(undefined);
+  const latest = useRef({ options, value, onChange });
+  latest.current = { options, value, onChange };
+  const drag = useRef<{ y: number; top: number; moved: boolean; id: number } | null>(null);
+  const suppressClick = useRef(false);
+  const lastWheel = useRef(0);
   const fsz = (px: number) => Math.round(px * scale * 10) / 10;
   const itemH = Math.max(44, Math.round(fsz(20) * 2));
   const mask = "linear-gradient(to bottom, transparent 0%, #000 28%, #000 72%, transparent 100%)";
 
+  const markScrolling = (ms: number) => {
+    scrolling.current = true;
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => { scrolling.current = false; }, ms);
+  };
+
+  const selectIndex = (i: number) => {
+    const { options: opts, value: cur, onChange: change } = latest.current;
+    const idx = Math.max(0, Math.min(opts.length - 1, i));
+    markScrolling(350);
+    if (opts[idx] !== cur) change(opts[idx]);
+    ref.current?.scrollTo({ top: idx * itemH, behavior: "smooth" });
+  };
+
+  const step = (dir: number) => {
+    const { options: opts, value: cur } = latest.current;
+    selectIndex(Math.max(0, opts.indexOf(cur)) + dir);
+  };
+
   // Posiciona a rolagem no valor atual (abrir o formulário, trocar o tipo, etc.)
   useEffect(() => {
     const el = ref.current;
-    if (!el || scrolling.current) return;
+    if (!el || scrolling.current || drag.current) return;
     const target = Math.max(0, options.indexOf(value)) * itemH;
     if (Math.abs(el.scrollTop - target) > 2) el.scrollTop = target;
   }, [value, itemH, options.length]);
+
+  // Roda do mouse: 1 número por "clique" da roda (precisa ser listener não-passivo)
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      if (e.deltaY === 0) return;
+      const now = Date.now();
+      if (now - lastWheel.current < 80) return;
+      lastWheel.current = now;
+      step(e.deltaY > 0 ? 1 : -1);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [itemH]);
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
   const handleScroll = () => {
     const el = ref.current;
     if (!el) return;
-    scrolling.current = true;
-    window.clearTimeout(timer.current);
-    const idx = Math.max(0, Math.min(options.length - 1, Math.round(el.scrollTop / itemH)));
-    if (options[idx] !== value) {
-      onChange(options[idx]);
+    markScrolling(160);
+    const { options: opts, value: cur, onChange: change } = latest.current;
+    const idx = Math.max(0, Math.min(opts.length - 1, Math.round(el.scrollTop / itemH)));
+    if (opts[idx] !== cur) {
+      change(opts[idx]);
       try { navigator.vibrate?.(6); } catch {}
     }
-    timer.current = window.setTimeout(() => { scrolling.current = false; }, 160);
   };
 
-  const goTo = (i: number) => {
-    ref.current?.scrollTo({ top: i * itemH, behavior: "smooth" });
+  // Arrastar com o mouse (no celular o dedo já rola sozinho)
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== "mouse" || e.button !== 0) return;
+    drag.current = { y: e.clientY, top: ref.current?.scrollTop ?? 0, moved: false, id: e.pointerId };
+  };
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    const el = ref.current;
+    if (!d || !el) return;
+    const dy = e.clientY - d.y;
+    if (!d.moved && Math.abs(dy) > 4) {
+      d.moved = true;
+      el.style.scrollSnapType = "none";
+      try { el.setPointerCapture(d.id); } catch {}
+    }
+    if (d.moved) el.scrollTop = d.top - dy;
+  };
+  const endDrag = () => {
+    const d = drag.current;
+    const el = ref.current;
+    drag.current = null;
+    if (!d || !el || !d.moved) return;
+    suppressClick.current = true;
+    window.setTimeout(() => { suppressClick.current = false; }, 0);
+    el.style.scrollSnapType = "y mandatory";
+    selectIndex(Math.round(el.scrollTop / itemH));
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); step(1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); step(-1); }
   };
 
   return (
@@ -173,11 +243,17 @@ function WheelPicker({
       <div
         ref={ref}
         className="med-wheel"
+        tabIndex={0}
         onScroll={handleScroll}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onKeyDown={onKeyDown}
         style={{
           height: "100%", overflowY: "scroll", scrollSnapType: "y mandatory",
           overscrollBehavior: "contain", WebkitOverflowScrolling: "touch", touchAction: "pan-y",
-          WebkitMaskImage: mask, maskImage: mask,
+          WebkitMaskImage: mask, maskImage: mask, cursor: "grab", userSelect: "none", outline: "none",
         }}
       >
         <div style={{ height: itemH }} />
@@ -188,7 +264,10 @@ function WheelPicker({
               key={o}
               role="option"
               aria-selected={selected}
-              onClick={() => goTo(i)}
+              onClick={() => {
+                if (suppressClick.current) { suppressClick.current = false; return; }
+                selectIndex(i);
+              }}
               style={{
                 height: itemH, scrollSnapAlign: "center", display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: fsz(selected ? 22 : 17), fontWeight: selected ? 700 : 400,
@@ -206,16 +285,28 @@ function WheelPicker({
   );
 }
 
-// ── Contador +/- (estoque) ────────────────────────────
+// ── Contador +/- (estoque) — dá para digitar o número direto ──
 function Stepper({ value, onChange, min, scale }: { value: number; onChange: (v: number) => void; min: number; scale: number }) {
+  const sz = (px: number) => Math.round(px * scale * 10) / 10;
   const btn: React.CSSProperties = {
-    width: 44, height: 44, borderRadius: 12, border: "0.5px solid var(--color-border-secondary)",
-    background: "transparent", cursor: "pointer", fontSize: Math.round(22 * scale * 10) / 10, color: "var(--color-text-primary)",
+    width: 42, height: 44, borderRadius: 12, border: "0.5px solid var(--color-border-secondary)",
+    background: "transparent", cursor: "pointer", fontSize: sz(22), color: "var(--color-text-primary)", padding: 0,
   };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
       <button type="button" onClick={() => onChange(Math.max(min, value - 1))} style={btn} aria-label="Diminuir">−</button>
-      <span style={{ fontSize: Math.round(18 * scale * 10) / 10, fontWeight: 600, minWidth: 36, textAlign: "center", color: "var(--color-text-primary)" }}>{value}</span>
+      <input
+        type="number"
+        inputMode="numeric"
+        min={min}
+        value={value}
+        onFocus={e => e.target.select()}
+        onChange={e => {
+          const n = parseInt(e.target.value, 10);
+          onChange(Number.isNaN(n) ? min : Math.max(min, n));
+        }}
+        style={{ width: 52, height: 44, textAlign: "center", fontSize: sz(18), fontWeight: 600, borderRadius: 12, border: "0.5px solid var(--color-border-secondary)", background: "transparent", color: "var(--color-text-primary)", padding: 0 }}
+      />
       <button type="button" onClick={() => onChange(value + 1)} style={btn} aria-label="Aumentar">+</button>
     </div>
   );
@@ -255,11 +346,11 @@ export function MedicationView() {
   const [formName, setFormName] = useState("");
   const [formType, setFormType] = useState<MedType>("pill");
   const [formColor, setFormColor] = useState(COLORS[0]);
-  const [formStock, setFormStock] = useState(30);
-  const [formLowStock, setFormLowStock] = useState(5);
+  const [formStock, setFormStock] = useState(0);
+  const [formLowStock, setFormLowStock] = useState(0);
   const [formStartDate, setFormStartDate] = useState(localKey());
   const [formPhases, setFormPhases] = useState<MedPhase[]>([
-    { dose: 1, doseUnit: "comprimido", days: 30, timesPerDay: 1, startTime: "08:00", schedules: ["08:00"] },
+    { dose: 0, doseUnit: "comprimido", days: 0, timesPerDay: 0, startTime: "08:00", schedules: [] },
   ]);
   const [formSound, setFormSound] = useState<AlertSoundId | null>(null);
   const [formNativeSound, setFormNativeSound] = useState<NativeSoundValue>({ uri: null, name: null });
@@ -278,6 +369,8 @@ export function MedicationView() {
   const save = useCallback((meds: Medication[]) => {
     setMedications(meds);
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(meds)); } catch {}
+    // Avisa o app (Index.tsx) pra reagendar os alarmes dos remédios na hora
+    try { window.dispatchEvent(new Event("medications-changed")); } catch {}
   }, [STORAGE_KEY]);
 
   const saveProfiles = useCallback((profs: FamilyProfile[]) => {
@@ -307,12 +400,12 @@ export function MedicationView() {
     const cfg = DOSE_CONFIG[formType];
     const last = formPhases[formPhases.length - 1];
     setFormPhases(prev => [...prev, {
-      dose: last ? last.dose : cfg.values[0],
+      dose: 0,
       doseUnit: cfg.unit,
-      days: 15,
-      timesPerDay: last ? last.timesPerDay : 1,
+      days: 0,
+      timesPerDay: 0,
       startTime: last ? last.startTime : "08:00",
-      schedules: last ? [...last.schedules] : ["08:00"],
+      schedules: [],
     }]);
   };
 
@@ -324,15 +417,15 @@ export function MedicationView() {
     if (key === formType) return;
     setFormType(key);
     const cfg = DOSE_CONFIG[key];
-    setFormPhases(prev => prev.map(p => ({ ...p, doseUnit: cfg.unit, dose: nearest(cfg.values, p.dose) })));
+    setFormPhases(prev => prev.map(p => ({ ...p, doseUnit: cfg.unit, dose: p.dose === 0 ? 0 : nearest(cfg.values, p.dose) })));
   };
 
   const resetForm = () => {
     setEditingId(null);
     setFormName(""); setFormType("pill"); setFormColor(COLORS[0]);
-    setFormStock(30); setFormLowStock(5);
+    setFormStock(0); setFormLowStock(0);
     setFormStartDate(localKey());
-    setFormPhases([{ dose: 1, doseUnit: "comprimido", days: 30, timesPerDay: 1, startTime: "08:00", schedules: ["08:00"] }]);
+    setFormPhases([{ dose: 0, doseUnit: "comprimido", days: 0, timesPerDay: 0, startTime: "08:00", schedules: [] }]);
     setFormSound(null);
     setFormNativeSound({ uri: null, name: null });
   };
@@ -363,6 +456,11 @@ export function MedicationView() {
 
   const handleSave = () => {
     if (!formName.trim()) { toast({ title: "Informe o nome do medicamento" }); return; }
+    const badPhase = formPhases.findIndex(p => !(p.dose > 0 && p.days > 0 && p.timesPerDay > 0));
+    if (badPhase >= 0) {
+      toast({ title: `Preencha a Fase ${badPhase + 1}`, description: "Escolha a dose, os dias e as vezes por dia (não podem ficar em 0).", variant: "destructive" });
+      return;
+    }
     // "Som do sistema" / "Música do celular" já valem como escolha de som.
     const effectiveSound: AlertSoundId | null = formSound ?? (formNativeSound.uri ? "classico" : null);
     if (!effectiveSound) { toast({ title: "Escolha um som de alerta", description: "Toque numa das opções, ou use Som do sistema / Música do celular.", variant: "destructive" }); return; }
@@ -537,15 +635,14 @@ export function MedicationView() {
 
         {/* Fases */}
         <div style={{ marginBottom: 14 }}>
-          <div style={labelStyle}>Fases da prescrição ({formPhases.length}/4) · deslize para escolher</div>
+          <div style={labelStyle}>Fases da prescrição ({formPhases.length}/4) · roda do mouse, arrastar ou deslizar</div>
           {formPhases.map((phase, idx) => {
             const pc = COLORS[idx % COLORS.length];
-            const [hh, mm] = phase.startTime.split(":").map(Number);
             return (
               <div key={idx} style={{ background: "var(--color-background-secondary)", borderRadius: 16, padding: 12, marginBottom: 10, border: `0.5px solid ${pc}40` }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, minHeight: 40 }}>
                   <div style={{ fontSize: fs(15), fontWeight: 600, color: pc }}>
-                    Fase {idx + 1} · {phase.days} {phase.days === 1 ? "dia" : "dias"}
+                    Fase {idx + 1}{phase.days > 0 ? ` · ${phase.days} ${phase.days === 1 ? "dia" : "dias"}` : ""}
                   </div>
                   {formPhases.length > 1 && (
                     <button onClick={() => removePhase(idx)} aria-label={`Excluir fase ${idx + 1}`}
@@ -559,7 +656,7 @@ export function MedicationView() {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
                   <div>
                     <div style={{ fontSize: fs(12), color: "var(--color-text-secondary)", textAlign: "center", marginBottom: 2 }}>Dose ({cfg.short})</div>
-                    <WheelPicker ariaLabel="Dose" options={withValue(cfg.values, phase.dose)} value={phase.dose}
+                    <WheelPicker ariaLabel="Dose" options={withValue([0, ...cfg.values], phase.dose)} value={phase.dose}
                       onChange={v => updatePhase(idx, { dose: v, doseUnit: cfg.unit })} format={fmtDose} color={pc} scale={scale} />
                   </div>
                   <div>
@@ -573,23 +670,20 @@ export function MedicationView() {
                       onChange={v => updatePhase(idx, { timesPerDay: v })} format={n => `${n}x`} color={pc} scale={scale} />
                   </div>
                 </div>
-                <div style={{ fontSize: fs(11), color: "var(--color-text-secondary)", textAlign: "center", marginTop: 2 }}>
-                  A cada {Math.round(24 / phase.timesPerDay)}h
-                </div>
+                {phase.timesPerDay > 0 && (
+                  <div style={{ fontSize: fs(11), color: "var(--color-text-secondary)", textAlign: "center", marginTop: 2 }}>
+                    A cada {Math.round(24 / phase.timesPerDay)}h
+                  </div>
+                )}
 
-                {/* Horário inicial */}
-                <div style={{ fontSize: fs(12), color: "var(--color-text-secondary)", textAlign: "center", margin: "10px 0 2px" }}>Horário inicial</div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, maxWidth: 240, margin: "0 auto" }}>
-                  <div style={{ flex: 1 }}>
-                    <WheelPicker ariaLabel="Hora" options={HOUR_OPTIONS} value={hh}
-                      onChange={v => updatePhase(idx, { startTime: `${pad2(v)}:${pad2(mm)}` })} format={pad2} color={pc} scale={scale} />
-                  </div>
-                  <div style={{ fontSize: fs(22), fontWeight: 700, color: pc }}>:</div>
-                  <div style={{ flex: 1 }}>
-                    <WheelPicker ariaLabel="Minuto" options={withValue(MINUTE_OPTIONS, mm)} value={mm}
-                      onChange={v => updatePhase(idx, { startTime: `${pad2(hh)}:${pad2(v)}` })} format={pad2} color={pc} scale={scale} />
-                  </div>
-                </div>
+                {/* Horário inicial — relógio do próprio aparelho */}
+                <div style={{ fontSize: fs(12), color: "var(--color-text-secondary)", textAlign: "center", margin: "10px 0 4px" }}>Horário inicial</div>
+                <input
+                  type="time"
+                  value={phase.startTime}
+                  onChange={e => { if (e.target.value) updatePhase(idx, { startTime: e.target.value }); }}
+                  style={{ ...inputStyle, display: "block", width: "auto", minWidth: 150, margin: "0 auto", textAlign: "center", fontSize: fs(22), fontWeight: 700, color: pc }}
+                />
 
                 <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center" }}>
                   {phase.schedules.map(s => (
@@ -629,8 +723,8 @@ export function MedicationView() {
             <Stepper value={formStock} onChange={setFormStock} min={0} scale={scale} />
           </div>
           <div>
-            <div style={labelStyle}>Alerta estoque baixo</div>
-            <Stepper value={formLowStock} onChange={setFormLowStock} min={1} scale={scale} />
+            <div style={labelStyle}>Avisar quando restar (0 = não avisar)</div>
+            <Stepper value={formLowStock} onChange={setFormLowStock} min={0} scale={scale} />
           </div>
         </div>
 
@@ -762,7 +856,7 @@ export function MedicationView() {
           const perDay = Math.max(1, phase?.timesPerDay ?? 1);
           const takenToday = med.takenDates.filter(d => keyOfIso(d) === today).length;
           const allDone = takenToday >= perDay;
-          const lowStock = med.stock <= med.lowStockAlert;
+          const lowStock = med.lowStockAlert > 0 && med.stock <= med.lowStockAlert;
           const adherence = getAdherence(med);
 
           return (

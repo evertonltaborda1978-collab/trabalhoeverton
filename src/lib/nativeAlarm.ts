@@ -140,7 +140,10 @@ export async function syncNativeAlarms(reminders: NativeAlarmReminder[]): Promis
     }
 
     const now = Date.now();
-    const future = reminders.filter((r) => r.at.getTime() > now).slice(0, 60);
+    const future = reminders
+      .filter((r) => r.at.getTime() > now)
+      .sort((x, y) => x.at.getTime() - y.at.getTime())
+      .slice(0, 120);
     const newIds: number[] = [];
     for (const r of future) {
       const id = hashId(r.key);

@@ -32,9 +32,40 @@ export function setAlertSoundChoice(id: AlertSoundId) {
   } catch {}
 }
 
+// Um único AudioContext compartilhado. Antes, cada toque criava um novo (e nunca
+// fechava), e o navegador/WebView do Android pode deixar o contexto "suspenso"
+// (mudo) quando o som dispara sozinho, sem um toque do usuário na hora.
+let sharedCtx: AudioContext | null = null;
+
+function getAudioContext(): AudioContext | null {
+  try {
+    const AC = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AC) return null;
+    if (!sharedCtx || sharedCtx.state === "closed") sharedCtx = new AC();
+    if (sharedCtx.state === "suspended") void sharedCtx.resume();
+    return sharedCtx;
+  } catch {
+    return null;
+  }
+}
+
+// "Destrava" o áudio no primeiro toque/clique/tecla em qualquer lugar do app,
+// para que os alertas agendados consigam tocar depois, sozinhos.
+if (typeof window !== "undefined") {
+  const unlockEvents = ["pointerdown", "touchstart", "keydown"];
+  const unlock = () => {
+    const ctx = getAudioContext();
+    if (ctx && ctx.state === "running") {
+      unlockEvents.forEach((ev) => window.removeEventListener(ev, unlock));
+    }
+  };
+  unlockEvents.forEach((ev) => window.addEventListener(ev, unlock, { passive: true }));
+}
+
 function playTonePattern(pattern: { freq: number; start: number; duration: number; type?: OscillatorType }[]) {
   try {
-    const ctx = new AudioContext();
+    const ctx = getAudioContext();
+    if (!ctx) return;
     for (const { freq, start, duration, type } of pattern) {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();

@@ -28,9 +28,13 @@ export interface Medication {
 }
 
 export function getDaysElapsed(startDate: string): number {
-  const start = new Date(startDate);
-  const now = new Date();
-  return Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  // Data LOCAL: "YYYY-MM-DD" vira meia-noite do seu fuso (new Date("YYYY-MM-DD")
+  // seria meia-noite UTC e o dia virava por volta das 21h no Brasil).
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(startDate);
+  const start = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(startDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 export function getCurrentPhaseIndex(phases: MedPhase[], startDate: string): number {
