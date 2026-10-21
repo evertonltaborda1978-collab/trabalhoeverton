@@ -12,6 +12,7 @@ import {
   HealthVisit, PLACE_TYPES, Prescription, RX_FORMS, RX_UNITS, RxItem,
   loadLocalVisits, pendingCount, refreshVisits, removeVisit, saveVisit,
 } from "@/lib/healthVisits";
+import { buildMedPrefill, loadLinkedItemIds, rxTitle, type MedPrefill } from "@/lib/healthLink";
 import { isUnlocked, lockNow, markUnlocked, touchActivity, unlockWithBiometric, verifyAccountPassword } from "@/lib/healthLock";
 
 const ACCENT = "#1A1A2E";
@@ -53,8 +54,7 @@ function allFiles(v: HealthVisit): HealthFile[] {
 }
 
 function itemSummary(it: RxItem): { title: string; sub: string } {
-  const strength = it.strength ? `${it.strength}${it.unit ? ` ${it.unit}` : ""}` : "";
-  const title = [it.name.trim() || "Remédio sem nome", strength].filter(Boolean).join(" ");
+  const title = rxTitle(it);
   const amount = it.amount && it.amount > 0 ? it.amount : 0;
   const pack = amount ? `${amount} ${(it.form || "unid.").toLowerCase()}${it.form && amount > 1 ? "s" : ""}` : (it.form || "");
   const sub = [pack, it.qty.trim()].filter(Boolean).join(" · ");
@@ -257,7 +257,7 @@ function FileViewer({ file, onClose, fs }: { file: HealthFile; onClose: () => vo
 
 // ── Editor de um atendimento ──────────────────────────
 function VisitEditor({
-  initial, isNew, userId, suggestions, scale, onSave, onDelete, onClose,
+  initial, isNew, userId, suggestions, scale, onSave, onDelete, onClose, onCreateMedication,
 }: {
   initial: HealthVisit;
   isNew: boolean;
@@ -267,8 +267,10 @@ function VisitEditor({
   onSave: (v: HealthVisit, removed: HealthFile[]) => Promise<void>;
   onDelete: () => Promise<void>;
   onClose: () => void;
+  onCreateMedication?: (p: MedPrefill) => void;
 }) {
   const fs = (px: number) => Math.round(px * scale * 10) / 10;
+  const linkedIds = useMemo(() => loadLinkedItemIds(userId), [userId]);
   const [draft, setDraft] = useState<HealthVisit>(() => JSON.parse(JSON.stringify(initial)));
   const initialJson = useRef(JSON.stringify(initial));
   const originalFiles = useRef<HealthFile[]>(allFiles(initial));
@@ -437,16 +439,23 @@ function VisitEditor({
   };
 
   // ── salvar / sair ──
-  const save = async () => {
+  const save = async (after?: () => void) => {
     setBusy(true);
     try {
       const finalIds = new Set(allFiles(draft).map((f) => f.id));
       const known = [...originalFiles.current, ...sessionFiles.current];
       const removed = known.filter((f) => !finalIds.has(f.id));
       await onSave(draft, removed);
+      after?.();
     } finally {
       setBusy(false);
     }
+  };
+
+  // Salva o atendimento e abre o cadastro do remédio (aba Remédios) já preenchido
+  const registerMed = async (it: RxItem) => {
+    const prefill = buildMedPrefill(it, draft);
+    await save(() => onCreateMedication?.(prefill));
   };
 
   const close = () => {
@@ -562,7 +571,8 @@ function VisitEditor({
             const { title, sub } = itemSummary(it);
             if (openItem !== it.id) {
               return (
-                <div key={it.id} style={{ display: "flex", gap: 4, alignItems: "center", marginBottom: 8, background: "var(--color-background-primary)", borderRadius: 12, padding: "6px 6px", border: "0.5px solid var(--color-border-tertiary)" }}>
+                <div key={it.id} style={{ marginBottom: 8, background: "var(--color-background-primary)", borderRadius: 12, padding: 6, border: "0.5px solid var(--color-border-tertiary)" }}>
+                  <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
                   <button onClick={() => updItem(idx, it.id, { bought: !it.bought })} aria-label={it.bought ? "Marcar como não comprado" : "Marcar como comprado"}
                     style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 12, border: `1.5px solid ${it.bought ? GREEN : "var(--color-border-secondary)"}`, background: it.bought ? "#E1F5EE" : "transparent", cursor: "pointer", fontSize: 18 }}>
                     {it.bought ? "✅" : "🛒"}
@@ -577,6 +587,15 @@ function VisitEditor({
                     style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 12, border: "1px solid #F7C1C1", background: "rgba(252,235,235,0.5)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <Trash2 size={18} color={RED} />
                   </button>
+                  </div>
+                  {onCreateMedication && it.name.trim() && (linkedIds.has(it.id) ? (
+                    <div style={{ marginTop: 6, textAlign: "center", fontSize: fs(12), fontWeight: 600, color: "#085041", background: "#E1F5EE", borderRadius: 10, padding: "8px 6px" }}>⏰ Em uso nos Remédios</div>
+                  ) : (
+                    <button onClick={() => setConfirm({ text: `Salvar este atendimento e cadastrar "${rxTitle(it)}" com alarme?`, yes: () => { setConfirm(null); registerMed(it); } })}
+                      style={{ width: "100%", marginTop: 6, minHeight: 44, borderRadius: 10, border: `1px dashed ${GREEN}`, background: "transparent", color: GREEN, fontSize: fs(13), fontWeight: 700, cursor: "pointer" }}>
+                      ⏰ Cadastrar com alarme
+                    </button>
+                  ))}
                 </div>
               );
             }
@@ -633,7 +652,7 @@ function VisitEditor({
         <Plus size={18} /> Adicionar receita
       </button>
 
-      <button onClick={save} disabled={busy}
+      <button onClick={() => save()} disabled={busy}
         style={{ width: "100%", minHeight: 54, borderRadius: 14, border: "none", background: ACCENT, color: "#fff", fontSize: fs(15), fontWeight: 700, cursor: "pointer", marginBottom: 12, opacity: busy ? 0.6 : 1 }}>
         {busy ? "Aguarde…" : "Salvar atendimento"}
       </button>
@@ -663,7 +682,7 @@ function VisitEditor({
 }
 
 // ── Tela principal da aba "Atendimentos" ──────────────
-export function HealthVisitsView({ scale }: { scale: number }) {
+export function HealthVisitsView({ scale, onCreateMedication }: { scale: number; onCreateMedication?: (p: MedPrefill) => void }) {
   const { user } = useAuth();
   const fs = (px: number) => Math.round(px * scale * 10) / 10;
   const uid = user?.id ?? "";
@@ -754,6 +773,7 @@ export function HealthVisitsView({ scale }: { scale: number }) {
           onSave={handleSave}
           onDelete={handleDelete}
           onClose={() => setEditing(null)}
+          onCreateMedication={onCreateMedication}
         />
       </div>
     );

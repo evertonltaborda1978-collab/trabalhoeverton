@@ -5,7 +5,8 @@ import { toast } from "@/hooks/use-toast";
 import { ALERT_SOUND_OPTIONS, playAlertSoundPreview, type AlertSoundId } from "@/lib/alertSound";
 import { NativeAlarmSoundPicker, type NativeSoundValue } from "./NativeAlarmSoundPicker";
 import { HealthVisitsView } from "./HealthVisitsView";
-import { getCurrentPhaseIndex, getDaysElapsed, type MedPhase, type Medication } from "@/lib/medicationTypes";
+import type { MedPrefill } from "@/lib/healthLink";
+import { getCurrentPhaseIndex, getDaysElapsed, type MedOrigin, type MedPhase, type Medication } from "@/lib/medicationTypes";
 export type { Medication } from "@/lib/medicationTypes";
 
 // ── Tipos e constantes ────────────────────────────────
@@ -356,6 +357,7 @@ export function MedicationView() {
   ]);
   const [formSound, setFormSound] = useState<AlertSoundId | null>(null);
   const [formNativeSound, setFormNativeSound] = useState<NativeSoundValue>({ uri: null, name: null });
+  const [formOrigin, setFormOrigin] = useState<MedOrigin | null>(null);
 
   const STORAGE_KEY = `medications_${user?.id}`;
 
@@ -430,6 +432,7 @@ export function MedicationView() {
     setFormPhases([{ dose: 0, doseUnit: "comprimido", days: 0, timesPerDay: 0, startTime: "08:00", schedules: [] }]);
     setFormSound(null);
     setFormNativeSound({ uri: null, name: null });
+    setFormOrigin(null);
   };
 
   const openNew = () => {
@@ -448,6 +451,19 @@ export function MedicationView() {
     setFormPhases(med.phases.map(p => ({ ...p, schedules: [...p.schedules] })));
     setFormSound((med.alertSound as AlertSoundId | null) ?? null);
     setFormNativeSound({ uri: med.nativeSoundUri ?? null, name: med.nativeSoundName ?? null });
+    setFormOrigin(med.origin ?? null);
+    setShowForm(true);
+  };
+
+  // Vindo de uma receita (aba Atendimentos): abre o cadastro já com nome, tipo e estoque
+  const startFromPrescription = (p: MedPrefill) => {
+    resetForm();
+    setTab("remedios");
+    setFormName(p.name);
+    setFormType(p.type);
+    setFormStock(p.stock);
+    setFormPhases([{ dose: 0, doseUnit: DOSE_CONFIG[p.type].unit, days: 0, timesPerDay: 0, startTime: "08:00", schedules: [] }]);
+    setFormOrigin(p.origin);
     setShowForm(true);
   };
 
@@ -483,6 +499,7 @@ export function MedicationView() {
           alertSound: effectiveSound,
           nativeSoundUri: formNativeSound.uri,
           nativeSoundName: formNativeSound.name,
+          origin: formOrigin ?? undefined,
         };
         save(medications.map(m => (m.id === editingId ? updated : m)));
         closeForm();
@@ -506,6 +523,7 @@ export function MedicationView() {
       alertSound: effectiveSound,
       nativeSoundUri: formNativeSound.uri,
       nativeSoundName: formNativeSound.name,
+      origin: formOrigin ?? undefined,
     };
     save([...medications, newMed]);
     closeForm();
@@ -584,6 +602,13 @@ export function MedicationView() {
           </div>
           <div style={{ width: 60 }} />
         </div>
+
+        {formOrigin && (
+          <div style={{ background: "#E1F5EE", border: "0.5px solid #1D9E75", borderRadius: 12, padding: "10px 12px", marginBottom: 14, fontSize: fs(13), color: "#085041" }}>
+            📋 {formOrigin.label}
+            <div style={{ fontSize: fs(12), marginTop: 2 }}>Falta escolher dose, dias e vezes por dia.</div>
+          </div>
+        )}
 
         {/* Prévia */}
         {formName && (
@@ -821,7 +846,7 @@ export function MedicationView() {
 
 
       {tab === "atendimentos" ? (
-        <HealthVisitsView scale={scale} />
+        <HealthVisitsView scale={scale} onCreateMedication={startFromPrescription} />
       ) : (
       <>
       {/* Perfis de família */}
@@ -904,6 +929,7 @@ export function MedicationView() {
                     Próximo: <strong style={{ color: "var(--color-text-primary)" }}>{nextTime}</strong>
                     {lowStock && <span style={{ marginLeft: 8, fontSize: fs(11), padding: "2px 7px", borderRadius: 20, background: "#FAEEDA", color: "#633806", fontWeight: 600 }}>⚠️ Estoque: {med.stock}</span>}
                   </div>
+                  {med.origin && <div style={{ fontSize: fs(12), color: "var(--color-text-secondary)", marginTop: 2, wordBreak: "break-word" }}>📋 {med.origin.label}</div>}
                 </div>
 
                 <button onClick={() => setConfirmDeleteId(med.id)} aria-label={`Excluir ${med.name}`}

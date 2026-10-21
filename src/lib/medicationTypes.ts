@@ -9,6 +9,14 @@ export interface MedPhase {
   schedules: string[];
 }
 
+/** De qual receita (aba Atendimentos) o remédio veio — opcional. */
+export interface MedOrigin {
+  visitId: string;
+  itemId: string;
+  /** Texto do cartão, ex.: "Receita · Dr(a). Ana · UPA Central · 12/10/2026" */
+  label: string;
+}
+
 export interface Medication {
   id: string;
   profileId: string;
@@ -25,6 +33,8 @@ export interface Medication {
   /** Som do alarme NATIVO (toca com o app fechado) — null usa o padrão do sistema */
   nativeSoundUri?: string | null;
   nativeSoundName?: string | null;
+  /** Se foi cadastrado a partir de uma receita */
+  origin?: MedOrigin;
 }
 
 export function getDaysElapsed(startDate: string): number {
