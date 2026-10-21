@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { ALERT_SOUND_OPTIONS, playAlertSoundPreview, type AlertSoundId } from "@/lib/alertSound";
 import { NativeAlarmSoundPicker, type NativeSoundValue } from "./NativeAlarmSoundPicker";
+import { HealthVisitsView } from "./HealthVisitsView";
 import { getCurrentPhaseIndex, getDaysElapsed, type MedPhase, type Medication } from "@/lib/medicationTypes";
 export type { Medication } from "@/lib/medicationTypes";
 
@@ -326,6 +327,7 @@ export function MedicationView() {
   const [newProfileName, setNewProfileName] = useState("");
   const [newProfileIcon, setNewProfileIcon] = useState("👨");
   const [showSizePanel, setShowSizePanel] = useState(false);
+  const [tab, setTab] = useState<"remedios" | "atendimentos">("remedios");
 
   // Tamanho da fonte (salvo no aparelho)
   const [fontStep, setFontStep] = useState<number>(() => {
@@ -780,30 +782,23 @@ export function MedicationView() {
     <div>
       <style>{WHEEL_CSS}</style>
 
-      {/* Perfis de família + tamanho do texto */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 8 }}>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-          {profiles.map(p => (
-            <button key={p.id} onClick={() => setActiveProfile(p.id)}
-              title={p.name} aria-label={p.name}
-              style={{
-                width: 44, height: 44, borderRadius: "50%", border: activeProfile === p.id ? "2px solid #1A1A2E" : "1.5px solid #E0E0E0",
-                background: activeProfile === p.id ? "rgba(26,26,46,0.05)" : "transparent",
-                fontSize: 22, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-              }}>{p.icon}</button>
-          ))}
-          {profiles.length < 5 && (
-            <button onClick={() => setShowAddProfile(true)} aria-label="Adicionar perfil"
-              style={{ width: 44, height: 44, borderRadius: "50%", border: "1.5px dashed #BDBDBD", background: "transparent", fontSize: 20, cursor: "pointer", color: "#BDBDBD" }}>+</button>
-          )}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: fs(13), color: "var(--color-text-secondary)", fontWeight: 500 }}>{profiles.find(p => p.id === activeProfile)?.name}</span>
-          <button onClick={() => setShowSizePanel(v => !v)} aria-label="Tamanho do texto"
-            style={{ minWidth: 44, height: 44, borderRadius: 12, border: showSizePanel ? "2px solid #1A1A2E" : "1px solid var(--color-border-secondary)", background: showSizePanel ? "rgba(26,26,46,0.06)" : "transparent", cursor: "pointer", fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}>
-            Aa
+      {/* Abas: Remédios | Atendimentos | tamanho do texto */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+        {([["remedios", "💊 Remédios"], ["atendimentos", "🩺 Atendimentos"]] as const).map(([key, label]) => (
+          <button key={key} onClick={() => setTab(key)}
+            style={{
+              flex: 1, minHeight: 48, borderRadius: 12, cursor: "pointer", fontSize: fs(14), fontWeight: tab === key ? 700 : 500,
+              border: tab === key ? "2px solid #1A1A2E" : "1px solid var(--color-border-secondary)",
+              background: tab === key ? "#1A1A2E" : "transparent",
+              color: tab === key ? "#fff" : "var(--color-text-primary)",
+            }}>
+            {label}
           </button>
-        </div>
+        ))}
+        <button onClick={() => setShowSizePanel(v => !v)} aria-label="Tamanho do texto"
+          style={{ minWidth: 48, height: 48, borderRadius: 12, border: showSizePanel ? "2px solid #1A1A2E" : "1px solid var(--color-border-secondary)", background: showSizePanel ? "rgba(26,26,46,0.06)" : "transparent", cursor: "pointer", fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}>
+          Aa
+        </button>
       </div>
 
       {showSizePanel && (
@@ -823,6 +818,31 @@ export function MedicationView() {
           </div>
         </div>
       )}
+
+
+      {tab === "atendimentos" ? (
+        <HealthVisitsView scale={scale} />
+      ) : (
+      <>
+      {/* Perfis de família */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 8 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+          {profiles.map(p => (
+            <button key={p.id} onClick={() => setActiveProfile(p.id)}
+              title={p.name} aria-label={p.name}
+              style={{
+                width: 44, height: 44, borderRadius: "50%", border: activeProfile === p.id ? "2px solid #1A1A2E" : "1.5px solid #E0E0E0",
+                background: activeProfile === p.id ? "rgba(26,26,46,0.05)" : "transparent",
+                fontSize: 22, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              }}>{p.icon}</button>
+          ))}
+          {profiles.length < 5 && (
+            <button onClick={() => setShowAddProfile(true)} aria-label="Adicionar perfil"
+              style={{ width: 44, height: 44, borderRadius: "50%", border: "1.5px dashed #BDBDBD", background: "transparent", fontSize: 20, cursor: "pointer", color: "#BDBDBD" }}>+</button>
+          )}
+        </div>
+        <span style={{ fontSize: fs(13), color: "var(--color-text-secondary)", fontWeight: 500 }}>{profiles.find(p => p.id === activeProfile)?.name}</span>
+      </div>
 
       {/* Resumo */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
@@ -1019,6 +1039,8 @@ export function MedicationView() {
             </div>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );
