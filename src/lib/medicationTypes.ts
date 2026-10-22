@@ -17,6 +17,20 @@ export interface MedOrigin {
   label: string;
 }
 
+/** Registro de uma dose: tomada ou "não tomei". Sem registro = não existe entrada. */
+export interface DoseEntry {
+  id: string;
+  /** Dia a que a dose pertence (YYYY-MM-DD, data local) */
+  day: string;
+  /** Número do horário no dia (0 = primeiro) */
+  slot: number;
+  /** Quando foi tomada (ISO). Para "não tomei", é quando foi marcado. */
+  at: string;
+  kind: "taken" | "skipped";
+  /** true = informado depois (lançado retroativamente) */
+  late?: boolean;
+}
+
 export interface Medication {
   id: string;
   profileId: string;
@@ -35,6 +49,8 @@ export interface Medication {
   nativeSoundName?: string | null;
   /** Se foi cadastrado a partir de uma receita */
   origin?: MedOrigin;
+  /** Registro de doses (tomei / não tomei). takenDates continua com as doses tomadas. */
+  doseLog?: DoseEntry[];
 }
 
 export function getDaysElapsed(startDate: string): number {

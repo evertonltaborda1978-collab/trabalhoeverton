@@ -100,7 +100,7 @@ export interface DoseStatus {
  * A próxima dose é a de número (doses de hoje já tomadas + 1), contando a partir do
  * horário inicial da fase. Horários depois da meia-noite contam como "amanhã".
  */
-export function getDoseStatus(phase: MedPhase | null | undefined, takenDates: string[], now: Date = new Date()): DoseStatus {
+export function getDoseStatus(phase: MedPhase | null | undefined, takenDates: string[], now: Date = new Date(), freeSlots?: number[]): DoseStatus {
   const none: DoseStatus = { kind: "none", minutes: 0 };
   if (!phase || phase.timesPerDay <= 0) return none;
 
@@ -113,13 +113,29 @@ export function getDoseStatus(phase: MedPhase | null | undefined, takenDates: st
 
   const today = localDateKey(now);
   const takenToday = takenDates.filter((d) => localDateKey(new Date(d)) === today).length;
-  if (takenToday >= phase.timesPerDay) return none;
+  if (!freeSlots && takenToday >= phase.timesPerDay) return none;
 
   const [h, m] = phase.startTime.split(":").map(Number);
   if (isNaN(h)) return none;
   const intervalMin = Math.floor(24 / phase.timesPerDay) * 60;
   const midnight = new Date(now);
   midnight.setHours(0, 0, 0, 0);
+
+  // Com o registro de doses: olha só os horários de hoje que ainda não têm marcação.
+  // Atrasada = horário que passou há até 6h sem marcação; amarelo = próxima em até 1h.
+  if (freeSlots) {
+    let soonest: number | null = null;
+    let nearestLate: number | null = null;
+    for (const k of freeSlots) {
+      const slot = midnight.getTime() + (h * 60 + (m || 0) + k * intervalMin) * 60_000;
+      const d = Math.round((slot - now.getTime()) / 60_000);
+      if (d > 0) soonest = soonest === null ? d : Math.min(soonest, d);
+      else if (-d <= 6 * 60) nearestLate = nearestLate === null ? -d : Math.min(nearestLate, -d);
+    }
+    if (nearestLate !== null) return { kind: "late", minutes: nearestLate };
+    if (soonest !== null && soonest <= 60) return { kind: "soon", minutes: soonest };
+    return none;
+  }
   const slot = midnight.getTime() + (h * 60 + (m || 0) + takenToday * intervalMin) * 60_000;
   const diff = Math.round((slot - now.getTime()) / 60_000);
 

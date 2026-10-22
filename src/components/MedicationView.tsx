@@ -7,6 +7,7 @@ import { NativeAlarmSoundPicker, type NativeSoundValue } from "./NativeAlarmSoun
 import { HealthVisitsView } from "./HealthVisitsView";
 import type { MedPrefill } from "@/lib/healthLink";
 import { getDoseStatus, getPhaseOnDate } from "@/lib/medicationSchedule";
+import { applyDose, buildDay, ensureLog, freeSlotsFor, parseDay, pickLiveSlot, resolveAt, stockForecast, treatmentStats, type DaySlot } from "@/lib/doseLog";
 import { getCurrentPhaseIndex, getDaysElapsed, type MedOrigin, type MedPhase, type Medication } from "@/lib/medicationTypes";
 export type { Medication } from "@/lib/medicationTypes";
 
@@ -130,18 +131,25 @@ function getNextSchedule(phases: MedPhase[], currentPhase: number): string {
   return phase.schedules[0] || "--";
 }
 
-// Adesão = doses tomadas ÷ doses que já deveriam ter sido tomadas até hoje
-function getAdherence(med: Medication): number {
-  const elapsed = Math.max(1, getDaysElapsed(med.startDate));
-  let left = elapsed;
-  let expected = 0;
-  for (const p of med.phases) {
-    const d = Math.min(p.days, left);
-    expected += d * p.timesPerDay;
-    left -= d;
-    if (left <= 0) break;
-  }
-  return Math.min(100, Math.round((med.takenDates.length / Math.max(1, expected)) * 100));
+const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+function dayLabel(day: string, todayKey: string): string {
+  const d = parseDay(day);
+  const dd = `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}`;
+  if (day === todayKey) return `Hoje ${dd}`;
+  const y = parseDay(todayKey);
+  y.setDate(y.getDate() - 1);
+  if (day === localKey(y)) return `Ontem ${dd}`;
+  return `${WEEKDAYS[d.getDay()]} ${dd}`;
+}
+
+function fmtHM(iso: string): string {
+  const d = new Date(iso);
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+function fmtNum(n: number): string {
+  return String(Math.round(n * 100) / 100).replace(".", ",");
 }
 
 // ── Rolagem (picker) ──────────────────────────────────
@@ -347,6 +355,8 @@ export function MedicationView() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState<string | null>(null);
+  const [slotSheet, setSlotSheet] = useState<{ medId: string; day: string; slot: number } | null>(null);
+  const [slotTime, setSlotTime] = useState("08:00");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [showAddProfile, setShowAddProfile] = useState(false);
   const [newProfileName, setNewProfileName] = useState("");
@@ -574,23 +584,63 @@ export function MedicationView() {
 
   // ── Ações da lista ──
   const takeMed = (id: string) => {
-    const now = new Date().toISOString();
-    save(medications.map(m => m.id === id ? { ...m, takenDates: [...m.takenDates, now], stock: Math.max(0, m.stock - 1) } : m));
+    const med = medications.find(m => m.id === id);
+    if (!med) return;
+    const phase = med.phases[getCurrentPhaseIndex(med.phases, med.startDate)];
+    const now = new Date();
+    const pick = pickLiveSlot(med, now, phase);
+    if (!pick) { toast({ title: "Todas as doses de hoje já têm marcação" }); return; }
+    const updated = applyDose(med, pick.day, pick.slot, { kind: "taken", at: now, late: false }, pick.phase);
+    save(medications.map(m => (m.id === id ? updated : m)));
     setClock(new Date());
-    toast({ title: "✅ Dose registrada!" });
+    toast({ title: "✅ Dose registrada!", description: med.stock > 0 || updated.stock > 0 ? `Restam ${fmtNum(updated.stock)} no estoque.` : undefined });
   };
 
   const undoLastDose = (id: string) => {
+    const med = medications.find(m => m.id === id);
+    if (!med) return;
     const today = localKey();
-    save(medications.map(m => {
-      if (m.id !== id) return m;
-      let last = -1;
-      m.takenDates.forEach((d, i) => { if (keyOfIso(d) === today) last = i; });
-      if (last < 0) return m;
-      return { ...m, takenDates: m.takenDates.filter((_, i) => i !== last), stock: m.stock + 1 };
-    }));
+    const mine = ensureLog(med)
+      .filter(e => e.kind === "taken" && !e.late && keyOfIso(e.at) === today)
+      .sort((a, b) => a.at.localeCompare(b.at));
+    const last = mine[mine.length - 1];
+    if (!last) return;
+    const updated = applyDose(med, last.day, last.slot, { kind: "clear" }, null);
+    save(medications.map(m => (m.id === id ? updated : m)));
     setClock(new Date());
-    toast({ title: "Dose desfeita" });
+    toast({ title: "Dose desfeita", description: med.stock > 0 || updated.stock > 0 ? `Restam ${fmtNum(updated.stock)} no estoque.` : undefined });
+  };
+
+  // Janelinha de uma dose (tocar numa bolinha): corrigir, "não tomei" ou deixar sem registro
+  const openSlot = (medId: string, day: string, slot: number) => {
+    const med = medications.find(m => m.id === medId);
+    if (!med) return;
+    const d = buildDay(med, day, clock, med.phases[getCurrentPhaseIndex(med.phases, med.startDate)]);
+    const s = d.slots.find(x => x.slot === slot);
+    if (!s) return;
+    setSlotTime(s.entry?.kind === "taken" ? fmtHM(s.entry.at) : s.label);
+    setSlotSheet({ medId, day, slot });
+  };
+
+  const applySlot = (kind: "taken" | "skipped" | "clear") => {
+    if (!slotSheet) return;
+    const med = medications.find(m => m.id === slotSheet.medId);
+    if (!med) { setSlotSheet(null); return; }
+    const fallback = med.phases[getCurrentPhaseIndex(med.phases, med.startDate)];
+    const d = buildDay(med, slotSheet.day, clock, fallback);
+    if (!d.phase) { setSlotSheet(null); return; }
+    const prev = d.slots.find(x => x.slot === slotSheet.slot)?.entry;
+    const action = kind === "taken"
+      ? ({ kind: "taken", at: resolveAt(slotSheet.day, slotTime, d.phase, slotSheet.slot), late: prev?.kind === "taken" ? !!prev.late : true } as const)
+      : kind === "skipped" ? ({ kind: "skipped" } as const) : ({ kind: "clear" } as const);
+    const updated = applyDose(med, slotSheet.day, slotSheet.slot, action, d.phase);
+    save(medications.map(m => (m.id === med.id ? updated : m)));
+    setClock(new Date());
+    setSlotSheet(null);
+    toast({
+      title: kind === "taken" ? "✅ Dose registrada" : kind === "skipped" ? "Marcada como não tomada" : "Voltou para sem registro",
+      description: med.stock > 0 || updated.stock > 0 ? `Restam ${fmtNum(updated.stock)} no estoque.` : undefined,
+    });
   };
 
   const saveTrash = (list: TrashedMedication[]) => {
@@ -632,9 +682,16 @@ export function MedicationView() {
     setNewProfileName("");
   };
 
-  const totalAdherence = profileMeds.length > 0
-    ? Math.round(profileMeds.reduce((s, m) => s + getAdherence(m), 0) / profileMeds.length)
-    : 0;
+  // Doses de hoje: marcadas ÷ previstas (de todos os remédios ativos hoje)
+  const todayKeyNow = localKey(clock);
+  let todayPlanned = 0;
+  let todayTaken = 0;
+  for (const m of profileMeds) {
+    const ph = getPhaseOnDate(m, clock);
+    if (!ph) continue;
+    todayPlanned += ph.timesPerDay;
+    todayTaken += ensureLog(m).filter(e => e.day === todayKeyNow && e.kind === "taken").length;
+  }
 
   const upcoming = profileMeds.filter(m => {
     const next = getNextSchedule(m.phases, getCurrentPhaseIndex(m.phases, m.startDate));
@@ -870,6 +927,62 @@ export function MedicationView() {
   // LISTA DE MEDICAMENTOS
   // ══════════════════════════════════════════════════════
   const today = localKey();
+
+  // Uma bolinha por horário: ✅ tomado (hora real), ❌ não tomei, ⚪ sem registro, ○ ainda não chegou
+  const renderBubble = (med: Medication, day: string, sl: DaySlot) => {
+    const e = sl.entry;
+    const look = e?.kind === "taken"
+      ? { text: `✅ ${fmtHM(e.at)}`, bg: "#E1F5EE", fg: "#085041", bd: "#1D9E75" }
+      : e?.kind === "skipped"
+        ? { text: `❌ ${sl.label}`, bg: "#FCEBEB", fg: "#8A1C1B", bd: "#E24B4A" }
+        : sl.future
+          ? { text: `○ ${sl.label}`, bg: "transparent", fg: "var(--color-text-secondary)", bd: "var(--color-border-tertiary)" }
+          : { text: `⚪ ${sl.label}`, bg: "var(--color-background-secondary)", fg: "var(--color-text-primary)", bd: "var(--color-border-secondary)" };
+    const locked = sl.future && !e;
+    return (
+      <button key={sl.slot} onClick={() => openSlot(med.id, day, sl.slot)} disabled={locked}
+        aria-label={`Dose das ${sl.label}`}
+        style={{ minHeight: 40, padding: "6px 12px", borderRadius: 20, border: `1.5px solid ${look.bd}`, background: look.bg, color: look.fg, fontSize: fs(13), fontWeight: 600, cursor: locked ? "default" : "pointer", opacity: locked ? 0.7 : 1 }}>
+        {look.text}
+      </button>
+    );
+  };
+
+  const renderDayRow = (med: Medication, day: string, fallback: MedPhase | null | undefined) => {
+    const d = buildDay(med, day, clock, fallback);
+    if (!d.phase) return null;
+    return (
+      <div key={day} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+        <span style={{ fontSize: fs(12), color: "var(--color-text-secondary)", minWidth: 74 }}>{dayLabel(day, today)}</span>
+        {d.slots.map(sl => renderBubble(med, day, sl))}
+      </div>
+    );
+  };
+
+  // Resumo do tratamento: tomadas / faltam / sem registro e o estoque
+  const renderSummary = (med: Medication, phase: MedPhase | null | undefined) => {
+    const st = treatmentStats(med, clock);
+    const fc = stockForecast(med, clock, phase);
+    const unit = med.type === "pill" ? "comprimidos" : "un.";
+    const forecastText =
+      fc.kind === "empty" ? "acabou"
+      : fc.kind === "covers" ? "cobre o resto do tratamento"
+      : `dá até ${pad2(fc.until.getDate())}/${pad2(fc.until.getMonth() + 1)}`;
+    return (
+      <div style={{ fontSize: fs(12), color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+        <div>Tomadas {st.taken} de {st.total} · faltam {st.remaining}</div>
+        {(st.unknown > 0 || st.skipped > 0) && (
+          <div>
+            {st.unknown > 0 && <span>⚪ {st.unknown} sem registro</span>}
+            {st.unknown > 0 && st.skipped > 0 && " · "}
+            {st.skipped > 0 && <span>❌ {st.skipped} não tomei</span>}
+          </div>
+        )}
+        {(med.stock > 0 || med.lowStockAlert > 0) && <div>💊 Restam {fmtNum(med.stock)} {unit} · {forecastText}</div>}
+      </div>
+    );
+  };
+
   const medToDelete = confirmDeleteId ? medications.find(m => m.id === confirmDeleteId) : null;
   const trashForProfile = trash.filter(t => t.profileId === activeProfile);
 
@@ -943,7 +1056,7 @@ export function MedicationView() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
         {[
           { label: "Ativos", value: profileMeds.length, bg: "var(--color-background-secondary)", color: "var(--color-text-primary)" },
-          { label: "Adesão", value: `${totalAdherence}%`, bg: "#E1F5EE", color: "#085041" },
+          { label: "Hoje", value: todayPlanned > 0 ? `${todayTaken}/${todayPlanned}` : "—", bg: "#E1F5EE", color: "#085041" },
           { label: "Próximos", value: upcoming, bg: "#FAEEDA", color: "#633806" },
         ].map(s => (
           <div key={s.label} style={{ background: s.bg, borderRadius: 12, padding: "10px 8px", textAlign: "center" }}>
@@ -969,11 +1082,17 @@ export function MedicationView() {
           const progress = Math.min(100, Math.round((elapsed / Math.max(1, totalDays)) * 100));
           const nextTime = getNextSchedule(med.phases, phaseIdx);
           const perDay = Math.max(1, phase?.timesPerDay ?? 1);
-          const takenToday = med.takenDates.filter(d => keyOfIso(d) === today).length;
-          const allDone = takenToday >= perDay;
+          const log = ensureLog(med);
+          const freeToday = freeSlotsFor(log, today, perDay);
+          const takenToday = log.filter(e => e.day === today && e.kind === "taken").length;
+          const allDone = freeToday.length === 0;
+          const yesterdayDate = parseDay(today);
+          yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+          const yesterdayKey = localKey(yesterdayDate);
+          const dayNo = Math.min(Math.max(getDaysElapsed(med.startDate) + 1, 0), totalDays);
+          const hasLiveToday = log.some(e => e.kind === "taken" && !e.late && keyOfIso(e.at) === today);
           const lowStock = med.lowStockAlert > 0 && med.stock <= med.lowStockAlert;
-          const dose = getDoseStatus(getPhaseOnDate(med, clock), med.takenDates, clock);
-          const adherence = getAdherence(med);
+          const dose = getDoseStatus(getPhaseOnDate(med, clock), med.takenDates, clock, freeToday);
 
           return (
             <div key={med.id} style={{
@@ -1027,15 +1146,15 @@ export function MedicationView() {
               <div style={{ marginTop: 14 }}>
                 {allDone ? (
                   <div style={{ textAlign: "center", padding: "14px 10px", borderRadius: 14, background: "#E1F5EE", border: "2px solid #1D9E75", color: "#085041", fontSize: fs(17), fontWeight: 700 }}>
-                    ✅ TOMADO{perDay > 1 ? ` (${takenToday}/${perDay})` : ""}
+                    {takenToday >= perDay ? "✅ TOMADO" : `Doses de hoje: ${takenToday} de ${perDay}`}
                   </div>
                 ) : (
                   <button onClick={() => takeMed(med.id)}
                     style={{ width: "100%", minHeight: 56, borderRadius: 14, border: "none", background: med.color, color: "white", fontSize: fs(17), fontWeight: 700, cursor: "pointer" }}>
-                    ✓ TOMEI{perDay > 1 ? ` · dose ${takenToday + 1} de ${perDay}` : ""}
+                    ✓ TOMEI{perDay > 1 ? ` · dose ${perDay - freeToday.length + 1} de ${perDay}` : ""}
                   </button>
                 )}
-                {takenToday > 0 && (
+                {hasLiveToday && (
                   <div style={{ textAlign: "center", marginTop: 6 }}>
                     <button onClick={() => undoLastDose(med.id)}
                       style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: fs(12), color: "var(--color-text-secondary)", textDecoration: "underline", padding: "8px 12px", minHeight: 36 }}>
@@ -1056,12 +1175,19 @@ export function MedicationView() {
                   <div style={{ height: 5, width: "100%", maxWidth: 160, borderRadius: 3, background: "var(--color-border-tertiary)", overflow: "hidden" }}>
                     <div style={{ height: "100%", width: `${progress}%`, background: med.color, borderRadius: 3 }} />
                   </div>
-                  <div style={{ fontSize: fs(12), color: "var(--color-text-secondary)", marginTop: 3 }}>{elapsed}/{totalDays} dias · {adherence}% adesão</div>
+                  <div style={{ fontSize: fs(12), color: "var(--color-text-secondary)", marginTop: 3 }}>{getDaysElapsed(med.startDate) < 0 ? `Começa em ${-getDaysElapsed(med.startDate)} ${-getDaysElapsed(med.startDate) === 1 ? "dia" : "dias"}` : `Dia ${dayNo} de ${totalDays}`}</div>
                 </div>
                 <button onClick={() => setShowHistory(med.id)} aria-label="Ver histórico"
                   style={{ width: 46, height: 46, borderRadius: 12, border: "0.5px solid var(--color-border-secondary)", background: "transparent", cursor: "pointer", fontSize: 20 }}>
                   📅
                 </button>
+              </div>
+
+              {/* Doses: hoje e ontem (toque numa bolinha para marcar ou corrigir) */}
+              <div style={{ marginTop: 12, paddingTop: 10, borderTop: "0.5px solid var(--color-border-tertiary)" }}>
+                {renderDayRow(med, today, phase)}
+                {renderDayRow(med, yesterdayKey, null)}
+                {renderSummary(med, phase)}
               </div>
             </div>
           );
@@ -1132,38 +1258,94 @@ export function MedicationView() {
         </div>
       )}
 
-      {/* Modal histórico */}
+      {/* Modal histórico: dia a dia, com os horários */}
       {showHistory && (() => {
         const med = medications.find(m => m.id === showHistory);
         if (!med) return null;
-        const takenKeys = new Set(med.takenDates.map(keyOfIso));
-        const days30 = Array.from({ length: 30 }, (_, i) => {
-          const d = new Date(); d.setDate(d.getDate() - 29 + i);
-          return localKey(d);
-        });
+        const phaseNow = med.phases[getCurrentPhaseIndex(med.phases, med.startDate)];
+        const start = parseDay(med.startDate);
+        const days: string[] = [];
+        for (let i = 0; i < 90; i++) {
+          const d = parseDay(today);
+          d.setDate(d.getDate() - i);
+          if (d.getTime() < start.getTime()) break;
+          days.push(localKey(d));
+        }
         return (
           <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}
             onClick={() => setShowHistory(null)}>
-            <div style={{ background: "var(--color-background-primary)", borderRadius: "20px 20px 0 0", padding: 20, width: "100%", maxWidth: 480 }}
+            <div style={{ background: "var(--color-background-primary)", borderRadius: "20px 20px 0 0", padding: 20, width: "100%", maxWidth: 480, maxHeight: "85vh", overflowY: "auto" }}
               onClick={e => e.stopPropagation()}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                <div style={{ fontSize: fs(16), fontWeight: 600 }}>Histórico — {med.name}</div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                <div style={{ fontSize: fs(16), fontWeight: 600, color: "var(--color-text-primary)", wordBreak: "break-word" }}>Histórico — {med.name}</div>
                 <button onClick={() => setShowHistory(null)} aria-label="Fechar" style={{ background: "transparent", border: "none", cursor: "pointer", width: 44, height: 44 }}><X size={20} /></button>
               </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                {days30.map(d => {
-                  const taken = takenKeys.has(d);
-                  const isPast = d <= today;
-                  return (
-                    <div key={d} title={d} style={{ width: 34, height: 34, borderRadius: 6, background: taken ? "#E1F5EE" : isPast ? "#FCEBEB" : "var(--color-background-secondary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>
-                      {taken ? "✅" : isPast ? "❌" : "·"}
-                    </div>
-                  );
-                })}
+              <div style={{ fontSize: fs(12), color: "var(--color-text-secondary)", marginBottom: 12 }}>
+                Toque num horário para marcar que tomou, que não tomou, ou corrigir a hora. ⚪ sem registro quer dizer que não há marcação (não que a dose não foi tomada).
               </div>
-              <div style={{ fontSize: fs(13), color: "var(--color-text-secondary)", marginTop: 12, textAlign: "center" }}>
-                {getAdherence(med)}% de adesão · Estoque: {med.stock} unidades
+              <div style={{ marginBottom: 12 }}>
+                {days.map(d => renderDayRow(med, d, d === today ? phaseNow : null))}
               </div>
+              <div style={{ borderTop: "0.5px solid var(--color-border-tertiary)", paddingTop: 10 }}>
+                {renderSummary(med, phaseNow)}
+                <div style={{ fontSize: fs(11), color: "var(--color-text-secondary)", marginTop: 8 }}>
+                  Para lançar doses de dias antes do cadastro, edite o remédio e coloque a data de início certa.
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Janelinha de uma dose */}
+      {slotSheet && (() => {
+        const med = medications.find(m => m.id === slotSheet.medId);
+        if (!med) return null;
+        const fallback = med.phases[getCurrentPhaseIndex(med.phases, med.startDate)];
+        const sl = buildDay(med, slotSheet.day, clock, fallback).slots.find(x => x.slot === slotSheet.slot);
+        if (!sl) return null;
+        const e = sl.entry;
+        const status = e?.kind === "taken"
+          ? `✅ Tomado às ${fmtHM(e.at)} · ${e.late ? "informado depois" : "marcado na hora"}`
+          : e?.kind === "skipped" ? "❌ Marcado como não tomado" : "⚪ Sem registro";
+        return (
+          <div style={{ position: "fixed", inset: 0, zIndex: 10000, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+            onClick={() => setSlotSheet(null)}>
+            <div style={{ background: "var(--color-background-primary)", borderRadius: "20px 20px 0 0", padding: 20, width: "100%", maxWidth: 480 }}
+              onClick={ev => ev.stopPropagation()}>
+              <div style={{ fontSize: fs(16), fontWeight: 600, color: "var(--color-text-primary)", wordBreak: "break-word" }}>{med.name}</div>
+              <div style={{ fontSize: fs(13), color: "var(--color-text-secondary)", marginBottom: 10 }}>Dose das {sl.label} · {dayLabel(slotSheet.day, today)}</div>
+              <div style={{ fontSize: fs(14), fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 12 }}>{status}</div>
+
+              {e?.kind !== "skipped" && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: fs(13), color: "var(--color-text-secondary)", marginBottom: 6 }}>Hora em que tomou</div>
+                  <input type="time" value={slotTime} onChange={ev => ev.target.value && setSlotTime(ev.target.value)}
+                    style={{ width: "100%", padding: "11px 12px", borderRadius: 12, border: "0.5px solid var(--color-border-secondary)", fontSize: fs(22), fontWeight: 700, textAlign: "center", background: "transparent", color: "var(--color-text-primary)" }} />
+                </div>
+              )}
+
+              <button onClick={() => applySlot("taken")}
+                style={{ width: "100%", minHeight: 52, borderRadius: 14, border: "none", background: "#1D9E75", color: "#fff", fontSize: fs(15), fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>
+                {e?.kind === "taken" ? "✅ Salvar a hora" : "✅ Tomei"}
+              </button>
+              {e?.kind !== "skipped" && (
+                <button onClick={() => applySlot("skipped")}
+                  style={{ width: "100%", minHeight: 48, borderRadius: 14, border: "1px solid #F7C1C1", background: "rgba(252,235,235,0.5)", color: "#E24B4A", fontSize: fs(14), fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>
+                  ❌ Não tomei
+                </button>
+              )}
+              <button onClick={() => (e ? applySlot("clear") : setSlotSheet(null))}
+                style={{ width: "100%", minHeight: 48, borderRadius: 14, border: "0.5px solid var(--color-border-secondary)", background: "transparent", color: "var(--color-text-primary)", fontSize: fs(14), cursor: "pointer", marginBottom: 8 }}>
+                {e ? "Voltar para sem registro" : "Deixar sem registro"}
+              </button>
+              <button onClick={() => setSlotSheet(null)}
+                style={{ width: "100%", minHeight: 44, borderRadius: 14, border: "none", background: "transparent", color: "var(--color-text-secondary)", fontSize: fs(13), cursor: "pointer" }}>
+                Cancelar
+              </button>
+              {e?.kind === "taken" && (
+                <div style={{ fontSize: fs(11), color: "var(--color-text-secondary)", textAlign: "center", marginTop: 4 }}>"Voltar para sem registro" devolve o comprimido ao estoque.</div>
+              )}
             </div>
           </div>
         );
