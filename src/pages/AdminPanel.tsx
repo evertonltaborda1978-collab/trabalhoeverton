@@ -8,6 +8,14 @@ import { Check, X, Trash2, ShieldCheck, ArrowLeft, ChevronDown, ChevronUp } from
 
 type ProfileStatus = "pending" | "approved" | "rejected";
 
+type FamilyLinkRow = {
+  id: string;
+  owner_id: string;
+  viewer_id: string;
+  owner_label: string;
+  status: "pending" | "accepted" | "declined" | "revoked";
+};
+
 type Permissions = {
   calendar: boolean;
   fuel: boolean;
@@ -72,6 +80,8 @@ export default function AdminPanel({ onClose }: { onClose?: () => void }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Pedidos de acompanhar a saúde (por pessoa). Só valem depois que a pessoa aceita no app dela.
+  const [familyLinks, setFamilyLinks] = useState<Record<string, FamilyLinkRow>>({});
 
   const loadProfiles = async () => {
     setLoading(true);
@@ -82,6 +92,33 @@ export default function AdminPanel({ onClose }: { onClose?: () => void }) {
       .order("created_at", { ascending: false });
     if (!error && data) setProfiles(data as Profile[]);
     setLoading(false);
+  };
+
+  const loadFamily = async (adminId: string) => {
+    const { data } = await (supabase as any).from("family_links").select("*").eq("viewer_id", adminId);
+    const map: Record<string, FamilyLinkRow> = {};
+    for (const row of (data || []) as FamilyLinkRow[]) map[row.owner_id] = row;
+    setFamilyLinks(map);
+  };
+
+  const askFamily = async (p: Profile) => {
+    const { error } = await (supabase as any).rpc("family_request", { p_owner: p.id });
+    if (error) {
+      toast({ title: "Não foi possível pedir", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Pedido enviado", description: "A pessoa precisa aceitar no app dela." });
+    if (user) loadFamily(user.id);
+  };
+
+  const stopFamily = async (link: FamilyLinkRow) => {
+    const { error } = await (supabase as any).rpc("family_respond", { p_link: link.id, p_status: "revoked" });
+    if (error) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: link.status === "pending" ? "Pedido cancelado" : "Você parou de acompanhar" });
+    if (user) loadFamily(user.id);
   };
 
   useEffect(() => {
@@ -108,6 +145,7 @@ export default function AdminPanel({ onClose }: { onClose?: () => void }) {
       setIsAdmin(true);
       setChecking(false);
       loadProfiles();
+      loadFamily(user.id);
     };
     check();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -236,6 +274,41 @@ export default function AdminPanel({ onClose }: { onClose?: () => void }) {
                     )}
                   </div>
                 )}
+
+                {!p.is_admin && p.status === "approved" && (() => {
+                  const link = familyLinks[p.id];
+                  const firstName = (p.full_name || p.email || "a pessoa").split(" ")[0];
+                  return (
+                    <div className="pt-2 border-t space-y-1.5" style={{ borderColor: "#F2F2F2" }}>
+                      <p className="text-xs font-semibold text-muted-foreground">👪 Acompanhar a saúde desta pessoa</p>
+                      {(!link || link.status === "declined" || link.status === "revoked") && (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {link?.status === "declined" ? "Ela recusou o pedido." : link?.status === "revoked" ? "Compartilhamento encerrado." : "Sem pedido."}
+                          </span>
+                          <Button size="sm" variant="outline" onClick={() => askFamily(p)}>
+                            {link ? "Pedir de novo" : "Pedir para acompanhar"}
+                          </Button>
+                        </div>
+                      )}
+                      {link?.status === "pending" && (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs">⏳ Aguardando {firstName} aceitar no app dela</span>
+                          <Button size="sm" variant="outline" onClick={() => stopFamily(link)}>Cancelar pedido</Button>
+                        </div>
+                      )}
+                      {link?.status === "accepted" && (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs">✅ Acompanhando (ela autorizou)</span>
+                          <Button size="sm" variant="outline" onClick={() => stopFamily(link)}>Parar de acompanhar</Button>
+                        </div>
+                      )}
+                      <p className="text-[10px] text-muted-foreground">
+                        Só vale depois que a pessoa aceitar no app dela, e ela pode parar quando quiser. Você vê remédios, horários, doses e estoque, nunca receitas nem atendimentos.
+                      </p>
+                    </div>
+                  );
+                })()}
               </div>
             );
           })}

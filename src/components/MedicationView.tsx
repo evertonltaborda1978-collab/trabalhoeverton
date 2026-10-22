@@ -6,6 +6,9 @@ import { ALERT_SOUND_OPTIONS, playAlertSoundPreview, type AlertSoundId } from "@
 import { NativeAlarmSoundPicker, type NativeSoundValue } from "./NativeAlarmSoundPicker";
 import { HealthVisitsView } from "./HealthVisitsView";
 import type { MedPrefill } from "@/lib/healthLink";
+import { FamilyView } from "./FamilyView";
+import { useFamilyLinks } from "@/hooks/useFamilyLinks";
+import { queuePush } from "@/lib/familyShare";
 import { getDoseStatus, getPhaseOnDate } from "@/lib/medicationSchedule";
 import { applyDose, buildDay, ensureLog, freeSlotsFor, parseDay, pickLiveSlot, resolveAt, stockForecast, treatmentStats, type DaySlot } from "@/lib/doseLog";
 import { getCurrentPhaseIndex, getDaysElapsed, type MedOrigin, type MedPhase, type Medication } from "@/lib/medicationTypes";
@@ -362,7 +365,10 @@ export function MedicationView() {
   const [newProfileName, setNewProfileName] = useState("");
   const [newProfileIcon, setNewProfileIcon] = useState("👨");
   const [showSizePanel, setShowSizePanel] = useState(false);
-  const [tab, setTab] = useState<"remedios" | "atendimentos">("remedios");
+  const [tab, setTab] = useState<"remedios" | "atendimentos" | "familia">("remedios");
+  const [medsLoaded, setMedsLoaded] = useState(false);
+  const { links, refresh: refreshLinks } = useFamilyLinks(user?.id);
+  const sharingActive = links.some(l => l.owner_id === user?.id && l.status === "accepted");
   const [trash, setTrash] = useState<TrashedMedication[]>([]);
   const [showTrash, setShowTrash] = useState(false);
   const [confirmPurgeId, setConfirmPurgeId] = useState<string | null>(null);
@@ -420,14 +426,22 @@ export function MedicationView() {
       const rawP = localStorage.getItem(`profiles_${user?.id}`);
       if (rawP) setProfiles(JSON.parse(rawP));
     } catch {}
+    if (user) setMedsLoaded(true);
   }, [user]);
+
+  // Se alguém acompanha esta conta, envia a foto atual dos remédios ao abrir a Saúde
+  useEffect(() => {
+    if (user && medsLoaded && sharingActive) queuePush(user.id, medications);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [medsLoaded, sharingActive]);
 
   const save = useCallback((meds: Medication[]) => {
     setMedications(meds);
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(meds)); } catch {}
     // Avisa o app (Index.tsx) pra reagendar os alarmes dos remédios na hora
     try { window.dispatchEvent(new Event("medications-changed")); } catch {}
-  }, [STORAGE_KEY]);
+    if (user) queuePush(user.id, meds);
+  }, [STORAGE_KEY, user]);
 
   const saveProfiles = useCallback((profs: FamilyProfile[]) => {
     setProfiles(profs);
@@ -985,17 +999,24 @@ export function MedicationView() {
 
   const medToDelete = confirmDeleteId ? medications.find(m => m.id === confirmDeleteId) : null;
   const trashForProfile = trash.filter(t => t.profileId === activeProfile);
+  const pendingForMe = links.filter(l => l.owner_id === user?.id && l.status === "pending");
+  const sharingWithLabels = links.filter(l => l.owner_id === user?.id && l.status === "accepted").map(l => l.viewer_label || "alguém");
+  const tabs: { key: "remedios" | "atendimentos" | "familia"; label: string }[] = [
+    { key: "remedios", label: "💊 Remédios" },
+    { key: "atendimentos", label: "🩺 Atendimentos" },
+    ...(links.length > 0 ? [{ key: "familia" as const, label: `👪 Família${pendingForMe.length > 0 ? ` (${pendingForMe.length})` : ""}` }] : []),
+  ];
 
   return (
     <div>
       <style>{WHEEL_CSS}</style>
 
       {/* Abas: Remédios | Atendimentos | tamanho do texto */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-        {([["remedios", "💊 Remédios"], ["atendimentos", "🩺 Atendimentos"]] as const).map(([key, label]) => (
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+        {tabs.map(({ key, label }) => (
           <button key={key} onClick={() => setTab(key)}
             style={{
-              flex: 1, minHeight: 48, borderRadius: 12, cursor: "pointer", fontSize: fs(14), fontWeight: tab === key ? 700 : 500,
+              flex: "1 1 30%", minHeight: 48, borderRadius: 12, cursor: "pointer", fontSize: fs(14), fontWeight: tab === key ? 700 : 500,
               border: tab === key ? "2px solid #1A1A2E" : "1px solid var(--color-border-secondary)",
               background: tab === key ? "#1A1A2E" : "transparent",
               color: tab === key ? "#fff" : "var(--color-text-primary)",
@@ -1030,8 +1051,22 @@ export function MedicationView() {
 
       {tab === "atendimentos" ? (
         <HealthVisitsView scale={scale} onCreateMedication={startFromPrescription} />
+      ) : tab === "familia" ? (
+        <FamilyView scale={scale} links={links} refreshLinks={refreshLinks} />
       ) : (
       <>
+      {pendingForMe.length > 0 && (
+        <button onClick={() => setTab("familia")}
+          style={{ display: "block", width: "100%", textAlign: "left", minHeight: 52, padding: "10px 14px", borderRadius: 14, border: "1.5px solid #EF9F27", background: "rgba(239,159,39,0.12)", cursor: "pointer", marginBottom: 10, fontSize: fs(14), color: "var(--color-text-primary)" }}>
+          👪 <strong>{pendingForMe[0].viewer_label || "Alguém"}</strong> pediu para acompanhar seus remédios. <u>Ver pedido</u>
+        </button>
+      )}
+      {sharingWithLabels.length > 0 && (
+        <div style={{ fontSize: fs(12), color: "#085041", background: "#E1F5EE", borderRadius: 12, padding: "8px 12px", marginBottom: 10 }}>
+          🔗 Compartilhando com {sharingWithLabels.join(", ")}
+        </div>
+      )}
+
       {/* Perfis de família */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 8 }}>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
