@@ -41,6 +41,16 @@
              fechado (ver AlarmPlugin.java) -->
         <receiver android:name=".AlarmReceiver" android:exported="false" />
 
+        <!-- Reagenda os alarmes quando o celular liga ou o app é atualizado
+             (o Android apaga todos os alarmes ao reiniciar; ver AlarmStore.java) -->
+        <receiver android:name=".BootReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
         <!-- Serviço que toca o som (volume de Alarme) e vibra em loop -->
         <service
             android:name=".AlarmService"
@@ -95,4 +105,5 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 </manifest>

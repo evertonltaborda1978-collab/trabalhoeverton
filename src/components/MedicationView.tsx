@@ -57,6 +57,8 @@ const TRASH_DAYS = 30;
 
 // Destaque piscante no nome do remédio: amarelo (dose em até 1h), vermelho (atrasada), verde (acabou de tomar)
 const WHEEL_CSS = `.med-wheel{scrollbar-width:none;-ms-overflow-style:none}.med-wheel::-webkit-scrollbar{display:none}
+/* Cores da aba Saúde: ligadas ao tema do app (claro e escuro). Antes estas variáveis não existiam no app e as janelas ficavam transparentes. */
+.saude-root{--color-background-primary:hsl(var(--card));--color-background-secondary:hsl(var(--muted));--color-background-tertiary:hsl(var(--secondary));--color-text-primary:hsl(var(--foreground));--color-text-secondary:hsl(var(--muted-foreground));--color-border-primary:hsl(var(--foreground) / .35);--color-border-secondary:hsl(var(--foreground) / .24);--color-border-tertiary:hsl(var(--border))}
 @keyframes medPulseY{0%,100%{box-shadow:0 0 0 0 rgba(239,159,39,.65)}50%{box-shadow:0 0 0 8px rgba(239,159,39,0)}}
 @keyframes medPulseR{0%,100%{box-shadow:0 0 0 0 rgba(226,75,74,.65)}50%{box-shadow:0 0 0 8px rgba(226,75,74,0)}}
 @keyframes medPulseG{0%,100%{box-shadow:0 0 0 0 rgba(29,158,117,.65)}50%{box-shadow:0 0 0 8px rgba(29,158,117,0)}}
@@ -726,7 +728,7 @@ export function MedicationView() {
   if (showForm) {
     const cfg = DOSE_CONFIG[formType];
     return (
-      <div style={{ minHeight: "60vh" }}>
+      <div className="saude-root" style={{ minHeight: "60vh" }}>
         <style>{WHEEL_CSS}</style>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
@@ -1008,7 +1010,7 @@ export function MedicationView() {
   ];
 
   return (
-    <div>
+    <div className="saude-root">
       <style>{WHEEL_CSS}</style>
 
       {/* Abas: Remédios | Atendimentos | tamanho do texto */}

@@ -22,12 +22,15 @@ interface AlarmPluginType {
 // LocalNotifications), que é mais simples e toca só uma vez.
 const AlarmPlugin = registerPlugin<AlarmPluginType>("AlarmPlugin");
 
-export async function scheduleNativeAlarm(id: number, at: Date, title: string, body: string, soundUri?: string | null): Promise<void> {
-  if (!isNative()) return;
+/** true = o Android aceitou o alarme; false = falhou (ou não é o app instalado). */
+export async function scheduleNativeAlarm(id: number, at: Date, title: string, body: string, soundUri?: string | null): Promise<boolean> {
+  if (!isNative()) return false;
   try {
     await AlarmPlugin.scheduleAlarm({ id, at: at.getTime(), title, body, ...(soundUri ? { soundUri } : {}) });
+    return true;
   } catch {
     /* silencioso: alarme nativo é um extra, não pode travar o app */
+    return false;
   }
 }
 
@@ -103,6 +106,25 @@ export interface NativeAlarmReminder {
 }
 
 const SCHEDULED_IDS_KEY = "native_alarm_scheduled_ids";
+const REGISTRY_KEY = "native_alarm_registry";
+
+export interface AlarmRegistryEntry {
+  at: number;
+  title: string;
+}
+
+/**
+ * Quais lembretes (por chave, ex.: "apt-123") têm alarme REALMENTE agendado no celular e para quando.
+ * null = o app ainda não agendou nada neste aparelho (ex.: navegador).
+ */
+export function getAlarmRegistry(): Record<string, AlarmRegistryEntry> | null {
+  try {
+    const raw = localStorage.getItem(REGISTRY_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, AlarmRegistryEntry>) : null;
+  } catch {
+    return null;
+  }
+}
 
 function readScheduledIds(): number[] {
   try {
@@ -145,12 +167,18 @@ export async function syncNativeAlarms(reminders: NativeAlarmReminder[]): Promis
       .sort((x, y) => x.at.getTime() - y.at.getTime())
       .slice(0, 120);
     const newIds: number[] = [];
+    const registry: Record<string, AlarmRegistryEntry> = {};
     for (const r of future) {
       const id = hashId(r.key);
-      await scheduleNativeAlarm(id, r.at, r.title, r.body, r.soundUri);
+      const ok = await scheduleNativeAlarm(id, r.at, r.title, r.body, r.soundUri);
       newIds.push(id);
+      if (ok) registry[r.key] = { at: r.at.getTime(), title: r.title };
     }
     writeScheduledIds(newIds);
+    try {
+      localStorage.setItem(REGISTRY_KEY, JSON.stringify(registry));
+      window.dispatchEvent(new Event("native-alarms-synced")); // a Agenda atualiza o aviso de cada compromisso
+    } catch {}
   } catch {
     /* silencioso: alarme nativo é um extra, não pode travar o app */
   }

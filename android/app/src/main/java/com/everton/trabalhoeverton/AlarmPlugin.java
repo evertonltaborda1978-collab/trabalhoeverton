@@ -205,6 +205,9 @@ public class AlarmPlugin extends Plugin {
             alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMillis, pendingIntent);
         }
 
+        // Guarda o alarme no aparelho: se o celular reiniciar, o BootReceiver reagenda sozinho
+        AlarmStore.put(context, alarmId, atMillis, title, body, soundUri);
+
         JSObject result = new JSObject();
         result.put("exact", exact);
         call.resolve(result);
@@ -232,6 +235,8 @@ public class AlarmPlugin extends Plugin {
             if (alarmManager != null) alarmManager.cancel(pendingIntent);
             pendingIntent.cancel();
         }
+
+        AlarmStore.remove(context, alarmId);
 
         // Se o alarme já estava tocando neste exato momento, para também.
         Intent stopIntent = new Intent(context, AlarmService.class);

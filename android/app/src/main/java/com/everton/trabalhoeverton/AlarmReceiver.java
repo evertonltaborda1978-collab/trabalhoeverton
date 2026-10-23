@@ -12,6 +12,8 @@ import androidx.core.content.ContextCompat;
 public class AlarmReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
+        // O alarme já tocou: tira da lista guardada (senão tocaria de novo se o celular reiniciasse)
+        AlarmStore.remove(context, intent.getIntExtra("alarmId", 0));
         Intent serviceIntent = new Intent(context, AlarmService.class);
         serviceIntent.putExtra("alarmId", intent.getIntExtra("alarmId", 0));
         serviceIntent.putExtra("title", intent.getStringExtra("title"));

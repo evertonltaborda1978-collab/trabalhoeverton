@@ -20,6 +20,8 @@ import { TrashView } from "./TrashView";
 import { cn } from "@/lib/utils";
 import { ALERT_SOUND_OPTIONS, playAlertSoundPreview, type AlertSoundId } from "@/lib/alertSound";
 import { NativeAlarmSoundPicker, type NativeSoundValue } from "./NativeAlarmSoundPicker";
+import { isNative } from "@/lib/native";
+import { getAlarmRegistry, type AlarmRegistryEntry } from "@/lib/nativeAlarm";
 
 type ViewMode = "day" | "week" | "month";
 
@@ -39,6 +41,13 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
   const [viewMode, setViewMode] = useState<ViewMode>("day");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Alarmes que o celular realmente agendou (atualiza quando o app termina de agendar)
+  const [alarmRegistry, setAlarmRegistry] = useState<Record<string, AlarmRegistryEntry> | null>(() => getAlarmRegistry());
+  useEffect(() => {
+    const refresh = () => setAlarmRegistry(getAlarmRegistry());
+    window.addEventListener("native-alarms-synced", refresh);
+    return () => window.removeEventListener("native-alarms-synced", refresh);
+  }, []);
   const [title, setTitle] = useState("");
   const [time, setTime] = useState("09:00");
   const [description, setDescription] = useState("");
@@ -189,6 +198,23 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
     );
   }
 
+  // Aviso em cada compromisso futuro: o alarme está mesmo agendado no celular?
+  const alarmBadge = (apt: Appointment) => {
+    if (!isNative() || !alarmRegistry) return null;
+    const [h, m] = apt.time.split(":").map(Number);
+    if (isNaN(h)) return null;
+    const when = new Date(apt.date);
+    when.setHours(h, m || 0, 0, 0);
+    if (when.getTime() <= Date.now()) return null;
+    const reg = alarmRegistry[`apt-${apt.id}`];
+    const ok = !!reg && Math.abs(reg.at - when.getTime()) < 60_000;
+    return ok ? (
+      <p className="text-[11px] mt-1 font-medium" style={{ color: "#1D7A5F" }}>🔔 Alarme agendado</p>
+    ) : (
+      <p className="text-[11px] mt-1 font-medium" style={{ color: "#B26B00" }}>⚠️ Sem alarme no celular. Abra o app para agendar.</p>
+    );
+  };
+
   const renderAppointmentItem = (apt: Appointment, compact = false) => (
     <div key={apt.id} className={cn("group flex items-start gap-2 rounded-xl glass-card animate-fade-in", compact ? "p-2" : "p-3")}>
       <div className="flex items-center gap-1 text-primary mt-0.5 shrink-0">
@@ -200,6 +226,7 @@ export function CalendarView({ appointments, onAdd, onUpdate, onDelete, trashedA
         {!compact && apt.description && (
           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{apt.description}</p>
         )}
+        {!compact && alarmBadge(apt)}
       </div>
       {!compact && (
         <>
