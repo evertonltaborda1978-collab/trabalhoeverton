@@ -6,6 +6,7 @@ import { ConsumidosEditor } from "./ConsumidosEditor";
 import { emailDe, salvarEmail, emailValido, abrirEmail, abrirGmail, emailDiretoDisponivel, lerCanalPC, salvarCanalPC, semAcentos } from "@/lib/destinatarioEmail";
 import type { CanalPC } from "@/lib/destinatarioEmail";
 import type { ItemConsumo } from "./ConsumidosEditor";
+import { TextoLongo, registrarModalRelatorio } from "./TextoTelaCheia";
 
 // ── Chaves localStorage ──
 const RASCUNHO_KEY = "rebobinadeira_rascunho";
@@ -389,17 +390,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
   useEffect(() => {
     onCloseRef.current = onClose;
   });
-  useEffect(() => {
-    const w = window as any;
-    if (typeof w.__registerModal === "function") {
-      w.__registerModal("relatorio-rebobinadeira", () => onCloseRef.current());
-    }
-    return () => {
-      if (typeof w.__unregisterModal === "function") {
-        w.__unregisterModal();
-      }
-    };
-  }, []);
+  useEffect(() => registrarModalRelatorio("relatorio-rebobinadeira", () => onCloseRef.current()), []);
 
   // ── Parâmetros da rebobinadeira ──
   const [idMaquina, setIdMaquina] = useState(saved?.idMaquina ?? "");
@@ -450,7 +441,6 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
   const [numTeclado, setNumTeclado] = useState<{ label: string; valor: string; onConfirm: (v: string) => void } | null>(null);
   const [numValor, setNumValor] = useState("");
   const [showPrevia, setShowPrevia] = useState(false);
-  const [previa, setPrevia] = useState("");
 
   // Força um re-render periódico para o cronômetro das paradas "em andamento" avançar na tela
   const [, setTick] = useState(0);
@@ -691,6 +681,9 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
     return `${getSaudacao()}${dest ? ", " + dest : ""},\nSegue relatório da Rebobinadeira ${rebobNum}.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}${idMaquina ? `\n\nPARÂMETROS DA REBOBINADEIRA: ${idMaquina}` : "\n\nPARÂMETROS DA REBOBINADEIRA:"}${paramsTexto ? "\n" + paramsTexto : ""}${jumbosTexto ? "\n\nPROGRAMAÇÃO:\n" + jumbosTexto : ""}${consumidosSection}${clSection}${rcSection}${obsSection}`.trim();
   }, [rebobNum, dest, turno, letra, horario, resps, idMaquina, parametros, itens, jumbos, clQtd, trocasSerra, obsCL, paradasCL, rcId, rcSid, obsRC, paradasRC, obsRebob, paradasRebob]);
 
+  // A prévia é calculada a cada mudança: lançou ou corrigiu algo, ela já mostra na hora
+  const previa = showPrevia ? gerarTexto() : "";
+
   const handleSaveNote = () => {
     let text: string;
     try {
@@ -830,6 +823,13 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
   const selectStyle: React.CSSProperties = { ...inputStyle, appearance: "none", WebkitAppearance: "none" };
   const cardStyle: React.CSSProperties = { background: theme.card, border: `1px solid ${theme.cardBorder}`, borderRadius: 16, padding: "14px 16px", marginBottom: 12 };
   const sectionBtn: React.CSSProperties = { fontSize: s(11), padding: "8px 14px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, cursor: "pointer", color: theme.text };
+
+  // Minimizar pelo meio do cartão: fecha e mantém o cartão à vista (não perde o lugar)
+  const minimizarCartao = (e: React.MouseEvent<HTMLElement>, fechar: () => void) => {
+    const card = (e.currentTarget as HTMLElement).closest("[data-card]") as HTMLElement | null;
+    fechar();
+    requestAnimationFrame(() => card?.scrollIntoView({ block: "nearest" }));
+  };
   const btnStyle: React.CSSProperties = { width: 44, height: 44, padding: 0, fontSize: 20, borderRadius: 12, border: `1px solid ${theme.inputBorder}`, background: theme.sectionBtnBg, cursor: "pointer", color: theme.text };
 
   // ── Render paradas ──
@@ -892,7 +892,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
                 <button onClick={() => removeParada(setList, i)} style={{ padding: "0 8px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
               </div>
             </div>
-            <input type="text" placeholder="Descrição" value={p.desc} onChange={e => updateParada(setList, i, "desc", e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
+            <TextoLongo value={p.desc} onChange={v => updateParada(setList, i, "desc", v)} placeholder="Descrição" titulo="Descrição da parada" minHeight={44} style={{ ...inputStyle, marginBottom: 8 }} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
               <div><label style={{ fontSize: s(11), color: theme.textSub }}>Início</label><input type="time" value={p.ini} onChange={e => updateParada(setList, i, "ini", e.target.value)} style={{ ...inputStyle, fontSize: s(15), fontWeight: 600 }} /></div>
               <div><label style={{ fontSize: s(11), color: theme.textSub }}>Fim</label><input type="time" value={p.fim} onChange={e => updateParada(setList, i, "fim", e.target.value)} style={{ ...inputStyle, fontSize: s(15), fontWeight: 600 }} /></div>
@@ -998,7 +998,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
 
         {/* Obs do jumbo */}
         <label style={{ fontSize: s(11), color: theme.textSub }}>Observações</label>
-        <textarea value={j.obsJumbo} onChange={e => updateJumbo(j.id, "obsJumbo", e.target.value)} rows={2} placeholder="Obs deste jumbo..." style={{ ...inputStyle, resize: "vertical", marginTop: 4, marginBottom: 16 }} />
+        <TextoLongo value={j.obsJumbo} onChange={v => updateJumbo(j.id, "obsJumbo", v)} placeholder="Obs deste jumbo..." titulo="Obs. do jumbo" style={{ ...inputStyle, marginTop: 4, marginBottom: 16 }} />
 
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => removeJumbo(j.id)} style={{ padding: "12px 16px", borderRadius: 12, background: "rgba(229,57,53,0.1)", color: "#E53935", fontWeight: 700, fontSize: s(14), border: "1px solid rgba(229,57,53,0.3)", cursor: "pointer" }}>🗑</button>
@@ -1224,7 +1224,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
         </div>
 
         {/* Core Link */}
-        {mostraCL && <div style={cardStyle}>
+        {mostraCL && <div data-card="cl" style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, marginBottom: clCollapsed ? 0 : 10 }}>
             <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>• Core Link</span>
             <div style={{ display: "flex", gap: 6 }}>
@@ -1283,13 +1283,16 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
               ))}
               <button onClick={adicionarTrocaSerra} style={{ ...sectionBtn, marginTop: 8 }}>+ Adicionar outra troca</button>
             </div>
-            <textarea value={obsCL} onChange={e => setObsCL(e.target.value)} rows={2} placeholder="Obs. Core Link..." style={{ ...inputStyle, resize: "vertical" }} />
+            <div style={{ display: "flex", justifyContent: "flex-end", margin: "8px 0" }}>
+              <button onClick={e => minimizarCartao(e, () => setClCollapsed(true))} style={sectionBtn}>▲ Minimizar</button>
+            </div>
+            <TextoLongo value={obsCL} onChange={setObsCL} placeholder="Obs. Core Link..." titulo="Obs. Core Link" style={{ ...inputStyle }} />
             {renderParadas(paradasCL, setParadasCL, "Paradas Core Link")}
           </>}
         </div>}
 
         {/* Roll Cutter */}
-        {mostraRC && <div style={cardStyle}>
+        {mostraRC && <div data-card="rc" style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, marginBottom: rcCollapsed ? 0 : 10 }}>
             <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>• Roll Cutter</span>
             <div style={{ display: "flex", gap: 6 }}>
@@ -1310,13 +1313,16 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
               <span style={{ fontSize: 18, fontWeight: 700, minWidth: 32, textAlign: "center", color: theme.text }}>{String(rcSid).padStart(2,"0")}</span>
               <button onClick={() => setRcSid(rcSid+1)} style={btnStyle}>+</button>
             </div>
-            <textarea value={obsRC} onChange={e => setObsRC(e.target.value)} rows={2} placeholder="Obs. Roll Cutter..." style={{ ...inputStyle, resize: "vertical" }} />
+            <div style={{ display: "flex", justifyContent: "flex-end", margin: "8px 0" }}>
+              <button onClick={e => minimizarCartao(e, () => setRcCollapsed(true))} style={sectionBtn}>▲ Minimizar</button>
+            </div>
+            <TextoLongo value={obsRC} onChange={setObsRC} placeholder="Obs. Roll Cutter..." titulo="Obs. Roll Cutter" style={{ ...inputStyle }} />
             {renderParadas(paradasRC, setParadasRC, "Paradas Roll Cutter")}
           </>}
         </div>}
 
         {/* Obs e Paradas Rebobinadeira */}
-        {mostraObs && <div style={cardStyle}>
+        {mostraObs && <div data-card="obs" style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, marginBottom: obsCollapsed ? 0 : 10 }}>
             <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>📝 Obs. e Paradas</span>
             <div style={{ display: "flex", gap: 6 }}>
@@ -1325,8 +1331,11 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
             </div>
           </div>
           {!obsCollapsed && <>
-            <textarea value={obsRebob} onChange={e => setObsRebob(e.target.value)} rows={2} placeholder="Observações gerais..." style={{ ...inputStyle, resize: "vertical" }} />
+            <TextoLongo value={obsRebob} onChange={setObsRebob} placeholder="Observações gerais..." titulo="Observações gerais" style={{ ...inputStyle }} />
             {renderParadas(paradasRebob, setParadasRebob, "Paradas Rebobinadeira")}
+            <div style={{ display: "flex", justifyContent: "flex-end", margin: "8px 0" }}>
+              <button onClick={e => minimizarCartao(e, () => setObsCollapsed(true))} style={sectionBtn}>▲ Minimizar</button>
+            </div>
           </>}
         </div>}
 
@@ -1353,7 +1362,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
 
       {/* Rodapé */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: theme.headerBg, borderTop: `1px solid ${theme.cardBorder}`, padding: "12px 16px", paddingBottom: "calc(12px + env(safe-area-inset-bottom))", display: "flex", gap: 8 }}>
-        <button onClick={() => { setPrevia(gerarTexto()); setShowPrevia(true); }} style={{ flex: 1, padding: "11px 0", fontSize: s(13), fontWeight: 600, borderRadius: 12, background: theme.sectionBtnBg, color: theme.text, border: "none", cursor: "pointer" }}>👁 Prévia</button>
+        <button onClick={() => setShowPrevia(true)} style={{ flex: 1, padding: "11px 0", fontSize: s(13), fontWeight: 600, borderRadius: 12, background: theme.sectionBtnBg, color: theme.text, border: "none", cursor: "pointer" }}>👁 Prévia</button>
         <button onClick={handleSaveNote} style={{ flex: 1, padding: "11px 0", fontSize: s(13), fontWeight: 600, borderRadius: 12, background: "#1A1A2E", color: "#FFF", border: "none", cursor: "pointer" }}>💾 Salvar</button>
         <button onClick={() => setShowSendConfirm(true)} style={{ flex: 1, padding: "11px 0", fontSize: s(13), fontWeight: 600, borderRadius: 12, background: "#2D9E7F", color: "#FFF", border: "none", cursor: "pointer" }}>📤 Enviar</button>
       </div>

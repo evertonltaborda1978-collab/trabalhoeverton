@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useLayoutEffect } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { X, FileText, Camera, Pencil } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { shareText } from "@/lib/nativeShare";
@@ -6,26 +6,7 @@ import { ConsumidosEditor } from "./ConsumidosEditor";
 import { emailDe, salvarEmail, emailValido, abrirEmail, abrirGmail, emailDiretoDisponivel, lerCanalPC, salvarCanalPC, semAcentos } from "@/lib/destinatarioEmail";
 import type { CanalPC } from "@/lib/destinatarioEmail";
 import type { ItemConsumo } from "./ConsumidosEditor";
-
-// Caixa de texto que cresce sozinha conforme você digita (altura mínima confortável, ~3 linhas)
-function AutoTextarea({ value, onChange, placeholder, style, minHeight = 84 }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; style?: React.CSSProperties; minHeight?: number;
-}) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = Math.max(minHeight, el.scrollHeight + 2) + "px";
-  }, [value, minHeight]);
-  return (
-    <textarea
-      ref={ref} value={value} placeholder={placeholder} rows={3}
-      onChange={e => onChange(e.target.value)}
-      style={{ ...style, minHeight, overflow: "hidden", resize: "none" }}
-    />
-  );
-}
+import { TextoLongo, formatarNota, registrarModalRelatorio } from "./TextoTelaCheia";
 
 // ── Tipos ──
 interface TombadorDB {
@@ -146,7 +127,7 @@ function buildParadasTxt(paradas: Parada[]): string {
       if (p.ini && p.fim) quando = ` (das ${p.ini} às ${p.fim})`;
       else if (p.ini) quando = ` (iniciada às ${p.ini})`;
       txt += `Parada total: ${formatMin(min)}${quando}.`;
-      if (p.nota) txt += ` ${p.nota}`;
+      if (p.nota) txt += ` ${formatarNota(p.nota)}`;
     }
     txt += "\n";
   });
@@ -485,7 +466,6 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   const [rcSid, setRcSid] = useState(saved?.rcSid ?? 0);
   const [obsCL, setObsCL] = useState(saved?.obsCL ?? "");
   const [obsRC, setObsRC] = useState(saved?.obsRC ?? "");
-  const [previa, setPrevia] = useState("");
   const [showPrevia, setShowPrevia] = useState(false);
 
   const [retrabalhadas, setRetrabalhadas] = useState<BobinaTombador[]>(saved?.retrabalhadas ?? []);
@@ -502,17 +482,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   useEffect(() => {
     onCloseRef.current = onClose;
   });
-  useEffect(() => {
-    const w = window as any;
-    if (typeof w.__registerModal === "function") {
-      w.__registerModal("relatorio-turno", () => onCloseRef.current());
-    }
-    return () => {
-      if (typeof w.__unregisterModal === "function") {
-        w.__unregisterModal();
-      }
-    };
-  }, []);
+  useEffect(() => registrarModalRelatorio("relatorio-turno", () => onCloseRef.current()), []);
   const [db, setDb] = useState<TombadorDB>(loadDB);
 
   // Modais
@@ -763,10 +733,12 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
     if (modoTombador) {
       return `${getSaudacao()}${dest ? ", " + dest : ""},\nSegue relatório do tombador.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}\n${buildTombadorTxt()}`.trim();
     }
-    return `${getSaudacao()}${dest ? ", " + dest : ""},\nSegue relatório da linha de bobinas.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}\n\n• Embaladeira ${embaladeiraNum}\n✔ Consumidos:\n${consumidos || " (sem consumos)\n"}\n✔ Total de Tempo de Parada: ${totalEmb}.${obsEmb ? "\n\nObs:\n" + obsEmb : ""}${paradasEmb ? "\n\nObs:\n" + paradasEmb + "Parada total: " + totalPEmb + "." : ""}${coreLinkSection}${rollCutterSection}${buildTombadorTxt()}`.trim();
+    return `${getSaudacao()}${dest ? ", " + dest : ""},\nSegue relatório da linha de bobinas.\nTurno ${turno} - Letra ${letra} - ${horario}\n\nResponsáveis:\n${resps.filter(Boolean).join("\n")}\n\n• Embaladeira ${embaladeiraNum}\n\n✔ Consumidos:\n${consumidos || " (sem consumos)\n"}\n✔ Total de Tempo de Parada: ${totalEmb}.${obsEmb ? "\n\nObs:\n" + obsEmb : ""}${paradasEmb ? "\n\nObs:\n" + paradasEmb + "Parada total: " + totalPEmb + "." : ""}${coreLinkSection}${rollCutterSection}${buildTombadorTxt()}`.trim();
   }, [dest, turno, letra, horario, resps, itens, obsEmb, paradasMap, clQtd, trocasSerra, obsCL, rcId, rcSid, obsRC, retrabalhadas, rejeitadas, labels, obsTomb, paradasTomb, embaladeiraNum, db]);
 
-  const handlePrevia = () => { setPrevia(gerarTexto()); setShowPrevia(true); };
+  const handlePrevia = () => setShowPrevia(true);
+  // A prévia é calculada a cada mudança: lançou ou corrigiu algo, ela já mostra na hora
+  const previa = showPrevia ? gerarTexto() : "";
   const handleShare = async () => {
     let text: string;
     try {
@@ -927,6 +899,13 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
   // ── Estilos ──
   const btnStyle: React.CSSProperties = { width: 44, height: 44, padding: 0, fontSize: 20, borderRadius: 12, border: `1px solid ${theme.inputBorder}`, background: theme.sectionBtnBg, cursor: "pointer", color: theme.text };
   const sectionBtn: React.CSSProperties = { fontSize: s(11), padding: "8px 14px", borderRadius: 20, border: `1px solid ${theme.sectionBtnBorder}`, background: theme.sectionBtnBg, cursor: "pointer", color: theme.text };
+
+  // Minimizar pelo meio do cartão: fecha e mantém o cartão à vista (não perde o lugar)
+  const minimizarCartao = (e: React.MouseEvent<HTMLElement>, fechar: () => void) => {
+    const card = (e.currentTarget as HTMLElement).closest("[data-card]") as HTMLElement | null;
+    fechar();
+    requestAnimationFrame(() => card?.scrollIntoView({ block: "nearest" }));
+  };
   const manageBtn: React.CSSProperties = { fontSize: s(10), padding: "6px 12px", borderRadius: 16, border: `1px solid ${theme.inputBorder}`, background: theme.card, color: theme.textSub, cursor: "pointer", whiteSpace: "nowrap" };
   const inputStyle: React.CSSProperties = { width: "100%", marginTop: 4, boxSizing: "border-box", fontSize: fz, borderRadius: 10, padding: "11px 12px", border: `1px solid ${theme.inputBorder}`, background: theme.inputBg, color: theme.text };
   const cardStyle: React.CSSProperties = { background: theme.card, border: `1px solid ${theme.cardBorder}`, borderRadius: 16, padding: "14px 16px", marginBottom: 12 };
@@ -950,7 +929,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
                 <span style={{ fontSize: s(12), fontWeight: 700, color: "#E53935" }}>🔴 Parada {i + 1} em andamento · desde {p.ini}</span>
                 <button onClick={() => removeParada(sec, i)} style={{ padding: "0 8px", color: "#E53935", fontSize: s(13), background: "none", border: "none", cursor: "pointer" }}>✕</button>
               </div>
-              <input type="text" placeholder="Descrição da parada (pode preencher depois)" value={p.desc} onChange={e => updateParada(sec, i, "desc", e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
+              <TextoLongo value={p.desc} onChange={v => updateParada(sec, i, "desc", v)} placeholder="Descrição da parada (pode preencher depois)" titulo="Descrição da parada" minHeight={44} style={{ ...inputStyle, marginBottom: 8 }} />
               <div style={{ fontSize: 22, fontWeight: 700, color: "#E53935", textAlign: "center", padding: "6px 0 10px" }}>{formatMin(elapsed)}</div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={() => finalizarParadaAgora(sec, i)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "#2D9E7F", color: "#FFF", border: "none", fontWeight: 700, fontSize: s(13), cursor: "pointer" }}>✅ Finalizar agora</button>
@@ -986,7 +965,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
                 <button onClick={() => removeParada(sec, i)} style={{ padding: "0 8px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
               </div>
             </div>
-            <input type="text" placeholder="Descrição da parada" value={p.desc} onChange={e => updateParada(sec, i, "desc", e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
+            <TextoLongo value={p.desc} onChange={v => updateParada(sec, i, "desc", v)} placeholder="Descrição da parada" titulo="Descrição da parada" minHeight={44} style={{ ...inputStyle, marginBottom: 8 }} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
               <div><label style={{ fontSize: s(11), color: theme.textSub }}>Início</label><input type="time" value={p.ini} onChange={e => updateParada(sec, i, "ini", e.target.value)} style={{ ...inputStyle, fontSize: s(15), fontWeight: 600 }} /></div>
               <div><label style={{ fontSize: s(11), color: theme.textSub }}>Fim</label><input type="time" value={p.fim} onChange={e => updateParada(sec, i, "fim", e.target.value)} style={{ ...inputStyle, fontSize: s(15), fontWeight: 600 }} /></div>
@@ -996,7 +975,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
                 ⏱ {formatMin(min)}{p.ini && p.fim ? ` (das ${p.ini} às ${p.fim})` : p.ini ? ` (iniciada às ${p.ini})` : typeof p.manualMin === "number" ? " (informado manualmente)" : ""}
               </div>
             )}
-            <input type="text" placeholder="Nota (ex: Aberto nota n° 1433966)" value={p.nota} onChange={e => updateParada(sec, i, "nota", e.target.value)} style={inputStyle} />
+            <input type="text" placeholder="Nº da nota (só o número)" value={p.nota} onChange={e => updateParada(sec, i, "nota", e.target.value)} style={inputStyle} />
           </div>
         );
       })}
@@ -1071,7 +1050,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
           </>)}
 
           <label style={{ fontSize: s(11), color: theme.textSub }}>Observações</label>
-          <textarea value={b.obs} onChange={e => updateBobina(setLista, b.id, "obs", e.target.value)} rows={2} placeholder="Observações..." style={{ ...inputStyle, resize: "vertical", marginTop: 4, marginBottom: 16 }} />
+          <TextoLongo value={b.obs} onChange={v => updateBobina(setLista, b.id, "obs", v)} placeholder="Observações..." titulo="Observações da bobina" style={{ ...inputStyle, marginTop: 4, marginBottom: 16 }} />
 
           <button onClick={() => setEditandoBobina(null)} style={{ width: "100%", padding: "12px 0", borderRadius: 12, background: cor, color: "#FFF", fontWeight: 700, fontSize: s(14), border: "none", cursor: "pointer" }}>✓ Confirmar</button>
         </div>
@@ -1290,7 +1269,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
         </div>}
 
         {/* Embaladeira */}
-        {!modoTombador && <div style={cardStyle}>
+        {!modoTombador && <div data-card="emb" style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: embCollapsed ? 0 : 10 }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
               <span style={{ fontSize: fz, fontWeight: 700, color: theme.text, whiteSpace: "nowrap" }}>• Embaladeira {embaladeiraNum}</span>
@@ -1309,6 +1288,9 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
               <span style={{ fontSize: s(13), color: theme.textSub }}>✔ Total Tempo de Parada</span>
               <span style={{ fontSize: 17, fontWeight: 700 }}>{formatMin(calcTotalEmb())}</span>
             </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", margin: "8px 0" }}>
+              <button onClick={e => minimizarCartao(e, () => setEmbCollapsed(true))} style={sectionBtn}>▲ Minimizar</button>
+            </div>
             {mostraParEmb && (
               <div>
                 {!temDadosParEmb && (
@@ -1325,14 +1307,14 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
                   <label style={{ fontSize: s(11), color: theme.textSub }}>Obs. Embaladeira</label>
                   {!temDadosObsEmb && <button onClick={() => setSecObsEmb(false)} style={{ ...sectionBtn, color: "#E53935" }} aria-label="Tirar observações do relatório">✕ Tirar</button>}
                 </div>
-                <AutoTextarea value={obsEmb} onChange={setObsEmb} placeholder="Observações..." style={{ ...inputStyle, marginTop: 4 }} />
+                <TextoLongo value={obsEmb} onChange={setObsEmb} placeholder="Observações..." titulo="Obs. Embaladeira" style={{ ...inputStyle, marginTop: 4 }} />
               </div>
             )}
           </>}
         </div>}
 
         {/* Core Link */}
-        {mostraCL && <div style={cardStyle}>
+        {mostraCL && <div data-card="cl" style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, marginBottom: clCollapsed ? 0 : 10 }}>
             <span style={{ fontSize: s(13), fontWeight: 700 }}>• Core Link</span>
             <div style={{ display: "flex", gap: 6 }}>
@@ -1391,13 +1373,16 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
               ))}
               <button onClick={adicionarTrocaSerra} style={{ ...sectionBtn, marginTop: 8 }}>+ Adicionar outra troca</button>
             </div>
-            <textarea value={obsCL} onChange={e => setObsCL(e.target.value)} rows={2} placeholder="Obs. Core Link..." style={{ ...inputStyle, resize: "vertical" }} />
+            <div style={{ display: "flex", justifyContent: "flex-end", margin: "8px 0" }}>
+              <button onClick={e => minimizarCartao(e, () => setClCollapsed(true))} style={sectionBtn}>▲ Minimizar</button>
+            </div>
+            <TextoLongo value={obsCL} onChange={setObsCL} placeholder="Obs. Core Link..." titulo="Obs. Core Link" style={{ ...inputStyle }} />
             {renderParadas("cl", "Paradas Core Link")}
           </>}
         </div>}
 
         {/* Roll Cutter */}
-        {mostraRC && <div style={cardStyle}>
+        {mostraRC && <div data-card="rc" style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, marginBottom: rcCollapsed ? 0 : 10 }}>
             <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>• Roll Cutter</span>
             <div style={{ display: "flex", gap: 6 }}>
@@ -1418,13 +1403,16 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
               <span style={{ fontSize: 18, fontWeight: 700, minWidth: 32, textAlign: "center" }}>{String(rcSid).padStart(2, "0")}</span>
               <button onClick={() => setRcSid(rcSid + 1)} style={btnStyle}>+</button>
             </div>
-            <textarea value={obsRC} onChange={e => setObsRC(e.target.value)} rows={2} placeholder="Obs. Roll Cutter..." style={{ ...inputStyle, resize: "vertical" }} />
+            <div style={{ display: "flex", justifyContent: "flex-end", margin: "8px 0" }}>
+              <button onClick={e => minimizarCartao(e, () => setRcCollapsed(true))} style={sectionBtn}>▲ Minimizar</button>
+            </div>
+            <TextoLongo value={obsRC} onChange={setObsRC} placeholder="Obs. Roll Cutter..." titulo="Obs. Roll Cutter" style={{ ...inputStyle }} />
             {renderParadas("rc", "Paradas Roll Cutter")}
           </>}
         </div>}
 
         {/* Tombador */}
-        {mostraTomb && <div style={cardStyle}>
+        {mostraTomb && <div data-card="tomb" style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, marginBottom: tombCollapsed ? 0 : 12 }}>
             <span style={{ fontSize: fz, fontWeight: 700, color: theme.text }}>🔁 Tombador</span>
             <div style={{ display: "flex", gap: 6 }}>
@@ -1437,6 +1425,10 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
             <div style={{ height: 1, background: "#F0F0F0", margin: "8px 0 16px" }} />
             {renderBobinas(rejeitadas, setRejeitadas, "❌ Bobinas Rejeitadas", "#E53935", "rej")}
             <div style={{ height: 1, background: "#F0F0F0", margin: "8px 0 16px" }} />
+
+            <div style={{ display: "flex", justifyContent: "flex-end", margin: "8px 0" }}>
+              <button onClick={e => minimizarCartao(e, () => setTombCollapsed(true))} style={sectionBtn}>▲ Minimizar</button>
+            </div>
 
             {/* Impressão de Label */}
             <div>
@@ -1470,10 +1462,14 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
               )}
             </div>
 
+            <div style={{ display: "flex", justifyContent: "flex-end", margin: "8px 0" }}>
+              <button onClick={e => minimizarCartao(e, () => setTombCollapsed(true))} style={sectionBtn}>▲ Minimizar</button>
+            </div>
+
             {/* Obs e Paradas Tombador */}
             <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #F0F0F0" }}>
               <label style={{ fontSize: s(11), color: theme.textSub }}>Obs. Tombador</label>
-              <textarea value={obsTomb} onChange={e => setObsTomb(e.target.value)} rows={2} placeholder="Observações Tombador..." style={{ ...inputStyle, resize: "vertical", marginTop: 4 }} />
+              <TextoLongo value={obsTomb} onChange={setObsTomb} placeholder="Observações Tombador..." titulo="Obs. Tombador" style={{ ...inputStyle, marginTop: 4 }} />
             </div>
             <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #F0F0F0" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
@@ -1494,7 +1490,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
                         <span style={{ fontSize: s(12), fontWeight: 700, color: "#E53935" }}>🔴 Parada {i + 1} em andamento · desde {p.ini}</span>
                         <button onClick={() => removeParadaTomb(i)} style={{ padding: "0 8px", color: "#E53935", fontSize: s(13), background: "none", border: "none", cursor: "pointer" }}>✕</button>
                       </div>
-                      <input type="text" placeholder="Descrição da parada (pode preencher depois)" value={p.desc} onChange={e => updateParadaTomb(i, "desc", e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
+                      <TextoLongo value={p.desc} onChange={v => updateParadaTomb(i, "desc", v)} placeholder="Descrição da parada (pode preencher depois)" titulo="Descrição da parada" minHeight={44} style={{ ...inputStyle, marginBottom: 8 }} />
                       <div style={{ fontSize: 22, fontWeight: 700, color: "#E53935", textAlign: "center", padding: "6px 0 10px" }}>{formatMin(elapsed)}</div>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button onClick={() => finalizarParadaTombAgora(i)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "#2D9E7F", color: "#FFF", border: "none", fontWeight: 700, fontSize: s(13), cursor: "pointer" }}>✅ Finalizar agora</button>
@@ -1530,7 +1526,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
                         <button onClick={() => removeParadaTomb(i)} style={{ padding: "0 8px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
                       </div>
                     </div>
-                    <input type="text" placeholder="Descrição da parada" value={p.desc} onChange={e => updateParadaTomb(i, "desc", e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
+                    <TextoLongo value={p.desc} onChange={v => updateParadaTomb(i, "desc", v)} placeholder="Descrição da parada" titulo="Descrição da parada" minHeight={44} style={{ ...inputStyle, marginBottom: 8 }} />
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
                       <div><label style={{ fontSize: s(11), color: theme.textSub }}>Início</label><input type="time" value={p.ini} onChange={e => updateParadaTomb(i, "ini", e.target.value)} style={{ ...inputStyle, fontSize: s(15), fontWeight: 600 }} /></div>
                       <div><label style={{ fontSize: s(11), color: theme.textSub }}>Fim</label><input type="time" value={p.fim} onChange={e => updateParadaTomb(i, "fim", e.target.value)} style={{ ...inputStyle, fontSize: s(15), fontWeight: 600 }} /></div>
@@ -1540,7 +1536,7 @@ export function RelatorioTurno({ onClose, onSaveAsNote, initialState, onOpenRebo
                         ⏱ {formatMin(min)}{p.ini && p.fim ? ` (das ${p.ini} às ${p.fim})` : p.ini ? ` (iniciada às ${p.ini})` : typeof p.manualMin === "number" ? " (informado manualmente)" : ""}
                       </div>
                     )}
-                    <input type="text" placeholder="Nota (ex: Aberto nota n° 1433966)" value={p.nota} onChange={e => updateParadaTomb(i, "nota", e.target.value)} style={inputStyle} />
+                    <input type="text" placeholder="Nº da nota (só o número)" value={p.nota} onChange={e => updateParadaTomb(i, "nota", e.target.value)} style={inputStyle} />
                   </div>
                 );
               })}
