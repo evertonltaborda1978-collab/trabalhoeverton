@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, forwardRef, useImperativeHandle } from "react";
 
 // ── Tipos (mesmos dados que os relatórios já salvavam — notas antigas continuam abrindo) ──
 export interface Troca { min: number | null; qtd?: number; }
@@ -21,6 +21,14 @@ interface ConsumidosTheme {
   inputBorder: string;
   sectionBtnBg: string;
   sectionBtnBorder: string;
+}
+
+/** Deixa o relatório perguntar se ficou um item escolhido e não lançado. */
+export interface ConsumidosHandle {
+  /** texto do item pendente (ex.: "Stretch (2x)") ou null se não há nada pendente */
+  temPendente: () => string | null;
+  /** lança o item pendente; devolve true se lançou */
+  lancarPendente: () => boolean;
 }
 
 interface Props {
@@ -67,7 +75,7 @@ function Stepper({ value, onChange, min, theme, fz, label }: {
   );
 }
 
-export function ConsumidosEditor({ itens, setItens, theme, s, fz }: Props) {
+export const ConsumidosEditor = forwardRef<ConsumidosHandle, Props>(function ConsumidosEditor({ itens, setItens, theme, s, fz }, ref) {
   // Formulário "Adicionar troca" — quantidade começa em 1 e minutos em 0 (linha parada = 0 min)
   const [sel, setSel] = useState<string>("");
   const [qtd, setQtd] = useState<string>("1");
@@ -177,6 +185,14 @@ export function ConsumidosEditor({ itens, setItens, theme, s, fz }: Props) {
 
   const iconBtn: React.CSSProperties = { width: 34, height: 36, fontSize: 16, borderRadius: 10, border: "none", background: "transparent", cursor: "pointer", flexShrink: 0, padding: 0 };
 
+  useImperativeHandle(ref, () => ({
+    temPendente: () => (sel && sel !== NOVO_ITEM && itens.some(i => i.label === sel) ? `${sel} (${parseInt(qtd, 10) || 1}x)` : null),
+    lancarPendente: () => {
+      if (sel && sel !== NOVO_ITEM && itens.some(i => i.label === sel)) { adicionar(); return true; }
+      return false;
+    },
+  }), [sel, qtd, min, itens]);
+
   return (
     <div>
       {/* ── Escolher o item: ao escolher, abre o box de quantidade e minutos ── */}
@@ -229,6 +245,7 @@ export function ConsumidosEditor({ itens, setItens, theme, s, fz }: Props) {
                 Lançar
               </button>
             </div>
+            <p style={{ fontSize: s(11), color: "#B26B00", margin: "8px 0 0" }}>⚠️ Falta tocar em Lançar para este item entrar no relatório.</p>
           </div>
         )}
       </div>
@@ -328,4 +345,4 @@ export function ConsumidosEditor({ itens, setItens, theme, s, fz }: Props) {
       )}
     </div>
   );
-}
+});
