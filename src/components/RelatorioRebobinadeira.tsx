@@ -2,11 +2,11 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { X, Camera, Pencil } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { shareText } from "@/lib/nativeShare";
-import { ConsumidosEditor } from "./ConsumidosEditor";
+import { ConsumidosEditor, type ConsumidosHandle } from "./ConsumidosEditor";
 import { emailDe, salvarEmail, emailValido, abrirEmail, abrirGmail, emailDiretoDisponivel, lerCanalPC, salvarCanalPC, semAcentos } from "@/lib/destinatarioEmail";
 import type { CanalPC } from "@/lib/destinatarioEmail";
 import type { ItemConsumo } from "./ConsumidosEditor";
-import { TextoLongo, registrarModalRelatorio } from "./TextoTelaCheia";
+import { BotaoTelaCheia, TextoLongo, registrarModalRelatorio } from "./TextoTelaCheia";
 
 // ── Chaves localStorage ──
 const RASCUNHO_KEY = "rebobinadeira_rascunho";
@@ -105,7 +105,7 @@ function getMin(p: Parada): number {
   const [ih, im] = p.ini.split(":").map(Number);
   const [fh, fm] = p.fim.split(":").map(Number);
   const d = fh * 60 + fm - (ih * 60 + im);
-  return d > 0 ? d : 0;
+  return d < 0 ? d + 24 * 60 : d; // passou da meia-noite
 }
 
 function nowHHMM(): string {
@@ -116,12 +116,26 @@ function nowHHMM(): string {
 /** Texto de uma parada finalizada, cobrindo os três casos: ini+fim, só ini (finalizada manualmente), ou nenhum horário */
 function paradaTexto(p: Parada): string {
   const m = getMin(p);
-  if (m <= 0) return p.desc || "";
-  const desc = p.desc ? `${p.desc}. ` : "";
-  let quando = "";
-  if (p.ini && p.fim) quando = ` (das ${p.ini} às ${p.fim})`;
-  else if (p.ini) quando = ` (iniciada às ${p.ini})`;
-  return `${desc}Parada total: ${formatMin(m)}${quando}.${p.nota ? " " + p.nota : ""}`;
+  if (m > 0) {
+    const desc = p.desc ? `${p.desc}. ` : "";
+    let quando = "";
+    if (p.ini && p.fim) quando = ` (das ${p.ini} às ${p.fim})`;
+    else if (p.ini) quando = ` (iniciada às ${p.ini})`;
+    return `${desc}Parada total: ${formatMin(m)}${quando}.${p.nota ? " " + p.nota : ""}`;
+  }
+  const partes: string[] = [];
+  if (p.desc) partes.push(p.desc);
+  let linha = "";
+  if (p.ini && !p.fim) {
+    linha = `Parada em andamento (iniciada às ${p.ini}).`;
+  } else if (p.ini && p.fim) {
+    linha = `Parada das ${p.ini} às ${p.fim}.`;
+  } else if (p.fim) {
+    linha = `Parada encerrada às ${p.fim}.`;
+  }
+  if (p.nota) linha += (linha ? " " : "") + p.nota;
+  if (linha) partes.push(linha);
+  return partes.join("\n");
 }
 
 function formatMin(t: number): string {
@@ -636,6 +650,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
       if (j.largura && j.diametro) linha += ` — ${j.largura} x ${j.diametro}`;
       else if (j.largura) linha += ` — ${j.largura}`;
       else if (j.diametro) linha += ` — Ø${j.diametro}`;
+      if (j.obsJumbo) linha += `\n   Obs: ${j.obsJumbo}`;
       return linha;
     }).join("\n");
 
@@ -833,6 +848,25 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
   const btnStyle: React.CSSProperties = { width: 44, height: 44, padding: 0, fontSize: 20, borderRadius: 12, border: `1px solid ${theme.inputBorder}`, background: theme.sectionBtnBg, cursor: "pointer", color: theme.text };
 
   // ── Render paradas ──
+
+  // ── Item escolhido no editor de Consumidos e ainda não lançado: pergunta antes de Prévia, Salvar ou Enviar ──
+  const consumidosRef = useRef<ConsumidosHandle>(null);
+  const [pendente, setPendente] = useState<{ texto: string; acao: "previa" | "salvar" | "enviar" } | null>(null);
+  const [executarAcao, setExecutarAcao] = useState<"previa" | "salvar" | "enviar" | null>(null);
+  const acoesRef = useRef<Record<string, () => void>>({});
+  acoesRef.current = { previa: () => setShowPrevia(true), salvar: handleSaveNote, enviar: () => setShowSendConfirm(true) };
+  const comGuarda = (acao: "previa" | "salvar" | "enviar") => {
+    const texto = consumidosRef.current?.temPendente();
+    if (texto) { setPendente({ texto, acao }); return; }
+    acoesRef.current[acao]?.();
+  };
+  useEffect(() => {
+    if (!executarAcao) return;
+    const acao = executarAcao;
+    setExecutarAcao(null);
+    acoesRef.current[acao]?.(); // roda depois que o item lançado já entrou na lista
+  }, [executarAcao]);
+
   const renderParadas = (list: Parada[], setList: React.Dispatch<React.SetStateAction<Parada[]>>, label: string) => (
     <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${theme.cardBorder}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
@@ -854,7 +888,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
                 <span style={{ fontSize: s(12), fontWeight: 700, color: "#E53935" }}>🔴 Parada {i + 1} em andamento · desde {p.ini}</span>
                 <button onClick={() => removeParada(setList, i)} style={{ padding: "0 8px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
               </div>
-              <input type="text" placeholder="Motivo da parada (pode preencher depois)" value={p.desc} onChange={e => updateParada(setList, i, "desc", e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
+              <TextoLongo value={p.desc} onChange={v => updateParada(setList, i, "desc", v)} placeholder="Motivo da parada (pode preencher depois)" titulo="Descrição da parada" minHeight={44} style={{ ...inputStyle, marginBottom: 8 }} />
               <div style={{ fontSize: 22, fontWeight: 700, color: "#E53935", textAlign: "center", padding: "6px 0 10px" }}>{formatMin(elapsed)}</div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={() => finalizarParadaAgora(setList, i)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "#2D9E7F", color: "#FFF", border: "none", fontWeight: 700, fontSize: s(13), cursor: "pointer" }}>✅ Finalizar agora</button>
@@ -887,12 +921,13 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
           <div key={i} style={{ border: `1px solid ${theme.cardBorder}`, borderRadius: 12, padding: 10, marginBottom: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <span style={{ fontSize: s(12), fontWeight: 600, color: theme.textSub }}>Parada {i+1}{tl}</span>
+              <BotaoTelaCheia alvoId={`parada-${label}-${i}`} />
               <div style={{ display: "flex", gap: 4 }}>
                 <button onClick={() => toggleParada(setList, i)} style={sectionBtn}>▲</button>
                 <button onClick={() => removeParada(setList, i)} style={{ padding: "0 8px", color: "#E53935", background: "none", border: "none", cursor: "pointer" }}>✕</button>
               </div>
             </div>
-            <TextoLongo value={p.desc} onChange={v => updateParada(setList, i, "desc", v)} placeholder="Descrição" titulo="Descrição da parada" minHeight={44} style={{ ...inputStyle, marginBottom: 8 }} />
+            <TextoLongo value={p.desc} onChange={v => updateParada(setList, i, "desc", v)} placeholder="Descrição" alvoId={`parada-${label}-${i}`} semBotao titulo="Descrição da parada" minHeight={44} style={{ ...inputStyle, marginBottom: 8 }} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
               <div><label style={{ fontSize: s(11), color: theme.textSub }}>Início</label><input type="time" value={p.ini} onChange={e => updateParada(setList, i, "ini", e.target.value)} style={{ ...inputStyle, fontSize: s(15), fontWeight: 600 }} /></div>
               <div><label style={{ fontSize: s(11), color: theme.textSub }}>Fim</label><input type="time" value={p.fim} onChange={e => updateParada(setList, i, "fim", e.target.value)} style={{ ...inputStyle, fontSize: s(15), fontWeight: 600 }} /></div>
@@ -1215,7 +1250,7 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
             </div>
           </div>
           {!consumidosCollapsed && <>
-            <ConsumidosEditor itens={itens} setItens={setItens} theme={theme} s={s} fz={fz} usoKey="consumidos_uso_rebobinadeira" />
+            <ConsumidosEditor ref={consumidosRef} itens={itens} setItens={setItens} theme={theme} s={s} fz={fz} usoKey="consumidos_uso_rebobinadeira" />
             <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${theme.cardBorder}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: s(13), color: theme.textSub }}>✔ Total Tempo de Parada</span>
               <span style={{ fontSize: 17, fontWeight: 700, color: theme.text }}>{formatMin(calcTotalConsumidos())}</span>
@@ -1362,9 +1397,9 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
 
       {/* Rodapé */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: theme.headerBg, borderTop: `1px solid ${theme.cardBorder}`, padding: "12px 16px", paddingBottom: "calc(12px + env(safe-area-inset-bottom))", display: "flex", gap: 8 }}>
-        <button onClick={() => setShowPrevia(true)} style={{ flex: 1, padding: "11px 0", fontSize: s(13), fontWeight: 600, borderRadius: 12, background: theme.sectionBtnBg, color: theme.text, border: "none", cursor: "pointer" }}>👁 Prévia</button>
-        <button onClick={handleSaveNote} style={{ flex: 1, padding: "11px 0", fontSize: s(13), fontWeight: 600, borderRadius: 12, background: "#1A1A2E", color: "#FFF", border: "none", cursor: "pointer" }}>💾 Salvar</button>
-        <button onClick={() => setShowSendConfirm(true)} style={{ flex: 1, padding: "11px 0", fontSize: s(13), fontWeight: 600, borderRadius: 12, background: "#2D9E7F", color: "#FFF", border: "none", cursor: "pointer" }}>📤 Enviar</button>
+        <button onClick={() => comGuarda("previa")} style={{ flex: 1, padding: "11px 0", fontSize: s(13), fontWeight: 600, borderRadius: 12, background: theme.sectionBtnBg, color: theme.text, border: "none", cursor: "pointer" }}>👁 Prévia</button>
+        <button onClick={() => comGuarda("salvar")} style={{ flex: 1, padding: "11px 0", fontSize: s(13), fontWeight: 600, borderRadius: 12, background: "#1A1A2E", color: "#FFF", border: "none", cursor: "pointer" }}>💾 Salvar</button>
+        <button onClick={() => comGuarda("enviar")} style={{ flex: 1, padding: "11px 0", fontSize: s(13), fontWeight: 600, borderRadius: 12, background: "#2D9E7F", color: "#FFF", border: "none", cursor: "pointer" }}>📤 Enviar</button>
       </div>
 
       {/* Modal gerenciar formatos */}
@@ -1427,6 +1462,28 @@ export function RelatorioRebobinadeira({ onClose, onSaveAsNote, initialState, in
       <InputModal open={!!inputModal} title={inputModal?.title || ""} subtitle={inputModal?.subtitle} placeholder={inputModal?.placeholder} inputMode={inputModal?.inputMode} onConfirm={v => inputModal?.onConfirm(v)} onCancel={() => setInputModal(null)} />
 
       {/* Confirmação antes de enviar o relatório */}
+      {pendente && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: darkMode ? "#1E1E38" : "#FFFFFF", color: theme.text, border: `1px solid ${theme.cardBorder}`, borderRadius: 16, padding: 20, width: "100%", maxWidth: 340 }}>
+            <div style={{ fontSize: s(16), fontWeight: 700, marginBottom: 8 }}>Falta lançar um item</div>
+            <div style={{ fontSize: s(14), lineHeight: 1.5, marginBottom: 16 }}>
+              Você escolheu <strong>{pendente.texto}</strong>, mas não tocou em <strong>Lançar</strong>. Sem isso ele não entra no relatório.
+            </div>
+            <button
+              onClick={() => { const acao = pendente.acao; consumidosRef.current?.lancarPendente(); setPendente(null); setExecutarAcao(acao); }}
+              style={{ width: "100%", minHeight: 48, borderRadius: 12, border: "none", background: "#2D9E7F", color: "#fff", fontSize: s(14), fontWeight: 700, cursor: "pointer", marginBottom: 8 }}
+            >✓ Lançar e continuar</button>
+            <button
+              onClick={() => { const acao = pendente.acao; setPendente(null); acoesRef.current[acao]?.(); }}
+              style={{ width: "100%", minHeight: 44, borderRadius: 12, border: `1px solid ${theme.inputBorder}`, background: "transparent", color: theme.text, fontSize: s(14), cursor: "pointer", marginBottom: 4 }}
+            >Seguir sem lançar</button>
+            <button
+              onClick={() => setPendente(null)}
+              style={{ width: "100%", minHeight: 40, borderRadius: 12, border: "none", background: "transparent", color: theme.textSub, fontSize: s(13), cursor: "pointer" }}
+            >Voltar</button>
+          </div>
+        </div>
+      )}
       {showSendConfirm && (
         <div style={{ position: "fixed", inset: 0, zIndex: 260, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => setShowSendConfirm(false)}>
           <div style={{ background: theme.card, borderRadius: 18, padding: 20, width: "min(100%,340px)" }} onClick={e => e.stopPropagation()}>

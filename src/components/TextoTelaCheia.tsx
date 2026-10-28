@@ -13,6 +13,25 @@ import { createPortal } from "react-dom";
 // ── Liga o botão de voltar do Android ──
 // O app só guarda UMA tela registrada por vez (window.__registerModal). Os relatórios
 // registram por aqui, e a tela cheia devolve o registro ao relatório quando fecha.
+const EVENTO_TELA_CHEIA = "texto-tela-cheia-abrir";
+
+/** Botão para o cabeçalho da parada: abre a tela cheia do campo que tem o mesmo alvoId. */
+export function BotaoTelaCheia({ alvoId }: { alvoId: string }) {
+  return (
+    <button
+      type="button"
+      onClick={() => window.dispatchEvent(new CustomEvent(EVENTO_TELA_CHEIA, { detail: alvoId }))}
+      aria-label="Abrir a descrição em tela cheia"
+      style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36, padding: "6px 12px", borderRadius: 20, border: "1px solid rgba(128,128,128,0.45)", background: "transparent", color: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
+      </svg>
+      Tela cheia
+    </button>
+  );
+}
+
 let telaPai: { id: string; fn: () => void } | null = null;
 
 export function registrarModalRelatorio(id: string, fn: () => void): () => void {
@@ -53,9 +72,13 @@ interface TextoLongoProps {
   minHeight?: number;
   /** a tela cheia abre sozinha quando o texto passa desta quantidade de linhas */
   linhasMax?: number;
+  /** identificador para abrir a tela cheia por um botão em outro lugar (ver BotaoTelaCheia) */
+  alvoId?: string;
+  /** esconde o botão que fica embaixo do campo (quando há um botão no cabeçalho) */
+  semBotao?: boolean;
 }
 
-export function TextoLongo({ value, onChange, placeholder, style, titulo = "Texto", minHeight = 84, linhasMax = 5 }: TextoLongoProps) {
+export function TextoLongo({ value, onChange, placeholder, style, titulo = "Texto", minHeight = 84, linhasMax = 5, alvoId, semBotao }: TextoLongoProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [aberta, setAberta] = useState(false);
   const linhasAntes = useRef(0);
@@ -63,13 +86,21 @@ export function TextoLongo({ value, onChange, placeholder, style, titulo = "Text
   // margens vão para a caixa de fora, para o botão "Tela cheia" ficar logo abaixo do campo
   const { marginTop, marginBottom, marginLeft, marginRight, ...campoStyle } = (style || {}) as React.CSSProperties;
 
-  // altura do campo = todas as linhas do texto; e abre a tela cheia ao passar de 5 linhas
+  // Ajusta a altura para caber TODAS as linhas. Se por algum motivo não couber, aparece a rolagem (nunca corta o texto).
+  const ajustar = (): number => {
+    const el = ref.current;
+    if (!el) return 0;
+    el.style.height = "auto";
+    el.style.height = Math.max(minHeight, el.scrollHeight + 2) + "px";
+    el.style.overflowY = el.scrollHeight > el.clientHeight + 1 ? "auto" : "hidden";
+    return contarLinhas(el);
+  };
+
+  // a cada letra: ajusta a altura e abre a tela cheia ao PASSAR de 5 linhas
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    el.style.height = "auto";
-    el.style.height = Math.max(minHeight, el.scrollHeight + 2) + "px";
-    const n = contarLinhas(el);
+    const n = ajustar();
     const antes = linhasAntes.current;
     linhasAntes.current = n;
     // só no momento em que CRUZA o limite, e só se a pessoa está digitando neste campo
@@ -77,6 +108,32 @@ export function TextoLongo({ value, onChange, placeholder, style, titulo = "Text
       setAberta(true);
     }
   }, [value, minHeight, linhasMax]);
+
+  // Reajusta quando o campo muda de largura, quando a fonte termina de carregar, ao girar a tela
+  // e logo depois de aparecer (o cálculo feito escondido, ou antes da fonte, ficava curto).
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let largura = el.clientWidth;
+    const refazer = () => { linhasAntes.current = ajustar(); };
+    const ro = typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(() => { if (el.clientWidth !== largura) { largura = el.clientWidth; refazer(); } })
+      : null;
+    ro?.observe(el);
+    const t1 = setTimeout(refazer, 60);
+    const t2 = setTimeout(refazer, 400);
+    (document as any).fonts?.ready?.then(refazer);
+    window.addEventListener("resize", refazer);
+    return () => { ro?.disconnect(); clearTimeout(t1); clearTimeout(t2); window.removeEventListener("resize", refazer); };
+  }, [minHeight]);
+
+  // botão de tela cheia colocado no cabeçalho da parada
+  useEffect(() => {
+    if (!alvoId) return;
+    const abrir = (e: Event) => { if ((e as CustomEvent).detail === alvoId) setAberta(true); };
+    window.addEventListener(EVENTO_TELA_CHEIA, abrir);
+    return () => window.removeEventListener(EVENTO_TELA_CHEIA, abrir);
+  }, [alvoId]);
 
   const fechar = () => {
     setAberta(false);
@@ -98,7 +155,7 @@ export function TextoLongo({ value, onChange, placeholder, style, titulo = "Text
         onChange={(e) => onChange(e.target.value)}
         style={{ ...campoStyle, marginTop: 0, marginBottom: 0, lineHeight: 1.4, minHeight, overflow: "hidden", resize: "none", display: "block" }}
       />
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+      {!semBotao && <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
         <button
           type="button"
           onClick={() => setAberta(true)}
@@ -110,7 +167,7 @@ export function TextoLongo({ value, onChange, placeholder, style, titulo = "Text
           </svg>
           Tela cheia
         </button>
-      </div>
+      </div>}
 
       {aberta && (
         <TelaCheia
